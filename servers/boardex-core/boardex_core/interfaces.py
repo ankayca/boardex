@@ -175,3 +175,87 @@ class TargetController(Backend):
         the current and faulting PCs to ``function (file:line)`` so the agent can
         act on a source location, not a raw address.
         """
+
+
+class LogicAnalyzer(Backend):
+    """Anything that can capture digital logic signals on many channels.
+
+    Implemented by sigrok (fx2lafw, kingst-la2016, ...), and future custom or
+    vendor drivers. Individual analyzer models are hidden behind the adapter;
+    agents address one by ``device_id`` and describe *what* to capture, never
+    *how* a particular device does it.
+
+    Trigger edges are the brand-neutral strings ``"rising"``, ``"falling"``,
+    ``"high"`` and ``"low"``. Sample data is returned in a compact, agent-
+    friendly form (per-channel transitions + metadata), not as a raw multi-
+    megabyte bit dump: the server is a dumb executor that hands back the capture
+    and its introspection; the agent judges timing/protocol correctness.
+    """
+
+    @abstractmethod
+    def capabilities(self, device_id: str) -> OperationResult:
+        """Report the device's limits so the agent can plan a valid capture.
+
+        ``data`` should include at least ``channels`` (names/count), the maximum
+        ``sample_rate_hz`` (and/or the list of supported rates), whether the
+        device streams or captures to on-board memory, and the trigger types it
+        supports. Pure introspection; changes nothing.
+        """
+
+    @abstractmethod
+    def capture(
+        self,
+        device_id: str,
+        *,
+        channels: list[int] | None = None,
+        sample_rate_hz: int = 1_000_000,
+        num_samples: int | None = None,
+        duration_s: float | None = None,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "rising",
+    ) -> OperationResult:
+        """Capture one acquisition of digital samples.
+
+        Args:
+            channels: Channel indices to record (None = all available).
+            sample_rate_hz: Requested sampling rate; the backend reports the
+                actual rate it used in the result (hardware rounds to what it
+                supports).
+            num_samples: Number of samples to capture. Provide this or
+                ``duration_s`` (num_samples wins if both are given).
+            duration_s: Capture length in seconds (converted to samples using the
+                actual rate) when ``num_samples`` is not given.
+            trigger_channel: Channel to trigger on; None captures immediately.
+            trigger_edge: One of ``"rising"``/``"falling"``/``"high"``/``"low"``.
+
+        Returns a result whose ``data`` carries the actual ``sample_rate_hz``,
+        ``num_samples``, channel names, and per-channel ``transitions`` (compact
+        edge list), so the agent can reason about timing without a raw bit dump.
+        """
+
+    def decode(
+        self,
+        device_id: str,
+        protocol: str,
+        channel_map: dict[str, int],
+        *,
+        sample_rate_hz: int = 1_000_000,
+        num_samples: int | None = None,
+        duration_s: float | None = None,
+        options: dict[str, str] | None = None,
+    ) -> OperationResult:
+        """Capture and run a bus protocol decoder (I2C/SPI/UART/...).
+
+        Turns raw edges into decoded transactions so the agent can check a bus
+        against a datasheet instead of eyeballing waveforms. ``protocol`` is a
+        backend decoder id; ``channel_map`` binds decoder inputs to channel
+        indices (e.g. ``{"scl": 0, "sda": 1}``); ``options`` sets decoder options
+        (e.g. ``{"baudrate": "115200"}``). ``data.annotations`` holds the decoded
+        stream.
+
+        Optional capability: backends that cannot decode return an
+        ``inconclusive`` result (the default here) rather than raising.
+        """
+        return OperationResult.inconclusive(
+            f"{type(self).__name__} does not support protocol decoding."
+        )

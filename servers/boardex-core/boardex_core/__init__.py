@@ -12,7 +12,7 @@ from .errors import (
     DeviceNotFoundError,
     OperationFailedError,
 )
-from .interfaces import Backend, DeviceInfo, TargetController
+from .interfaces import Backend, DeviceInfo, LogicAnalyzer, TargetController
 from .registry import BackendRegistry
 from .results import OperationResult, Verdict
 
@@ -24,6 +24,7 @@ __all__ = [
     "DeviceBusyError",
     "DeviceInfo",
     "DeviceNotFoundError",
+    "LogicAnalyzer",
     "OperationFailedError",
     "OperationResult",
     "TargetController",
