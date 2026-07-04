@@ -27,7 +27,7 @@ Produces `blinky-f303re.elf` and `blinky-f303re.bin`.
 from boardex_target.server import list_targets, flash_firmware
 dev = list_targets()["data"]["devices"][0]["device_id"]
 flash_firmware(device_id=dev,
-               firmware_path="firmware/blinky-f303re/blinky-f303re.elf",
+               firmware_path="examples/firmware/blinky-f303re/blinky-f303re.elf",
                target="stm32f303retx")
 ```
 

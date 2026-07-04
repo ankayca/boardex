@@ -26,3 +26,10 @@ out/
 *.elf
 *.bin
 *.o
+
+# Scratch area for local / board-specific firmware. This repo is the Boardex
+# tooling, NOT a firmware archive: real per-board firmware for agent tasks lives
+# in your own projects and is referenced by absolute path when flashing. Drop
+# work-in-progress firmware here and it stays out of git. Committed reference
+# demos that validate the tooling live in examples/firmware/ instead.
+/firmware/

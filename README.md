@@ -51,10 +51,18 @@ boardex/
 ├── servers/
 │   ├── boardex-core/             # shared interfaces, results, errors, registry
 │   └── boardex-target/           # MCP server: flash/debug (pyOCD backend)
-├── firmware/
-│   └── blinky-f303re/            # bare-metal smoke-test firmware for the Nucleo
+├── examples/
+│   └── firmware/                 # minimal reference firmware to validate the tooling
+│       ├── blinky-f303re/        #   bare-metal flash smoke test
+│       └── rtt-f303re/           #   RTT logging demo (read_firmware_log)
 └── app/                          # Electron app (planned)
 ```
+
+> **This repo is the Boardex tooling, not a firmware archive.** Only tiny,
+> clean-room reference firmware lives in `examples/firmware/` to prove the
+> servers work on real silicon. Your real per-board firmware belongs in its own
+> project and is handed to the agent by absolute path. A top-level `firmware/`
+> directory is git-ignored as a scratch area for local work.
 
 ## Status
 
