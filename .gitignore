@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Node / Electron (planned app/)
+node_modules/
+out/
+
+# Local toolchains & firmware build artifacts
+.toolchains/
+*.elf
+*.bin
+*.o
+
+# Scratch area for local / board-specific firmware. This repo is the Boardex
+# tooling, NOT a firmware archive: real per-board firmware for agent tasks lives
+# in your own projects and is referenced by absolute path when flashing. Drop
+# work-in-progress firmware here and it stays out of git. Committed reference
+# demos that validate the tooling live in examples/firmware/ instead.
+/firmware/
