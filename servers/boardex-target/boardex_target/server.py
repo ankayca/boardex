@@ -18,15 +18,20 @@ from boardex_core import BackendRegistry, BoardexError, OperationResult, TargetC
 from mcp.server.fastmcp import FastMCP
 
 from .adapters.pyocd_adapter import PyOcdAdapter
+from .session import SessionManager
 
 log = logging.getLogger("boardex.target")
 
 mcp = FastMCP("boardex-target")
 
+# Owns persistent debug sessions (for RTT streaming, etc.). Shared with the
+# adapter so stateless tools transparently reuse an open session when one exists.
+sessions = SessionManager()
+
 # Registry of target-control backends. Register new probes (J-Link, OpenOCD, ...)
 # here and they immediately appear in list_targets() with no tool changes.
 registry: BackendRegistry[TargetController] = BackendRegistry()
-registry.register("pyocd", PyOcdAdapter)
+registry.register("pyocd", lambda: PyOcdAdapter(sessions))
 
 
 def _guard(fn: Any) -> OperationResult:
@@ -165,6 +170,76 @@ def read_firmware_log(
             control_block_address=control_block_address,
         )
     ).to_dict()
+
+
+# -- persistent debug sessions --------------------------------------------
+
+
+@mcp.tool()
+def open_session(device_id: str, target: str | None = None) -> dict[str, Any]:
+    """Open a persistent debug session for a target and keep the probe claimed.
+
+    Required before RTT streaming. While a session is open, the plain tools
+    (flash_firmware, reset_target, read_memory, ...) automatically route through
+    it. Returns ``data.session_id`` for use with the RTT tools and close_session.
+    """
+
+    def _open() -> OperationResult:
+        adapter = registry.resolve(device_id)
+        uid = adapter.probe_unique_id(device_id)  # type: ignore[attr-defined]
+        managed = sessions.open(device_id, uid, target=target)
+        return OperationResult.passed(
+            f"Opened session {managed.session_id} for {device_id}.",
+            **managed.info(),
+        )
+
+    return _guard(_open).to_dict()
+
+
+@mcp.tool()
+def close_session(session_id: str) -> dict[str, Any]:
+    """Close a persistent debug session and release the probe."""
+    return _guard(
+        lambda: OperationResult.passed(
+            f"Closed session {sessions.close(session_id).session_id}."
+        )
+    ).to_dict()
+
+
+@mcp.tool()
+def list_sessions() -> dict[str, Any]:
+    """List all currently open debug sessions."""
+    open_sessions = sessions.list()
+    return OperationResult.passed(
+        f"{len(open_sessions)} open session(s).", sessions=open_sessions
+    ).to_dict()
+
+
+@mcp.tool()
+def start_rtt(session_id: str, control_block_address: int | None = None) -> dict[str, Any]:
+    """Start background RTT log capture on an open session.
+
+    A reader thread continuously drains the RTT up channel into a buffer; use
+    ``read_rtt`` to fetch accumulated output. Pass ``control_block_address``
+    (the ``_SEGGER_RTT`` symbol) to skip the RAM search.
+    """
+    return _guard(
+        lambda: sessions.get(session_id).start_rtt(
+            control_block_address=control_block_address
+        )
+    ).to_dict()
+
+
+@mcp.tool()
+def read_rtt(session_id: str) -> dict[str, Any]:
+    """Drain buffered RTT output captured since the last read (in ``data.text``)."""
+    return _guard(lambda: sessions.get(session_id).read_rtt()).to_dict()
+
+
+@mcp.tool()
+def stop_rtt(session_id: str) -> dict[str, Any]:
+    """Stop background RTT log capture on a session."""
+    return _guard(lambda: sessions.get(session_id).stop_rtt()).to_dict()
 
 
 def main() -> None:

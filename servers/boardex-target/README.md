@@ -13,9 +13,31 @@ STM32CubeProgrammer are future adapters that plug in without changing any tool.
 | `reset_target` | Reset (optionally halt after reset) |
 | `halt_target` / `resume_target` | Stop / start the CPU core |
 | `read_memory` / `write_memory` | Peek/poke target memory (hex payloads) |
-| `read_firmware_log` | Drain live SEGGER RTT output from the running target |
+| `read_firmware_log` | One-shot: drain SEGGER RTT output for a timeout |
+| `open_session` / `close_session` / `list_sessions` | Manage persistent debug sessions |
+| `start_rtt` / `read_rtt` / `stop_rtt` | Background RTT streaming on an open session |
 
 Every tool returns an `OperationResult` (`verdict`, `summary`, `data`, ...).
+
+## Sessions & RTT streaming
+
+`read_firmware_log` is the quick, stateless way to grab RTT output (open probe,
+poll for `timeout_s`, close). For continuous capture, use a **persistent
+session**: a background thread drains the RTT up channel so you can read
+accumulated output incrementally.
+
+```python
+sid = open_session(device_id=dev, target="stm32f303retx")["data"]["session_id"]
+flash_firmware(device_id=dev, firmware_path="app.elf")  # routed through the session
+start_rtt(session_id=sid)
+# ... let the firmware run ...
+read_rtt(session_id=sid)   # -> data.text has everything since the last read
+stop_rtt(session_id=sid)
+close_session(session_id=sid)
+```
+
+While a session is open the plain tools (flash/reset/memory) automatically reuse
+it, so the probe is never double-claimed.
 
 ## Install
 

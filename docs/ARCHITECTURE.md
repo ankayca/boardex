@@ -105,6 +105,22 @@ These rules exist because tools are consumed by an LLM, not a human:
 
 ---
 
+## Persistent sessions (target server)
+
+Most operations are stateless (open probe → do → close) to avoid stuck debug
+sessions. But streaming firmware logs (RTT) needs the probe held open, so
+`boardex-target` adds a session layer:
+
+- **`SessionManager`** owns `ManagedSession`s, one per device, and is shared with
+  the adapter. When a session is open, the stateless tools transparently route
+  through it (the probe can only be claimed once).
+- **`ManagedSession`** serialises all target access behind a single lock, and
+  runs a **background RTT reader thread** that drains the up channel into a
+  ring buffer for `read_rtt` to fetch incrementally.
+
+Session lifecycle tools: `open_session` / `close_session` / `list_sessions` and
+`start_rtt` / `read_rtt` / `stop_rtt`.
+
 ## How to add a new backend (the contributor workflow)
 
 Say you want to add J-Link support to `boardex-target`:

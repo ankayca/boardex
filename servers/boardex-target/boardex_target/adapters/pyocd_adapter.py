@@ -1,42 +1,23 @@
 """pyOCD adapter: flash & debug MCU targets over CMSIS-DAP / ST-Link / etc.
 
-This is the only file in ``boardex-target`` that knows pyOCD exists. All vendor
-quirks live here, quarantined behind the ``TargetController`` interface so the
-MCP tools stay backend-agnostic.
+This is the only file (together with pyocd_ops.py) that knows pyOCD exists. The
+adapter satisfies the ``TargetController`` interface; the actual pyOCD calls live
+in ``pyocd_ops`` so transient and persistent sessions share identical logic.
 
-Design notes:
-- **Stateless sessions.** Each operation opens a fresh pyOCD session, does its
-  work, and closes it. This avoids stuck/locked debug sessions, which are the
-  most common cause of a flaky bench. Persistent debug sessions (for stepping,
-  breakpoints) are a deliberate Phase 2 feature.
-- **Graceful availability.** pyOCD is imported lazily so the server can start and
-  report a clean error even when the dependency is missing.
+Session awareness: if a persistent ``ManagedSession`` is open for a device, the
+adapter routes operations through it (a probe can only be claimed once). This is
+what lets an agent ``open_session`` then keep using the plain flash/reset/memory
+tools without hitting "device busy".
 """
 
 from __future__ import annotations
 
-import contextlib
-import time
-from typing import Any, Iterator
+from typing import Any, Callable
 
-from boardex_core import (
-    DeviceBusyError,
-    DeviceInfo,
-    DeviceNotFoundError,
-    OperationFailedError,
-    OperationResult,
-    TargetController,
-)
+from boardex_core import DeviceInfo, OperationResult, TargetController
 
-try:  # pyOCD is optional at import time; is_available() reports the truth.
-    from pyocd.core.helpers import ConnectHelper
-    from pyocd.flash.file_programmer import FileProgrammer
-
-    _PYOCD_IMPORT_ERROR: Exception | None = None
-except Exception as exc:  # noqa: BLE001
-    ConnectHelper = None  # type: ignore[assignment]
-    FileProgrammer = None  # type: ignore[assignment]
-    _PYOCD_IMPORT_ERROR = exc
+from .. import pyocd_ops
+from ..session import ManagedSession, SessionManager
 
 
 class PyOcdAdapter(TargetController):
@@ -44,14 +25,20 @@ class PyOcdAdapter(TargetController):
 
     backend_name = "pyocd"
 
+    def __init__(self, sessions: SessionManager | None = None) -> None:
+        # Shared with the server so transient ops can find persistent sessions.
+        self._sessions = sessions
+
     def is_available(self) -> bool:
-        return _PYOCD_IMPORT_ERROR is None
+        return pyocd_ops.pyocd_available()
 
     # -- discovery ---------------------------------------------------------
 
     def scan(self) -> list[DeviceInfo]:
         if not self.is_available():
             return []
+        from pyocd.core.helpers import ConnectHelper
+
         probes = ConnectHelper.get_all_connected_probes(blocking=False)
         devices: list[DeviceInfo] = []
         for probe in probes:
@@ -71,6 +58,10 @@ class PyOcdAdapter(TargetController):
             )
         return devices
 
+    def probe_unique_id(self, device_id: str) -> str:
+        """Expose the raw probe id so the server can open a managed session."""
+        return self._probe_uid(device_id)
+
     # -- operations --------------------------------------------------------
 
     def flash(
@@ -82,62 +73,38 @@ class PyOcdAdapter(TargetController):
         verify: bool = True,
         reset_after: bool = True,
     ) -> OperationResult:
-        started = time.monotonic()
-        with self._session(device_id, target=target) as session:
-            programmer = FileProgrammer(session)
-            # pyOCD auto-detects .elf/.hex/.bin by extension.
-            programmer.program(firmware_path)
-            if reset_after:
-                session.target.reset()
-        result = OperationResult.passed(
-            f"Flashed '{firmware_path}' to {device_id}.",
-            firmware_path=firmware_path,
-            verified=verify,
-            reset_after=reset_after,
+        return self._run(
+            device_id,
+            target,
+            lambda s: pyocd_ops.flash(
+                s, firmware_path, verify=verify, reset_after=reset_after
+            ),
         )
-        result.duration_s = round(time.monotonic() - started, 3)
-        return result
 
     def reset(
         self, device_id: str, *, target: str | None = None, halt: bool = False
     ) -> OperationResult:
-        with self._session(device_id, target=target) as session:
-            if halt:
-                session.target.reset_and_halt()
-            else:
-                session.target.reset()
-        state = "reset and halted" if halt else "reset"
-        return OperationResult.passed(f"Target {device_id} {state}.", halted=halt)
+        return self._run(device_id, target, lambda s: pyocd_ops.reset(s, halt=halt))
 
     def halt(self, device_id: str, *, target: str | None = None) -> OperationResult:
-        # connect_mode="attach" avoids an implicit halt-on-connect; we then halt
-        # explicitly and keep the core halted after the session closes.
-        with self._session(
+        return self._run(
             device_id,
-            target=target,
+            target,
+            pyocd_ops.halt,
             connect_mode="attach",
             resume_on_disconnect=False,
-        ) as session:
-            session.target.halt()
-        return OperationResult.passed(f"Target {device_id} halted.")
+        )
 
     def resume(self, device_id: str, *, target: str | None = None) -> OperationResult:
-        with self._session(
-            device_id, target=target, connect_mode="attach"
-        ) as session:
-            session.target.resume()
-        return OperationResult.passed(f"Target {device_id} resumed.")
+        return self._run(
+            device_id, target, pyocd_ops.resume, connect_mode="attach"
+        )
 
     def read_memory(
         self, device_id: str, address: int, length: int, *, target: str | None = None
     ) -> OperationResult:
-        with self._session(device_id, target=target) as session:
-            data = bytes(session.target.read_memory_block8(address, length))
-        return OperationResult.passed(
-            f"Read {length} bytes @ {address:#010x} from {device_id}.",
-            address=address,
-            length=length,
-            hex=data.hex(),
+        return self._run(
+            device_id, target, lambda s: pyocd_ops.read_memory(s, address, length)
         )
 
     def write_memory(
@@ -148,12 +115,8 @@ class PyOcdAdapter(TargetController):
         *,
         target: str | None = None,
     ) -> OperationResult:
-        with self._session(device_id, target=target) as session:
-            session.target.write_memory_block8(address, list(data))
-        return OperationResult.passed(
-            f"Wrote {len(data)} bytes @ {address:#010x} to {device_id}.",
-            address=address,
-            length=len(data),
+        return self._run(
+            device_id, target, lambda s: pyocd_ops.write_memory(s, address, data)
         )
 
     def read_log(
@@ -164,56 +127,42 @@ class PyOcdAdapter(TargetController):
         timeout_s: float = 2.0,
         control_block_address: int | None = None,
     ) -> OperationResult:
-        """Drain SEGGER RTT up-channel output while the target runs.
-
-        RTT is a live stream, so unlike the other operations this one *attaches*
-        to a running core (no halt) and polls the up-channel ring buffer until
-        ``timeout_s`` elapses. Returns an INCONCLUSIVE verdict (not an error)
-        when the firmware simply isn't using RTT, so the agent can tell "no logs"
-        apart from "the probe broke".
-        """
-        from pyocd.core import exceptions as pyocd_exc
-        from pyocd.debug.rtt import RTTControlBlock
-
-        with self._session(
-            device_id, target=target, connect_mode="attach"
-        ) as session:
-            control_block = RTTControlBlock.from_target(
-                session.target, address=control_block_address
-            )
-            try:
-                control_block.start()
-            except pyocd_exc.RTTError as exc:
-                return OperationResult.inconclusive(
-                    "No SEGGER RTT control block found on the target. Is the "
-                    "firmware built with RTT enabled?",
-                    detail=str(exc),
-                )
-
-            if not control_block.up_channels:
-                return OperationResult.inconclusive(
-                    "RTT control block found but it exposes no up channels."
-                )
-
-            up_channel = control_block.up_channels[0]
-            collected = bytearray()
-            deadline = time.monotonic() + max(timeout_s, 0.0)
-            while time.monotonic() < deadline:
-                chunk = up_channel.read()
-                if chunk:
-                    collected.extend(chunk)
-                else:
-                    time.sleep(0.02)
-
-        text = collected.decode("utf-8", "backslashreplace")
-        return OperationResult.passed(
-            f"Read {len(collected)} bytes of RTT output from {device_id}.",
-            text=text,
-            byte_count=len(collected),
-            channel=up_channel.name,
+        return self._run(
+            device_id,
+            target,
+            lambda s: pyocd_ops.read_rtt_once(
+                s, timeout_s=timeout_s, control_block_address=control_block_address
+            ),
+            connect_mode="attach",
         )
 
     # -- helpers -----------------------------------------------------------
+
+    def _run(
+        self,
+        device_id: str,
+        target: str | None,
+        operation: Callable[[Any], OperationResult],
+        *,
+        connect_mode: str | None = None,
+        resume_on_disconnect: bool = True,
+    ) -> OperationResult:
+        """Run ``operation`` against a managed session if one exists, else a
+        transient one."""
+        managed: ManagedSession | None = (
+            self._sessions.find_by_device(device_id) if self._sessions else None
+        )
+        if managed is not None:
+            return managed.run(operation)
+
+        uid = self._probe_uid(device_id)
+        with pyocd_ops.transient_session(
+            uid,
+            target=target,
+            connect_mode=connect_mode,
+            resume_on_disconnect=resume_on_disconnect,
+        ) as session:
+            return operation(session)
 
     @staticmethod
     def _device_id(unique_id: str) -> str:
@@ -223,54 +172,3 @@ class PyOcdAdapter(TargetController):
     @staticmethod
     def _probe_uid(device_id: str) -> str:
         return device_id.split(":", 1)[1] if ":" in device_id else device_id
-
-    @contextlib.contextmanager
-    def _session(
-        self,
-        device_id: str,
-        *,
-        target: str | None = None,
-        connect_mode: str | None = None,
-        resume_on_disconnect: bool = True,
-    ) -> Iterator[Any]:
-        """Open a pyOCD session for ``device_id`` and translate its errors.
-
-        Any pyOCD failure is converted into a typed ``BoardexError`` so the MCP
-        facade can render an actionable ``verdict="error"`` result.
-        """
-        if not self.is_available():
-            raise OperationFailedError(
-                f"pyOCD is not importable: {_PYOCD_IMPORT_ERROR}"
-            )
-
-        options: dict[str, Any] = {"resume_on_disconnect": resume_on_disconnect}
-        if connect_mode is not None:
-            options["connect_mode"] = connect_mode
-
-        try:
-            session = ConnectHelper.session_with_chosen_probe(
-                unique_id=self._probe_uid(device_id),
-                target_override=target,
-                options=options,
-                blocking=False,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise OperationFailedError(f"Could not open probe session: {exc}") from exc
-
-        if session is None:
-            raise DeviceNotFoundError(
-                f"No debug probe matched '{device_id}'. Is it plugged in?"
-            )
-
-        try:
-            with session:
-                yield session
-        except DeviceNotFoundError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            message = str(exc).lower()
-            if "busy" in message or "in use" in message or "locked" in message:
-                raise DeviceBusyError(
-                    f"Probe {device_id} is busy (another tool holding it?): {exc}"
-                ) from exc
-            raise OperationFailedError(str(exc)) from exc
