@@ -145,12 +145,24 @@ def write_memory(
 
 @mcp.tool()
 def read_firmware_log(
-    device_id: str, target: str | None = None, timeout_s: float = 2.0
+    device_id: str,
+    target: str | None = None,
+    timeout_s: float = 2.0,
+    control_block_address: int | None = None,
 ) -> dict[str, Any]:
-    """Read firmware debug output (RTT/semihosting) for up to ``timeout_s``."""
+    """Read firmware debug output over SEGGER RTT for up to ``timeout_s`` seconds.
+
+    Attaches to the running core and drains the RTT up channel into ``data.text``.
+    Pass ``control_block_address`` (the ``_SEGGER_RTT`` symbol address) to skip
+    the RAM search. Returns verdict ``inconclusive`` if the firmware isn't using
+    RTT.
+    """
     return _guard(
         lambda: registry.resolve(device_id).read_log(
-            device_id, target=target, timeout_s=timeout_s
+            device_id,
+            target=target,
+            timeout_s=timeout_s,
+            control_block_address=control_block_address,
         )
     ).to_dict()
 

@@ -157,14 +157,60 @@ class PyOcdAdapter(TargetController):
         )
 
     def read_log(
-        self, device_id: str, *, target: str | None = None, timeout_s: float = 2.0
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        timeout_s: float = 2.0,
+        control_block_address: int | None = None,
     ) -> OperationResult:
-        # RTT/semihosting capture is Phase 1.5. The Verdict system lets us return
-        # a clean, machine-readable "not judged yet" instead of a fake success.
-        return OperationResult.inconclusive(
-            "Firmware log capture (RTT/semihosting) is not wired up on the pyOCD "
-            "backend yet. Use flash + read_memory for now; RTT is next.",
-            device_id=device_id,
+        """Drain SEGGER RTT up-channel output while the target runs.
+
+        RTT is a live stream, so unlike the other operations this one *attaches*
+        to a running core (no halt) and polls the up-channel ring buffer until
+        ``timeout_s`` elapses. Returns an INCONCLUSIVE verdict (not an error)
+        when the firmware simply isn't using RTT, so the agent can tell "no logs"
+        apart from "the probe broke".
+        """
+        from pyocd.core import exceptions as pyocd_exc
+        from pyocd.debug.rtt import RTTControlBlock
+
+        with self._session(
+            device_id, target=target, connect_mode="attach"
+        ) as session:
+            control_block = RTTControlBlock.from_target(
+                session.target, address=control_block_address
+            )
+            try:
+                control_block.start()
+            except pyocd_exc.RTTError as exc:
+                return OperationResult.inconclusive(
+                    "No SEGGER RTT control block found on the target. Is the "
+                    "firmware built with RTT enabled?",
+                    detail=str(exc),
+                )
+
+            if not control_block.up_channels:
+                return OperationResult.inconclusive(
+                    "RTT control block found but it exposes no up channels."
+                )
+
+            up_channel = control_block.up_channels[0]
+            collected = bytearray()
+            deadline = time.monotonic() + max(timeout_s, 0.0)
+            while time.monotonic() < deadline:
+                chunk = up_channel.read()
+                if chunk:
+                    collected.extend(chunk)
+                else:
+                    time.sleep(0.02)
+
+        text = collected.decode("utf-8", "backslashreplace")
+        return OperationResult.passed(
+            f"Read {len(collected)} bytes of RTT output from {device_id}.",
+            text=text,
+            byte_count=len(collected),
+            channel=up_channel.name,
         )
 
     # -- helpers -----------------------------------------------------------

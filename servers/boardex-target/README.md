@@ -13,7 +13,7 @@ STM32CubeProgrammer are future adapters that plug in without changing any tool.
 | `reset_target` | Reset (optionally halt after reset) |
 | `halt_target` / `resume_target` | Stop / start the CPU core |
 | `read_memory` / `write_memory` | Peek/poke target memory (hex payloads) |
-| `read_firmware_log` | Read RTT/semihosting output *(Phase 1.5 — currently inconclusive)* |
+| `read_firmware_log` | Drain live SEGGER RTT output from the running target |
 
 Every tool returns an `OperationResult` (`verdict`, `summary`, `data`, ...).
 

@@ -59,7 +59,7 @@ class FakeProbe(TargetController):
             self.memory[address + i] = byte
         return OperationResult.passed("wrote", length=len(data))
 
-    def read_log(self, device_id, *, target=None, timeout_s=2.0):
+    def read_log(self, device_id, *, target=None, timeout_s=2.0, control_block_address=None):
         return OperationResult.inconclusive("no log backend")
 
 

@@ -116,6 +116,16 @@ class TargetController(Backend):
 
     @abstractmethod
     def read_log(
-        self, device_id: str, *, target: str | None = None, timeout_s: float = 2.0
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        timeout_s: float = 2.0,
+        control_block_address: int | None = None,
     ) -> OperationResult:
-        """Read firmware debug output (RTT/semihosting) for up to ``timeout_s``."""
+        """Read firmware debug output (RTT/semihosting) for up to ``timeout_s``.
+
+        ``control_block_address`` pins the SEGGER RTT control block location
+        (from the firmware's ``_SEGGER_RTT`` symbol) to skip the RAM scan; if
+        omitted the backend searches the target's RAM for it.
+        """
