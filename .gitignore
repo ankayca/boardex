@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Node / Electron (planned app/)
+node_modules/
+out/
+
+# Local toolchains & firmware build artifacts
+.toolchains/
+*.elf
+*.bin
+*.o
