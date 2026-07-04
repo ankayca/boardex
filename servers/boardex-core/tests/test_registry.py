@@ -59,8 +59,16 @@ class FakeProbe(TargetController):
             self.memory[address + i] = byte
         return OperationResult.passed("wrote", length=len(data))
 
-    def read_log(self, device_id, *, target=None, timeout_s=2.0, control_block_address=None):
+    def read_log(self, device_id, *, target=None, timeout_s=2.0, control_block_address=None, elf_path=None):
         return OperationResult.inconclusive("no log backend")
+
+    def recover(self, device_id, *, target=None, mass_erase=True):
+        if mass_erase:
+            self.memory.clear()
+        return OperationResult.passed("recovered", mass_erased=mass_erase)
+
+    def get_status(self, device_id, *, target=None, elf_path=None, halt=False):
+        return OperationResult.passed("halted", running=False, faulted=False)
 
 
 @pytest.fixture()
@@ -95,6 +103,22 @@ def test_write_then_read_roundtrip(registry):
     probe.write_memory("fake:001", 0x2000_0000, b"\xde\xad\xbe\xef")
     result = probe.read_memory("fake:001", 0x2000_0000, 4)
     assert result.data["hex"] == "deadbeef"
+
+
+def test_recover_mass_erase_clears_state(registry):
+    probe = registry.resolve("fake:001")
+    probe.write_memory("fake:001", 0x2000_0000, b"\xde\xad")
+    result = probe.recover("fake:001", mass_erase=True)
+    assert result.ok
+    assert result.data["mass_erased"] is True
+    # Every TargetController inherits recover/get_status from the ABC.
+    assert probe.read_memory("fake:001", 0x2000_0000, 2).data["hex"] == "0000"
+
+
+def test_get_status_returns_result(registry):
+    result = registry.resolve("fake:001").get_status("fake:001")
+    assert result.ok
+    assert result.data["faulted"] is False
 
 
 def test_operation_result_serialisation():

@@ -17,6 +17,7 @@ from typing import Any
 from boardex_core import BackendRegistry, BoardexError, OperationResult, TargetController
 from mcp.server.fastmcp import FastMCP
 
+from . import builder
 from .adapters.pyocd_adapter import PyOcdAdapter
 from .session import SessionManager
 
@@ -62,6 +63,47 @@ def list_targets() -> dict[str, Any]:
         f"Found {len(devices)} target(s).",
         devices=[d.to_dict() for d in devices],
         backends=registry.available_backends(),
+    ).to_dict()
+
+
+@mcp.tool()
+def build_firmware(
+    project_dir: str,
+    command: str | None = None,
+    artifact: str | None = None,
+    env: dict[str, str] | None = None,
+    clean: bool = False,
+    timeout_s: float = 600.0,
+) -> dict[str, Any]:
+    """Build an external firmware project and return the built artifact path.
+
+    Runs the project's own build command (framework/vendor-neutral), captures
+    structured compiler errors/warnings, and reports the resulting firmware
+    image so it can be handed straight to ``flash_firmware``.
+
+    Args:
+        project_dir: Absolute path to the firmware project (external to Boardex).
+        command: Build command as a shell string (e.g. "make CROSS=/path/arm-none-eabi-").
+            If omitted, auto-detected from the project (Makefile -> make,
+            CMakeLists.txt -> cmake, platformio.ini -> pio run, ...).
+        artifact: Optional path/glob (relative to the project) pinning the output
+            image; otherwise the newest .elf/.hex/.bin/.uf2 built is reported.
+        env: Extra environment variables (e.g. to put a cross-toolchain on PATH).
+        clean: Run the build system's clean step first (make/cmake only).
+        timeout_s: Abort the build after this many seconds.
+
+    Verdict: ``pass`` on exit 0, ``fail`` on compile/link errors, ``error`` if
+    the build could not be started. The built image is in ``data.artifact_path``.
+    """
+    return _guard(
+        lambda: builder.build_firmware(
+            project_dir,
+            command,
+            artifact=artifact,
+            env=env,
+            clean=clean,
+            timeout_s=timeout_s,
+        )
     ).to_dict()
 
 
@@ -154,13 +196,15 @@ def read_firmware_log(
     target: str | None = None,
     timeout_s: float = 2.0,
     control_block_address: int | None = None,
+    elf_path: str | None = None,
 ) -> dict[str, Any]:
     """Read firmware debug output over SEGGER RTT for up to ``timeout_s`` seconds.
 
     Attaches to the running core and drains the RTT up channel into ``data.text``.
-    Pass ``control_block_address`` (the ``_SEGGER_RTT`` symbol address) to skip
-    the RAM search. Returns verdict ``inconclusive`` if the firmware isn't using
-    RTT.
+    The RTT control block is located automatically from the ``_SEGGER_RTT`` symbol
+    in ``elf_path`` (or the last image flashed to this device); pass
+    ``control_block_address`` to override, or neither to fall back to a RAM scan.
+    Returns verdict ``inconclusive`` if the firmware isn't using RTT.
     """
     return _guard(
         lambda: registry.resolve(device_id).read_log(
@@ -168,6 +212,58 @@ def read_firmware_log(
             target=target,
             timeout_s=timeout_s,
             control_block_address=control_block_address,
+            elf_path=elf_path,
+        )
+    ).to_dict()
+
+
+@mcp.tool()
+def recover_target(
+    device_id: str, target: str | None = None, mass_erase: bool = True
+) -> dict[str, Any]:
+    """Reclaim a wedged board by connecting under reset (and erasing flash).
+
+    The escape hatch when firmware has disabled SWD, put the core to sleep, or
+    spun it in a tight loop so normal connect/halt fails. Asserts reset while
+    connecting to catch the core before firmware runs, halts it, and (by default)
+    mass-erases flash so the bad image can't re-wedge the board on reset. Leave
+    ``mass_erase=False`` to keep flash and just regain a halted core.
+
+    Close any open debug session on the device first: connect-under-reset needs
+    an exclusive, fresh connection to the probe.
+    """
+    return _guard(
+        lambda: registry.resolve(device_id).recover(
+            device_id, target=target, mass_erase=mass_erase
+        )
+    ).to_dict()
+
+
+@mcp.tool()
+def read_chip_status(
+    device_id: str,
+    target: str | None = None,
+    elf_path: str | None = None,
+    halt: bool = False,
+) -> dict[str, Any]:
+    """Report core state (running/halted, PC) and decode any latched crash.
+
+    Non-intrusive introspection to tell "crashed (and why)" apart from "just
+    silent": reads the run state, the program counter when halted, and decodes
+    the Cortex-M fault registers (CFSR/HFSR/BFAR) into a human/agent-readable
+    reason. ``data.faulted`` and ``data.in_fault_handler`` flag a crash;
+    ``data.faults.reason`` explains it.
+
+    The *faulting* PC lives in the stacked exception frame, readable only when
+    halted. For a running crashed core, pass ``halt=True`` to halt and recover
+    it in one call (``data.fault_pc``); the core is left halted. With an ELF
+    (``elf_path``, or the last image flashed here) the faulting/current PCs are
+    resolved to ``function (file:line)`` in ``data.fault_location`` /
+    ``data.pc_location``.
+    """
+    return _guard(
+        lambda: registry.resolve(device_id).get_status(
+            device_id, target=target, elf_path=elf_path, halt=halt
         )
     ).to_dict()
 
@@ -216,24 +312,59 @@ def list_sessions() -> dict[str, Any]:
 
 
 @mcp.tool()
-def start_rtt(session_id: str, control_block_address: int | None = None) -> dict[str, Any]:
+def start_rtt(
+    session_id: str,
+    control_block_address: int | None = None,
+    elf_path: str | None = None,
+) -> dict[str, Any]:
     """Start background RTT log capture on an open session.
 
     A reader thread continuously drains the RTT up channel into a buffer; use
-    ``read_rtt`` to fetch accumulated output. Pass ``control_block_address``
-    (the ``_SEGGER_RTT`` symbol) to skip the RAM search.
+    ``read_rtt`` to fetch accumulated output. The control block is located from
+    the ``_SEGGER_RTT`` symbol in ``elf_path`` (or the last image flashed to the
+    session's device); pass ``control_block_address`` to override, or neither to
+    fall back to a RAM search.
     """
-    return _guard(
-        lambda: sessions.get(session_id).start_rtt(
-            control_block_address=control_block_address
-        )
-    ).to_dict()
+
+    def _start() -> OperationResult:
+        session = sessions.get(session_id)
+        address = control_block_address
+        if address is None:
+            adapter = registry.resolve(session.device_id)
+            resolver = getattr(adapter, "rtt_control_block", None)
+            if resolver is not None:
+                address = resolver(session.device_id, elf_path)
+        return session.start_rtt(control_block_address=address)
+
+    return _guard(_start).to_dict()
 
 
 @mcp.tool()
 def read_rtt(session_id: str) -> dict[str, Any]:
     """Drain buffered RTT output captured since the last read (in ``data.text``)."""
     return _guard(lambda: sessions.get(session_id).read_rtt()).to_dict()
+
+
+@mcp.tool()
+def wait_for_rtt(
+    session_id: str,
+    pattern: str,
+    timeout_s: float = 5.0,
+    regex: bool = False,
+) -> dict[str, Any]:
+    """Block until ``pattern`` appears in the RTT stream, or ``timeout_s`` passes.
+
+    Turns "flash and run" into a deterministic checkpoint: wait for a firmware
+    banner or result line (e.g. "SELF-TEST PASS"). Requires RTT already started
+    (start_rtt). Branch on ``data.matched`` (true if seen, false on timeout);
+    the matched/preceding output is in ``data.text``. Set ``regex=True`` to treat
+    ``pattern`` as a regular expression.
+    """
+    return _guard(
+        lambda: sessions.get(session_id).wait_for_rtt(
+            pattern, timeout_s=timeout_s, regex=regex
+        )
+    ).to_dict()
 
 
 @mcp.tool()

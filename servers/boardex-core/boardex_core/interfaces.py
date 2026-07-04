@@ -122,10 +122,56 @@ class TargetController(Backend):
         target: str | None = None,
         timeout_s: float = 2.0,
         control_block_address: int | None = None,
+        elf_path: str | None = None,
     ) -> OperationResult:
         """Read firmware debug output (RTT/semihosting) for up to ``timeout_s``.
 
         ``control_block_address`` pins the SEGGER RTT control block location
         (from the firmware's ``_SEGGER_RTT`` symbol) to skip the RAM scan; if
-        omitted the backend searches the target's RAM for it.
+        omitted the backend searches the target's RAM for it. ``elf_path`` lets
+        the backend resolve that symbol from the firmware image instead (falling
+        back to the last image it flashed to this device).
+        """
+
+    @abstractmethod
+    def recover(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        mass_erase: bool = True,
+    ) -> OperationResult:
+        """Reclaim a wedged target by connecting under reset.
+
+        The escape hatch for firmware that has disabled the debug port, put the
+        core to sleep, or wedged it in a tight loop: the backend asserts the
+        reset line *while* connecting so it catches the core before firmware
+        runs, halts it, and (if ``mass_erase``) erases flash so the bad image
+        cannot re-wedge the board on the next power-up. After a successful
+        recover the target is halted and reclaimable by every other tool.
+        """
+
+    @abstractmethod
+    def get_status(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+        halt: bool = False,
+    ) -> OperationResult:
+        """Report core execution state and decode any latched crash reason.
+
+        Lets the agent tell "crashed (and why)" apart from "just silent". Returns
+        whether the core is running or halted, the program counter when halted,
+        and a decoded Cortex-M fault reason (from CFSR/HFSR/etc.) when a fault is
+        latched. Non-intrusive by default.
+
+        The *faulting* PC and register frame live in the stacked exception frame,
+        readable only when halted. Pass ``halt=True`` to halt the core in this
+        call and recover them (it was crashed anyway); the core is left halted.
+
+        ``elf_path`` (falling back to the last image flashed to this device) maps
+        the current and faulting PCs to ``function (file:line)`` so the agent can
+        act on a source location, not a raw address.
         """

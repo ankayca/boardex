@@ -11,7 +11,7 @@ OBJCOPY = $(CROSS)objcopy
 TARGET = blinky-f303re
 
 CFLAGS  = -mcpu=cortex-m4 -mthumb -mfloat-abi=soft \
-          -Wall -Wextra -O2 -ffreestanding -nostdlib -std=c11
+          -Wall -Wextra -O2 -g -ffreestanding -nostdlib -std=c11
 LDFLAGS = -T linker.ld -nostdlib -Wl,--gc-sections
 
 all: $(TARGET).elf $(TARGET).bin

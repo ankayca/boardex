@@ -17,6 +17,7 @@ from typing import Any, Callable
 from boardex_core import DeviceInfo, OperationResult, TargetController
 
 from .. import pyocd_ops
+from ..elf import ElfInfo
 from ..session import ManagedSession, SessionManager
 
 
@@ -28,6 +29,10 @@ class PyOcdAdapter(TargetController):
     def __init__(self, sessions: SessionManager | None = None) -> None:
         # Shared with the server so transient ops can find persistent sessions.
         self._sessions = sessions
+        # Remember the last image flashed to each device so status/RTT tools can
+        # source-map addresses and auto-locate RTT without the agent re-passing
+        # the path every call.
+        self._last_elf: dict[str, str] = {}
 
     def is_available(self) -> bool:
         return pyocd_ops.pyocd_available()
@@ -73,13 +78,16 @@ class PyOcdAdapter(TargetController):
         verify: bool = True,
         reset_after: bool = True,
     ) -> OperationResult:
-        return self._run(
+        result = self._run(
             device_id,
             target,
             lambda s: pyocd_ops.flash(
                 s, firmware_path, verify=verify, reset_after=reset_after
             ),
         )
+        if result.ok and firmware_path.lower().endswith((".elf", ".out", ".axf")):
+            self._last_elf[device_id] = firmware_path
+        return result
 
     def reset(
         self, device_id: str, *, target: str | None = None, halt: bool = False
@@ -126,7 +134,10 @@ class PyOcdAdapter(TargetController):
         target: str | None = None,
         timeout_s: float = 2.0,
         control_block_address: int | None = None,
+        elf_path: str | None = None,
     ) -> OperationResult:
+        if control_block_address is None:
+            control_block_address = self.rtt_control_block(device_id, elf_path)
         return self._run(
             device_id,
             target,
@@ -135,6 +146,69 @@ class PyOcdAdapter(TargetController):
             ),
             connect_mode="attach",
         )
+
+    def recover(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        mass_erase: bool = True,
+    ) -> OperationResult:
+        # Recovery deliberately bypasses any managed session: a wedged board's
+        # session is dead weight, and connect-under-reset needs a *fresh* connect
+        # (the reset line is asserted during attach). If a session is holding the
+        # probe, the resulting busy error tells the agent to close it first.
+        managed = (
+            self._sessions.find_by_device(device_id) if self._sessions else None
+        )
+        if managed is not None:
+            return OperationResult.errored(
+                f"A debug session ({managed.session_id}) is holding {device_id}. "
+                "Close it before recovering (connect-under-reset needs the probe).",
+            )
+        uid = self._probe_uid(device_id)
+        with pyocd_ops.transient_session(
+            uid,
+            target=target,
+            connect_mode="under-reset",
+            resume_on_disconnect=False,
+        ) as session:
+            return pyocd_ops.recover(session, mass_erase=mass_erase)
+
+    def get_status(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+        halt: bool = False,
+    ) -> OperationResult:
+        elf = self._elf_for(device_id, elf_path)
+        # attach mode: never perturb a running/crashed core unless halt=True is
+        # explicitly requested (to recover the faulting frame in this connection).
+        return self._run(
+            device_id,
+            target,
+            lambda s: pyocd_ops.read_core_status(s, elf=elf, halt=halt),
+            connect_mode="attach",
+            resume_on_disconnect=False,
+        )
+
+    # -- ELF / symbol awareness -------------------------------------------
+
+    def known_elf(self, device_id: str) -> str | None:
+        """Path of the last ELF flashed to this device, if any."""
+        return self._last_elf.get(device_id)
+
+    def _elf_for(self, device_id: str, elf_path: str | None) -> ElfInfo | None:
+        return ElfInfo.load(elf_path or self._last_elf.get(device_id))
+
+    def rtt_control_block(
+        self, device_id: str, elf_path: str | None = None
+    ) -> int | None:
+        """Resolve the ``_SEGGER_RTT`` control-block address from the ELF."""
+        elf = self._elf_for(device_id, elf_path)
+        return elf.symbol_address("_SEGGER_RTT") if elf is not None else None
 
     # -- helpers -----------------------------------------------------------
 

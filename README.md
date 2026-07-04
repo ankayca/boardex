@@ -66,8 +66,10 @@ boardex/
 
 ## Status
 
-Early stage. Working today: `boardex-core` + `boardex-target` (flash/debug an
-STM32 Nucleo via its onboard ST-Link).
+Early stage. Working today: `boardex-core` + `boardex-target` — a loop-complete
+flash/debug server for an STM32 Nucleo (via its onboard ST-Link): build external
+firmware, flash it, stream RTT logs, decode crashes from the Cortex-M fault
+registers, and recover a wedged board with connect-under-reset + mass-erase.
 
 ## Supported equipment
 

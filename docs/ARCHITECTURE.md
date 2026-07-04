@@ -121,6 +121,48 @@ sessions. But streaming firmware logs (RTT) needs the probe held open, so
 Session lifecycle tools: `open_session` / `close_session` / `list_sessions` and
 `start_rtt` / `read_rtt` / `stop_rtt`.
 
+## Closing the loop (build, diagnose, recover)
+
+Three capabilities make `boardex-target` self-recovering — an agent can build,
+flash, notice a crash, and reclaim the board without a human:
+
+- **`recover_target`** and **`read_chip_status`** are probe operations, so they
+  live on the `TargetController` interface: connect-under-reset + mass-erase, and
+  core-state + Cortex-M fault-register decoding. Every future programmer adapter
+  (J-Link, OpenOCD) inherits the contract and gains these tools for free.
+- **`build_firmware`** is deliberately *not* on `TargetController`. Building is a
+  host-side operation with no probe and no vendor SDK (a J-Link adapter has no
+  business knowing how to run `make`), so it lives in a standalone `builder`
+  module. It stays a dumb executor: exit code → `Verdict`, gcc-style diagnostics
+  scraped into structured records, newest artifact located. Framework-specific
+  result parsing (e.g. Zephyr/twister) can layer on top later.
+- Cortex-M fault decoding lives in a vendor-neutral `cortex_m` helper (pure
+  functions over register values), reusable by any adapter that reads the same
+  SCB registers and unit-testable without hardware.
+
+What makes these *agent-actionable* rather than raw hardware pokes:
+
+- **Source mapping.** An `elf` helper parses the firmware's symbols/DWARF, so
+  `read_chip_status` reports the faulting PC as `func (file:line)` and RTT
+  auto-locates its `_SEGGER_RTT` control block. `flash_firmware` remembers the
+  last image per device, so this needs no extra arguments. Brand-neutral and
+  host-side (any GCC/Clang ELF), so it's a helper, not part of the ABC.
+- **Faulting context.** When halted, `read_chip_status` decodes the auto-stacked
+  Cortex-M exception frame to recover the *faulting* PC (the current PC is just
+  the handler). `halt=True` halts an already-crashed running core to grab it in
+  one call — the one exception to "never change execution state", and only when
+  asked.
+- **`wait_for_rtt`.** A thin, explicitly-blessed ergonomic helper (session layer,
+  not the ABC): block until a pattern appears in the RTT stream or a timeout.
+  Turns "flash and run" into a deterministic checkpoint while leaving the
+  pass/fail judgment to the agent (`data.matched`).
+
+The next programmer-side phase — interactive/halt-mode debugging (breakpoints,
+watchpoints, `run_until`, backtrace) — is specified in
+[`phase2-interactive-debug.md`](phase2-interactive-debug.md). It builds on the
+`elf`/`cortex_m`/session foundations above and lands on the `TargetController`
+ABC so every future probe adapter inherits it.
+
 ## How to add a new backend (the contributor workflow)
 
 Say you want to add J-Link support to `boardex-target`:

@@ -15,6 +15,7 @@ creation should move behind the adapter interface.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from typing import Any, Callable
@@ -22,6 +23,15 @@ from typing import Any, Callable
 from boardex_core import DeviceBusyError, DeviceNotFoundError, OperationResult
 
 from . import pyocd_ops
+
+
+def _find_match(text: str, pattern: str, *, regex: bool) -> int | None:
+    """Return the end index of ``pattern`` in ``text``, or None. Pure/testable."""
+    if regex:
+        found = re.search(pattern, text)
+        return found.end() if found else None
+    index = text.find(pattern)
+    return index + len(pattern) if index >= 0 else None
 
 
 class _RttLogger:
@@ -185,6 +195,58 @@ class ManagedSession:
         )
         result.warnings = warnings
         return result
+
+    def wait_for_rtt(
+        self,
+        pattern: str,
+        *,
+        timeout_s: float = 5.0,
+        regex: bool = False,
+        poll_interval_s: float = 0.05,
+    ) -> OperationResult:
+        """Block until ``pattern`` appears in the RTT stream or ``timeout_s``.
+
+        The thin ergonomic helper the agent uses to turn "flash and run" into a
+        deterministic checkpoint: wait for e.g. "SELF-TEST PASS". The agent still
+        judges the outcome via ``data.matched`` (verdict is only a sensible
+        default: PASS when found, FAIL on timeout). Consumes the buffered stream
+        up to the match and returns it in ``data.text``.
+        """
+        if self._rtt is None:
+            return OperationResult.inconclusive(
+                "RTT logging is not running; call start_rtt before wait_for_rtt."
+            )
+        started = time.monotonic()
+        deadline = started + max(timeout_s, 0.0)
+        collected = bytearray()
+        while True:
+            data, _total, _dropped = self._rtt.drain()
+            collected.extend(data)
+            text = collected.decode("utf-8", "backslashreplace")
+            end = _find_match(text, pattern, regex=regex)
+            if end is not None:
+                result = OperationResult.passed(
+                    f"Matched {'regex' if regex else 'text'} {pattern!r} in RTT output.",
+                    matched=True,
+                    timed_out=False,
+                    pattern=pattern,
+                    text=text,
+                    channel=self._rtt.channel_name,
+                )
+                result.duration_s = round(time.monotonic() - started, 3)
+                return result
+            if time.monotonic() >= deadline:
+                result = OperationResult.failed(
+                    f"Pattern {pattern!r} not seen in RTT within {timeout_s:.1f}s.",
+                    matched=False,
+                    timed_out=True,
+                    pattern=pattern,
+                    text=text,
+                    channel=self._rtt.channel_name,
+                )
+                result.duration_s = round(time.monotonic() - started, 3)
+                return result
+            time.sleep(poll_interval_s)
 
     def stop_rtt(self) -> OperationResult:
         if self._rtt is None:
