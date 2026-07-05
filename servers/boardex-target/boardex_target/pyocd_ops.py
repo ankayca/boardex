@@ -345,12 +345,25 @@ def _read_exception_frame(
 
 def read_memory(session: Any, address: int, length: int) -> OperationResult:
     data = bytes(session.target.read_memory_block8(address, length))
-    return OperationResult.passed(
+    word_aligned = (address % 4) == 0
+    result = OperationResult.passed(
         f"Read {length} bytes @ {address:#010x}.",
+        # ``address`` is echoed for backwards compatibility; ``requested_address``
+        # makes it explicit that we report exactly what was asked for (the debug
+        # access is byte-wise, so no probe-side aliasing is applied to the value).
         address=address,
+        requested_address=address,
+        word_aligned=word_aligned,
         length=length,
         hex=data.hex(),
     )
+    if not word_aligned:
+        result.warnings.append(
+            f"Address {address:#010x} is not 32-bit aligned. Some peripheral "
+            "registers require word (32-bit) access; a byte read here can return "
+            "wrong values. Read the containing word (mask to a 4-byte boundary)."
+        )
+    return result
 
 
 def write_memory(session: Any, address: int, data: bytes) -> OperationResult:

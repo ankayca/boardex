@@ -243,6 +243,8 @@ class LogicAnalyzer(Backend):
         num_samples: int | None = None,
         duration_s: float | None = None,
         options: dict[str, str] | None = None,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "rising",
     ) -> OperationResult:
         """Capture and run a bus protocol decoder (I2C/SPI/UART/...).
 

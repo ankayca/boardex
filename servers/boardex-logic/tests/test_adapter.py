@@ -133,8 +133,57 @@ def test_decode(registry, fake_cli):
     )
     assert result.ok
     assert result.data["annotations"][0]["decoder"] == "i2c"
+    assert result.data["bus_state"] == "decoded_ok"
+    assert result.data["transactions"][0]["addr_7bit"] == 0x24
     # Indices are resolved to the device's channel names before hitting sigrok.
     assert fake_cli["decode"]["channel_map"] == {"scl": "D0", "sda": "D1"}
+
+
+def test_decode_structured_transactions(registry, monkeypatch):
+    la = registry.resolve(DEVICE)
+    text = (
+        "0-100 i2c: START\n"
+        "100-200 i2c: ADDRESS WRITE: EE\n"
+        "200-300 i2c: DATA WRITE: D0\n"
+        "300-400 i2c: ACK\n"
+        "400-500 i2c: START REPEAT\n"
+        "500-600 i2c: ADDRESS READ: EF\n"
+        "600-700 i2c: DATA READ: 55\n"
+        "700-800 i2c: NACK\n"
+        "800-900 i2c: STOP\n"
+    )
+    monkeypatch.setattr(
+        "boardex_logic.adapters.sigrok_adapter.sigrok_cli.decode_raw",
+        lambda *a, **k: text,
+    )
+    result = la.decode(DEVICE, "i2c", {"scl": 0, "sda": 1}, num_samples=1000)
+    assert result.ok
+    assert result.data["bus_state"] == "decoded_ok"
+    assert len(result.data["transactions"]) == 2
+    assert result.data["transactions"][1]["read"] == [0x55]
+
+
+def test_decode_with_trigger(registry, monkeypatch):
+    captured: dict = {}
+
+    def fake_decode_raw(spec, **kwargs):
+        captured.update(kwargs)
+        return "0-100 i2c: START\n100-200 i2c: ADDRESS WRITE: EE\n"
+
+    monkeypatch.setattr(
+        "boardex_logic.adapters.sigrok_adapter.sigrok_cli.decode_raw",
+        fake_decode_raw,
+    )
+    registry.resolve(DEVICE).decode(
+        DEVICE,
+        "i2c",
+        {"scl": 1, "sda": 0},
+        num_samples=500,
+        trigger_channel=1,
+        trigger_edge="falling",
+    )
+    assert captured["trigger"] == ("D1", "f")
+    assert "D0" in captured["channels"] and "D1" in captured["channels"]
 
 
 def test_unavailable_backend_scans_empty(monkeypatch):

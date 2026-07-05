@@ -129,6 +129,8 @@ def decode_bus(
     num_samples: int | None = None,
     duration_s: float | None = None,
     options: dict[str, str] | None = None,
+    trigger_channel: int | None = None,
+    trigger_edge: str = "rising",
 ) -> dict[str, Any]:
     """Capture a bus and decode it into transactions (I2C/SPI/UART/...).
 
@@ -143,9 +145,14 @@ def decode_bus(
         sample_rate_hz: Sample rate for the capture (use >= ~4x the bus clock).
         num_samples / duration_s: Capture length (num_samples wins).
         options: Decoder options, e.g. {"baudrate": "115200"} for UART.
+        trigger_channel: Channel index to trigger on; None captures immediately.
+        trigger_edge: One of "rising"/"falling"/"high"/"low"/"either".
 
-    Returns ``data.annotations`` — the decoded stream. Verdict is ``inconclusive``
-    if nothing decoded (wrong channel map, rate too low, or an idle bus).
+    Returns ``data.annotations`` — the decoded stream — and, for supported
+    protocols, ``data.transactions`` (structured records) plus ``data.bus_state``
+    (``idle_bus`` / ``activity_no_decode`` / ``decoded_ok``). Verdict is
+    ``inconclusive`` if nothing decoded (wrong channel map, rate too low, or an
+    idle bus).
     """
     return _guard(
         lambda: registry.resolve(device_id).decode(
@@ -156,8 +163,46 @@ def decode_bus(
             num_samples=num_samples,
             duration_s=duration_s,
             options=options,
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge,
         )
     ).to_dict()
+
+
+@mcp.tool()
+def capture_during(
+    device_id: str,
+    protocol: str,
+    channel_map: dict[str, int],
+    sample_rate_hz: int = 4_000_000,
+    duration_s: float = 0.1,
+    trigger_channel: int | None = None,
+    trigger_edge: str = "falling",
+    options: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Trigger-armed bus capture for sporadic traffic (I2C/SPI/UART/...).
+
+    Same as ``decode_bus`` but defaults to a short window and SCL-falling trigger
+    for I2C. Coordinate with the target MCP: call ``reset_target`` on the MCU
+    immediately before this tool so the capture covers the first post-reset bus
+    activity.
+
+    For I2C, when ``trigger_channel`` is omitted the ``scl`` entry from
+    ``channel_map`` is used.
+    """
+    trig = trigger_channel
+    if trig is None and protocol.lower() == "i2c" and "scl" in channel_map:
+        trig = channel_map["scl"]
+    return decode_bus(
+        device_id,
+        protocol,
+        channel_map,
+        sample_rate_hz=sample_rate_hz,
+        duration_s=duration_s,
+        options=options,
+        trigger_channel=trig,
+        trigger_edge=trigger_edge,
+    )
 
 
 def main() -> None:

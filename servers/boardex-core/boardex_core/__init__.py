@@ -12,6 +12,7 @@ from .errors import (
     DeviceNotFoundError,
     OperationFailedError,
 )
+from .evidence import EvidenceBundle, WorkflowStep, combine_verdicts
 from .interfaces import Backend, DeviceInfo, LogicAnalyzer, TargetController
 from .registry import BackendRegistry
 from .results import OperationResult, Verdict
@@ -24,11 +25,14 @@ __all__ = [
     "DeviceBusyError",
     "DeviceInfo",
     "DeviceNotFoundError",
+    "EvidenceBundle",
     "LogicAnalyzer",
     "OperationFailedError",
     "OperationResult",
     "TargetController",
     "Verdict",
+    "WorkflowStep",
+    "combine_verdicts",
 ]
 
 __version__ = "0.1.0"

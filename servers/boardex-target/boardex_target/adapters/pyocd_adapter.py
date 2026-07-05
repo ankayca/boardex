@@ -87,12 +87,17 @@ class PyOcdAdapter(TargetController):
         )
         if result.ok and firmware_path.lower().endswith((".elf", ".out", ".axf")):
             self._last_elf[device_id] = firmware_path
+        if result.ok:
+            self._drain_session_rtt(device_id, result)
         return result
 
     def reset(
         self, device_id: str, *, target: str | None = None, halt: bool = False
     ) -> OperationResult:
-        return self._run(device_id, target, lambda s: pyocd_ops.reset(s, halt=halt))
+        result = self._run(device_id, target, lambda s: pyocd_ops.reset(s, halt=halt))
+        if result.ok:
+            self._drain_session_rtt(device_id, result)
+        return result
 
     def halt(self, device_id: str, *, target: str | None = None) -> OperationResult:
         return self._run(
@@ -114,6 +119,23 @@ class PyOcdAdapter(TargetController):
         return self._run(
             device_id, target, lambda s: pyocd_ops.read_memory(s, address, length)
         )
+
+    def inspect_peripheral(
+        self,
+        device_id: str,
+        peripheral: str,
+        *,
+        target: str | None = None,
+    ) -> OperationResult:
+        from ..peripherals import inspect as peripheral_inspect
+
+        def _read(session: Any) -> OperationResult:
+            def read_block(address: int, length: int) -> bytes:
+                return bytes(session.target.read_memory_block8(address, length))
+
+            return peripheral_inspect.inspect(read_block, peripheral)
+
+        return self._run(device_id, target, _read, connect_mode="attach")
 
     def write_memory(
         self,
@@ -211,6 +233,24 @@ class PyOcdAdapter(TargetController):
         return elf.symbol_address("_SEGGER_RTT") if elf is not None else None
 
     # -- helpers -----------------------------------------------------------
+
+    def _drain_session_rtt(self, device_id: str, result: OperationResult) -> None:
+        """Discard stale RTT backlog after a successful flash/reset.
+
+        The background RTT logger keeps running across a reflash, so output from
+        the *previous* image is still buffered when the new one boots. Dropping
+        it here means a subsequent ``wait_for_rtt`` matches only fresh output and
+        can't false-positive on a stale banner/result line. No-op when no session
+        (or no RTT stream) is open. The count is surfaced for observability.
+        """
+        managed = (
+            self._sessions.find_by_device(device_id) if self._sessions else None
+        )
+        if managed is None:
+            return
+        dropped = managed.mark_fresh_run()
+        result.data["rtt_backlog_discarded"] = dropped
+        result.data["run_epoch"] = managed._run_epoch
 
     def _run(
         self,

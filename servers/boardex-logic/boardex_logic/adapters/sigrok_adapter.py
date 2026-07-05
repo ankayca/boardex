@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from boardex_core import DeviceInfo, LogicAnalyzer, OperationResult, Verdict
 
-from .. import analyze, parse, sigrok_cli
+from .. import analyze, decode, parse, sigrok_cli
 
 
 class SigrokAdapter(LogicAnalyzer):
@@ -159,6 +159,8 @@ class SigrokAdapter(LogicAnalyzer):
         num_samples: int | None = None,
         duration_s: float | None = None,
         options: dict[str, str] | None = None,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "rising",
     ) -> OperationResult:
         spec = self._spec(device_id)
         n = self._resolve_num_samples(num_samples, duration_s, sample_rate_hz)
@@ -166,6 +168,20 @@ class SigrokAdapter(LogicAnalyzer):
             return OperationResult.errored(
                 "Specify num_samples or duration_s for the decode capture."
             )
+
+        channel_names = [
+            self._channel_name(device_id, idx) for idx in channel_map.values()
+        ]
+        trigger = None
+        if trigger_channel is not None:
+            edge = sigrok_cli.TRIGGER_EDGES.get(trigger_edge)
+            if edge is None:
+                return OperationResult.errored(
+                    f"Unknown trigger_edge '{trigger_edge}'. Use one of "
+                    f"{sorted(sigrok_cli.TRIGGER_EDGES)}."
+                )
+            trigger = (self._channel_name(device_id, trigger_channel), edge)
+
         text = sigrok_cli.decode_raw(
             spec,
             sample_rate_hz=sample_rate_hz,
@@ -176,13 +192,37 @@ class SigrokAdapter(LogicAnalyzer):
                 for pin, idx in channel_map.items()
             },
             options=options,
+            channels=sorted(set(channel_names)),
+            trigger=trigger,
         )
         annotations = parse.parse_annotations(text)
-        verdict = OperationResult.passed if annotations else OperationResult.inconclusive
+        transactions = decode.decode_transactions(protocol, annotations)
+        bus_state = _bus_state(annotations, transactions)
+
+        if transactions:
+            verdict = OperationResult.passed
+            summary = (
+                f"Decoded {len(transactions)} {protocol} transaction(s) "
+                f"from {len(annotations)} annotation(s)."
+            )
+        elif annotations:
+            verdict = OperationResult.inconclusive
+            summary = (
+                f"Saw {len(annotations)} {protocol} annotation(s) but could not "
+                "form complete transactions (partial capture or unknown format)."
+            )
+        else:
+            verdict = OperationResult.inconclusive
+            summary = f"No {protocol} activity decoded (idle bus or wrong channel map)."
+
         return verdict(
-            f"Decoded {len(annotations)} {protocol} annotation(s).",
+            summary,
             protocol=protocol,
+            bus_state=bus_state,
             annotations=annotations,
+            transactions=transactions,
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge if trigger_channel is not None else None,
         )
 
     # -- helpers -----------------------------------------------------------
@@ -244,3 +284,12 @@ class SigrokAdapter(LogicAnalyzer):
             if hz >= div:
                 return f"{hz / div:g} {unit}"
         return f"{hz} Hz"
+
+
+def _bus_state(annotations: list[dict], transactions: list[dict]) -> str:
+    """Classify capture outcome for agent branching."""
+    if not annotations:
+        return "idle_bus"
+    if transactions:
+        return "decoded_ok"
+    return "activity_no_decode"

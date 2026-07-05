@@ -139,6 +139,8 @@ def decode_raw(
     channel_map: dict[str, str],
     options: dict[str, str] | None = None,
     annotation: str | None = None,
+    channels: list[str] | None = None,
+    trigger: tuple[str, str] | None = None,
     timeout_s: float = 60.0,
 ) -> str:
     """Capture and run a sigrok protocol decoder, returning annotation lines.
@@ -163,5 +165,10 @@ def decode_raw(
         "-P",
         pd,
     ]
+    if channels:
+        args += ["--channels", ",".join(channels)]
+    if trigger is not None:
+        name, edge = trigger
+        args += ["--triggers", f"{name}={edge}"]
     args += ["-A", annotation or protocol]
     return run(args, timeout_s=timeout_s)

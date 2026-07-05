@@ -114,6 +114,17 @@ class _RttLogger:
             self._buffer.clear()
             return data, self._total_bytes, self._dropped_bytes
 
+    def discard(self) -> int:
+        """Drop everything currently buffered without returning it.
+
+        Used to throw away stale output left over from a previous firmware
+        image after a flash/reset, so a later ``wait_for_rtt`` can't match it.
+        """
+        with self._buffer_lock:
+            dropped = len(self._buffer)
+            self._buffer.clear()
+            return dropped
+
     def buffered_bytes(self) -> int:
         with self._buffer_lock:
             return len(self._buffer)
@@ -137,6 +148,7 @@ class ManagedSession:
         self._session = session
         self._lock = threading.RLock()
         self._rtt: _RttLogger | None = None
+        self._run_epoch = 0
 
     def run(self, operation: Callable[[Any], OperationResult]) -> OperationResult:
         """Execute a pyocd_ops operation against this session under the lock."""
@@ -174,6 +186,40 @@ class ManagedSession:
             "RTT logging started.", channel=logger.channel_name
         )
 
+    def discard_rtt_backlog(self) -> int:
+        """Throw away buffered RTT output; no-op (returns 0) if not running.
+
+        Called right after a flash/reset so the next ``read_rtt``/``wait_for_rtt``
+        only sees output produced by the freshly-loaded image, never a stale
+        banner or result line from the previous run.
+        """
+        if self._rtt is None:
+            return 0
+        return self._rtt.discard()
+
+    def mark_fresh_run(self) -> int:
+        """Discard RTT backlog and bump ``run_epoch`` for a new verification cycle."""
+        dropped = self.discard_rtt_backlog()
+        self._run_epoch += 1
+        return dropped
+
+    def prepare_for_run(self) -> OperationResult:
+        """Discard buffered RTT and bump the run epoch for session hygiene.
+
+        Call before a fresh flash/wait cycle when you want to guarantee no stale
+        RTT text is matched. ``flash_firmware``/``reset_target`` already drain the
+        buffer; this covers manual re-runs without a reflash.
+        """
+        discarded = self.mark_fresh_run()
+        info = self.info()
+        info.pop("run_epoch", None)
+        return OperationResult.passed(
+            f"Session prepared (discarded {discarded} RTT byte(s)).",
+            rtt_backlog_discarded=discarded,
+            run_epoch=self._run_epoch,
+            **info,
+        )
+
     def read_rtt(self) -> OperationResult:
         if self._rtt is None:
             return OperationResult.inconclusive(
@@ -202,6 +248,7 @@ class ManagedSession:
         *,
         timeout_s: float = 5.0,
         regex: bool = False,
+        since_last_flash: bool = True,
         poll_interval_s: float = 0.05,
     ) -> OperationResult:
         """Block until ``pattern`` appears in the RTT stream or ``timeout_s``.
@@ -211,11 +258,19 @@ class ManagedSession:
         judges the outcome via ``data.matched`` (verdict is only a sensible
         default: PASS when found, FAIL on timeout). Consumes the buffered stream
         up to the match and returns it in ``data.text``.
+
+        ``since_last_flash`` (default True) discards anything already buffered
+        when the wait begins, so the pattern can only match output that arrives
+        *after* this call. This is what prevents a false positive from a stale
+        banner/result line left in the buffer by a previous firmware image.
+        Pass False to also consider output buffered before the call.
         """
         if self._rtt is None:
             return OperationResult.inconclusive(
                 "RTT logging is not running; call start_rtt before wait_for_rtt."
             )
+        if since_last_flash:
+            self._rtt.discard()
         started = time.monotonic()
         deadline = started + max(timeout_s, 0.0)
         collected = bytearray()
@@ -266,6 +321,7 @@ class ManagedSession:
             "rtt_running": self._rtt is not None and self._rtt.running,
             "rtt_channel": self._rtt.channel_name if self._rtt else None,
             "rtt_buffered_bytes": self._rtt.buffered_bytes() if self._rtt else 0,
+            "run_epoch": self._run_epoch,
         }
 
     def close(self) -> None:
