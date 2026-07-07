@@ -27,3 +27,13 @@ class DeviceBusyError(BoardexError):
 
 class OperationFailedError(BoardexError):
     """The operation was attempted on real hardware but did not complete."""
+
+
+class RttUnavailableError(BoardexError):
+    """Firmware log streaming (RTT) is not available on this target/backend.
+
+    Raised when the backend cannot locate an RTT control block (firmware built
+    without RTT) or does not support RTT at all. The session layer converts
+    this into an ``inconclusive`` result rather than an error, because a
+    missing log stream is a property of the firmware, not a bench failure.
+    """

@@ -22,6 +22,37 @@ def test_registry_lists_i2c_instances():
     assert "I2C2" in names
 
 
+def test_registry_is_family_keyed():
+    assert registry.get("I2C1") is registry.get("stm32:I2C1")
+    assert registry.get("I2C1", family="stm32") is not None
+    assert registry.get("I2C1", family="nxp") is None
+    assert "stm32" in registry.list_families()
+
+
+def test_registry_qualifies_names_shared_across_families():
+    class _NxpI2c:
+        name = "I2C1"
+        family = "nxp"
+        description = "fake NXP I2C"
+
+        def memory_reads(self):
+            return []
+
+        def decode(self, blocks):
+            return {}
+
+    registry.register(_NxpI2c())
+    try:
+        # Bare name is now ambiguous; qualified names resolve.
+        assert registry.get("I2C1") is None
+        assert registry.get("nxp:I2C1") is not None
+        assert registry.get("stm32:I2C1") is not None
+        names = registry.list_supported()
+        assert "stm32:I2C1" in names and "nxp:I2C1" in names
+    finally:
+        del registry._INSPECTORS[("nxp", "I2C1")]
+
+
 def test_decode_i2c_cr1_flags():
     decoded = decode_i2c_cr1(0x401)
     assert decoded["PE"] is True

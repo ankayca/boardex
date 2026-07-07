@@ -1,16 +1,19 @@
 """Persistent debug sessions with a background RTT logger.
 
-A ``ManagedSession`` keeps one pyOCD session open so the agent can flash, then
-stream firmware logs, then flash again without re-claiming the probe each time.
+A ``ManagedSession`` keeps one backend-native session open so the agent can
+flash, then stream firmware logs, then flash again without re-claiming the
+probe each time.
 
-Concurrency model: a single probe/DAP is *not* thread-safe, so every access to a
-session's target is serialised by one lock. The background RTT reader thread
-acquires that same lock for each poll, and drops what it reads into a separate,
-independently-locked ring buffer that ``read_rtt`` drains.
+This layer is vendor-neutral: it only speaks the ``NativeSession`` /
+``RttChannel`` protocols from ``boardex_core``. Which vendor SDK actually
+backs the session is the adapter's business (``SupportsSessions``), so any
+probe backend that implements those protocols gets persistent sessions and RTT
+streaming for free.
 
-Backend note: session creation currently assumes the pyOCD backend (the only
-target backend today). When a second backend (e.g. J-Link) is added, session
-creation should move behind the adapter interface.
+Concurrency model: a single probe/DAP is *not* thread-safe, so the backend's
+``NativeSession`` serialises every access to the device internally (including
+``RttChannel.read``). The background RTT reader thread drops what it reads into
+a separate, independently-locked ring buffer that ``read_rtt`` drains.
 """
 
 from __future__ import annotations
@@ -20,9 +23,17 @@ import threading
 import time
 from typing import Any, Callable
 
-from boardex_core import DeviceBusyError, DeviceNotFoundError, OperationResult
-
-from . import pyocd_ops
+from boardex_core import (
+    DeviceBusyError,
+    DeviceNotFoundError,
+    NativeSession,
+    OperationFailedError,
+    OperationResult,
+    RttChannel,
+    RttUnavailableError,
+    SupportsRttLocation,
+    SupportsSessions,
+)
 
 
 def _find_match(text: str, pattern: str, *, regex: bool) -> int | None:
@@ -39,16 +50,12 @@ class _RttLogger:
 
     def __init__(
         self,
-        session: Any,
-        lock: threading.RLock,
+        channel: RttChannel | None,
         *,
-        control_block_address: int | None = None,
         poll_interval_s: float = 0.05,
         max_buffer_bytes: int = 1_000_000,
     ) -> None:
-        self._session = session
-        self._target_lock = lock
-        self._control_block_address = control_block_address
+        self._channel = channel
         self._poll_interval_s = poll_interval_s
         self._max_buffer_bytes = max_buffer_bytes
 
@@ -59,26 +66,16 @@ class _RttLogger:
         self._buffer = bytearray()
         self._total_bytes = 0
         self._dropped_bytes = 0
-        self.channel_name: str | None = None
+        self.channel_name: str | None = (
+            getattr(channel, "name", None) if channel is not None else None
+        )
 
     @property
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
     def start(self) -> None:
-        """Find the up channel and spawn the reader thread.
-
-        Raises pyOCD's RTTError if no control block is found, or ValueError if
-        the control block has no up channels.
-        """
-        with self._target_lock:
-            up_channel = pyocd_ops.open_up_channel(
-                self._session, control_block_address=self._control_block_address
-            )
-        if up_channel is None:
-            raise ValueError("RTT control block has no up channels.")
-        self.channel_name = up_channel.name
-        self._up_channel = up_channel
+        """Spawn the reader thread for the already-open channel."""
         self._stop.clear()
         self._thread = threading.Thread(
             target=self._run, name="boardex-rtt-logger", daemon=True
@@ -88,11 +85,10 @@ class _RttLogger:
     def _run(self) -> None:
         while not self._stop.is_set():
             chunk = b""
-            with self._target_lock:
-                try:
-                    chunk = self._up_channel.read()
-                except Exception:  # noqa: BLE001 - keep the logger alive on glitches
-                    chunk = b""
+            try:
+                chunk = self._channel.read() if self._channel is not None else b""
+            except Exception:  # noqa: BLE001 - keep the logger alive on glitches
+                chunk = b""
             if chunk:
                 self._append(chunk)
             else:
@@ -140,21 +136,27 @@ class ManagedSession:
     """A live, persistent debug session for one target."""
 
     def __init__(
-        self, session_id: str, device_id: str, session: Any, target: str | None
+        self,
+        session_id: str,
+        device_id: str,
+        native: NativeSession | None,
+        target: str | None,
     ) -> None:
         self.session_id = session_id
         self.device_id = device_id
         self.target = target
-        self._session = session
-        self._lock = threading.RLock()
+        self._native = native
         self._rtt: _RttLogger | None = None
         self._run_epoch = 0
 
+    @property
+    def run_epoch(self) -> int:
+        """Monotonic counter bumped on every fresh flash/verification cycle."""
+        return self._run_epoch
+
     def run(self, operation: Callable[[Any], OperationResult]) -> OperationResult:
-        """Execute a pyocd_ops operation against this session under the lock."""
-        with pyocd_ops.translate_errors():
-            with self._lock:
-                return operation(self._session)
+        """Execute an operation against this session's native backend session."""
+        return self._native.run(operation)
 
     # -- RTT streaming -----------------------------------------------------
 
@@ -164,23 +166,15 @@ class ManagedSession:
                 "RTT logging already running.",
                 channel=self._rtt.channel_name,
             )
-        from pyocd.core import exceptions as pyocd_exc
-
-        logger = _RttLogger(
-            self._session, self._lock, control_block_address=control_block_address
-        )
         try:
-            with pyocd_ops.translate_errors():
-                logger.start()
-        except pyocd_exc.RTTError as exc:
-            return OperationResult.inconclusive(
-                "No SEGGER RTT control block found. Is the firmware built with "
-                "RTT enabled?",
-                detail=str(exc),
+            channel = self._native.open_rtt(
+                control_block_address=control_block_address
             )
-        except ValueError as exc:
+        except RttUnavailableError as exc:
             return OperationResult.inconclusive(str(exc))
 
+        logger = _RttLogger(channel)
+        logger.start()
         self._rtt = logger
         return OperationResult.passed(
             "RTT logging started.", channel=logger.channel_name
@@ -325,15 +319,57 @@ class ManagedSession:
         }
 
     def close(self) -> None:
-        """Stop RTT and close the underlying probe session."""
+        """Stop RTT and close the underlying native session."""
         if self._rtt is not None:
             self._rtt.stop()
             self._rtt = None
-        with self._lock:
+        if self._native is not None:
             try:
-                self._session.close()
+                self._native.close()
             except Exception:  # noqa: BLE001 - best effort on teardown
                 pass
+
+
+def open_session_for(
+    adapter: Any,
+    sessions: "SessionManager",
+    device_id: str,
+    *,
+    target: str | None = None,
+) -> ManagedSession:
+    """Open a persistent session for ``device_id`` via its owning adapter.
+
+    Single implementation of the "check capability, then open" step shared by
+    the ``open_session`` tool and the composite workflows. Raises a typed
+    ``OperationFailedError`` when the backend cannot do sessions, so the facade
+    guard converts it into an actionable error result.
+    """
+    if not isinstance(adapter, SupportsSessions):
+        raise OperationFailedError(
+            f"Backend {getattr(adapter, 'backend_name', '?')!r} does not support "
+            "persistent debug sessions."
+        )
+    return sessions.open(adapter, device_id, target=target)
+
+
+def start_session_rtt(
+    session: ManagedSession,
+    adapter: Any,
+    *,
+    control_block_address: int | None = None,
+    elf_path: str | None = None,
+) -> OperationResult:
+    """Start RTT on ``session``, resolving the control block via the adapter.
+
+    Single implementation of the "resolve ``_SEGGER_RTT`` from the adapter's
+    ``SupportsRttLocation`` capability, then start" step shared by the
+    ``start_rtt`` tool and the composite workflows. Idempotent: an already
+    running stream reports success without restarting.
+    """
+    address = control_block_address
+    if address is None and isinstance(adapter, SupportsRttLocation):
+        address = adapter.rtt_control_block(session.device_id, elf_path)
+    return session.start_rtt(control_block_address=address)
 
 
 class SessionManager:
@@ -346,8 +382,18 @@ class SessionManager:
         self._counter = 0
 
     def open(
-        self, device_id: str, unique_id: str, *, target: str | None = None
+        self,
+        adapter: SupportsSessions,
+        device_id: str,
+        *,
+        target: str | None = None,
     ) -> ManagedSession:
+        """Open a persistent session for ``device_id`` via its owning adapter.
+
+        The adapter's ``open_native_session`` attaches without perturbing the
+        running target, so firmware keeps executing and RTT can stream
+        immediately.
+        """
         with self._lock:
             if device_id in self._by_device:
                 existing = self._by_device[device_id]
@@ -355,17 +401,11 @@ class SessionManager:
                     f"A session ({existing}) is already open for {device_id}. "
                     "Close it before opening another."
                 )
-            # attach mode: don't reset/halt on connect, so the target keeps
-            # running and RTT can stream immediately.
-            session_obj = pyocd_ops.open_session(
-                unique_id, target=target, connect_mode="attach"
-            )
-            with pyocd_ops.translate_errors():
-                session_obj.open()
+            native = adapter.open_native_session(device_id, target=target)
 
             self._counter += 1
             session_id = f"sess-{self._counter}"
-            managed = ManagedSession(session_id, device_id, session_obj, target)
+            managed = ManagedSession(session_id, device_id, native, target)
             self._sessions[session_id] = managed
             self._by_device[device_id] = session_id
             return managed

@@ -16,35 +16,24 @@ import logging
 import sys
 from typing import Any
 
-from boardex_core import BackendRegistry, BoardexError, LogicAnalyzer, OperationResult
+from boardex_core import BackendRegistry, LogicAnalyzer, OperationResult, guard, list_devices_result
 from mcp.server.fastmcp import FastMCP
 
-from .adapters.sigrok_adapter import SigrokAdapter
+from .backends import build_registry
 
 log = logging.getLogger("boardex.logic")
 
 mcp = FastMCP("boardex-logic")
 
-# Registry of logic-analyzer backends. Register new drivers here and they
-# immediately appear in list_analyzers() with no tool changes.
-registry: BackendRegistry[LogicAnalyzer] = BackendRegistry()
-registry.register("sigrok", SigrokAdapter)
+# Registry of logic-analyzer backends, assembled from installed plugins
+# (``boardex.logic_backends`` entry points). New analyzer drivers appear in
+# list_analyzers() by pip-installing their adapter package.
+registry: BackendRegistry[LogicAnalyzer] = build_registry()
 
 
 def _guard(fn: Any) -> OperationResult:
-    """Run an adapter call, converting expected failures into error results.
-
-    Guarantees the agent always receives a valid ``OperationResult`` instead of a
-    raised exception across the MCP wire.
-    """
-    try:
-        return fn()
-    except BoardexError as exc:
-        log.warning("operation failed: %s", exc)
-        return OperationResult.errored(str(exc))
-    except Exception as exc:  # noqa: BLE001 - last-resort safety net
-        log.exception("unexpected error")
-        return OperationResult.errored(f"Unexpected error: {exc}")
+    """Shared facade guard bound to this server's logger."""
+    return guard(fn, logger=log)
 
 
 @mcp.tool()
@@ -55,12 +44,7 @@ def list_analyzers() -> dict[str, Any]:
     each device's ``device_id`` in the other tools. If ``data.backends`` is empty,
     the sigrok tooling isn't installed (or no analyzer is plugged in / powered).
     """
-    devices = registry.scan()
-    return OperationResult.passed(
-        f"Found {len(devices)} logic analyzer(s).",
-        devices=[d.to_dict() for d in devices],
-        backends=registry.available_backends(),
-    ).to_dict()
+    return list_devices_result(registry, "logic analyzer").to_dict()
 
 
 @mcp.tool()

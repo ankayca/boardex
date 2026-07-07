@@ -14,12 +14,16 @@ STM32CubeProgrammer are future adapters that plug in without changing any tool.
 | `reset_target` | Reset (optionally halt after reset) |
 | `halt_target` / `resume_target` | Stop / start the CPU core |
 | `read_memory` / `write_memory` | Peek/poke target memory (hex payloads) |
+| `inspect_peripheral` | Decode a live on-chip peripheral (registers, pin mux, clocks, hints) |
 | `read_firmware_log` | One-shot: drain SEGGER RTT output for a timeout |
 | `recover_target` | Reclaim a wedged board: connect-under-reset + mass-erase |
 | `read_chip_status` | Core state/PC + decoded Cortex-M fault, source-mapped via the ELF |
 | `open_session` / `close_session` / `list_sessions` | Manage persistent debug sessions |
 | `start_rtt` / `read_rtt` / `stop_rtt` | Background RTT streaming on an open session |
 | `wait_for_rtt` | Block until a pattern appears in the RTT stream (or timeout) |
+| `prepare_session` | Discard stale RTT output before a fresh run (session hygiene) |
+| `run_checkpoint` | Composite: build → flash → wait-for-RTT with bundled evidence |
+| `verify_bringup` | Composite: checkpoint + optional logic-analyzer I2C bus proof |
 
 Every tool returns an `OperationResult` (`verdict`, `summary`, `data`, ...).
 
@@ -130,10 +134,25 @@ boardex-target          # runs over stdio, the transport MCP clients use
 
 ## Add a new probe backend
 
-1. Create `boardex_target/adapters/<name>_adapter.py` implementing
-   `boardex_core.TargetController`.
-2. `registry.register("<name>", YourAdapter)` in `server.py`.
+Backends are discovered as plugins — your adapter can live in its own
+pip-installable package with zero changes to this one:
 
-That's it — no tool or agent changes. See [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+1. Implement `boardex_core.TargetController` (plus any opt-in capability
+   protocols: `SupportsSessions`, `SupportsRttLocation`,
+   `SupportsPeripheralInspection`).
+2. Publish an entry point in your `pyproject.toml`:
+
+```toml
+[project.entry-points."boardex.target_backends"]
+jlink = "boardex_jlink.adapter:JLinkAdapter"
+```
+
+3. Prove conformance with the shared suite
+   (`boardex_core.testing.TargetControllerConformance`).
+
+That's it — `pip install` your package and the backend appears in
+`list_targets()`. No tool or agent changes. See
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md) and
+[`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 [pyOCD]: https://pyocd.io

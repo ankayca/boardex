@@ -14,6 +14,7 @@ analyzers plug in without changing any tool.
 | `get_capabilities` | Channels, sample rates, and trigger types of one device |
 | `capture` | Acquire samples; returns a compact per-channel edge list |
 | `decode_bus` | Capture + decode a bus (I2C/SPI/UART/...) into transactions |
+| `capture_during` | Trigger-armed short bus capture for sporadic traffic (defaults tuned for I2C) |
 
 Every tool returns an `OperationResult` (`verdict`, `summary`, `data`, ...), so
 the agent branches on a machine-readable outcome, never on prose.
@@ -100,10 +101,23 @@ boardex-logic          # runs over stdio, the transport MCP clients use
 
 ## Add a new analyzer backend
 
-1. Create `boardex_logic/adapters/<name>_adapter.py` implementing
-   `boardex_core.LogicAnalyzer`.
-2. `registry.register("<name>", YourAdapter)` in `server.py`.
+Backends are discovered as plugins — your adapter can live in its own
+pip-installable package with zero changes to this one:
 
-That's it — no tool or agent changes. See [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+1. Implement `boardex_core.LogicAnalyzer`.
+2. Publish an entry point in your `pyproject.toml`:
+
+```toml
+[project.entry-points."boardex.logic_backends"]
+saleae = "boardex_saleae.adapter:SaleaeAdapter"
+```
+
+3. Prove conformance with the shared suite
+   (`boardex_core.testing.LogicAnalyzerConformance`).
+
+That's it — `pip install` your package and the backend appears in
+`list_analyzers()`. No tool or agent changes. See
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md) and
+[`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 [sigrok]: https://sigrok.org

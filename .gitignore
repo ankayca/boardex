@@ -17,6 +17,9 @@ env/
 .vscode/
 .idea/
 
+# Local-only Cursor rules (this clone only, not shared)
+.cursor/rules/
+
 # Node / Electron (planned app/)
 node_modules/
 out/

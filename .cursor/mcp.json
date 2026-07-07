@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "boardex-target": {
+      "command": "${workspaceFolder}/.venv/bin/boardex-target"
+    },
+    "boardex-logic": {
+      "command": "${workspaceFolder}/.venv/bin/boardex-logic"
+    }
+  }
+}

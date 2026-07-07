@@ -22,6 +22,12 @@ logic = ["boardex-logic"]
 [project.scripts]
 boardex-target = "boardex_target.server:main"
 
+# Built-in backends register through the same plugin mechanism third-party
+# adapter packages use: publish an entry point in this group and the adapter
+# appears in list_targets() with zero Boardex code changes.
+[project.entry-points."boardex.target_backends"]
+pyocd = "boardex_target.adapters.pyocd_adapter:PyOcdAdapter"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
