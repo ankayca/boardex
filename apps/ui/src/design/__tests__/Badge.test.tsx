@@ -16,10 +16,12 @@ describe('Badge risk mapping (BIBLE §6.2)', () => {
     expect(badge.classList.contains('bg-warn')).toBe(false);
   });
 
-  it('high renders amber solid', () => {
+  it('high renders amber solid with text-primary for contrast', () => {
     render(<Badge kind="risk" value="high" />);
     const badge = screen.getByText('High');
-    expect(badge).toHaveClass('bg-warn', 'text-white');
+    // White on amber #D97706 fails small-text contrast — high uses text-primary.
+    expect(badge).toHaveClass('bg-warn', 'text-text-primary');
+    expect(badge.classList.contains('text-white')).toBe(false);
   });
 
   it('critical renders red solid', () => {
@@ -62,21 +64,23 @@ describe('Badge status mapping (D14 semantic reservation)', () => {
     expect(screen.getByText('Stopped')).toHaveClass('bg-fail-bg', 'text-fail');
   });
 
-  it('states needing the human render amber', () => {
+  it('amber marks exactly the states where a human action exists', () => {
     render(<Badge kind="status" value="awaiting_approval" />);
     render(<Badge kind="status" value="plan_ready" />);
-    render(<Badge kind="status" value="diagnosing" />);
     expect(screen.getByText('Awaiting approval')).toHaveClass('bg-warn-bg', 'text-warn');
     expect(screen.getByText('Plan ready')).toHaveClass('bg-warn-bg', 'text-warn');
-    expect(screen.getByText('Diagnosing')).toHaveClass('bg-warn-bg', 'text-warn');
   });
 
-  it('working states render neutral — no decorative color', () => {
+  it('working states render neutral — no decorative color (diagnosing included)', () => {
     render(<Badge kind="status" value="draft" />);
     render(<Badge kind="status" value="planning" />);
     render(<Badge kind="status" value="running" />);
+    // diagnosing is the agent acting, not the human — neutral, not amber.
+    render(<Badge kind="status" value="diagnosing" />);
     expect(screen.getByText('Draft')).toHaveClass('bg-neutral-badge-bg', 'text-neutral-badge');
     expect(screen.getByText('Planning')).toHaveClass('bg-neutral-badge-bg', 'text-neutral-badge');
     expect(screen.getByText('Running')).toHaveClass('bg-neutral-badge-bg', 'text-neutral-badge');
+    expect(screen.getByText('Diagnosing')).toHaveClass('bg-neutral-badge-bg', 'text-neutral-badge');
+    expect(screen.getByText('Diagnosing').classList.contains('text-warn')).toBe(false);
   });
 });

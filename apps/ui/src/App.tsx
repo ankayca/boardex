@@ -1,9 +1,12 @@
 import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 
-// Dev-only gallery route (BIBLE §8 T0.5): lazy so it never lands in the prod bundle,
-// and the route itself is only registered in dev builds.
-const DesignGalleryPage = lazy(() => import('./design/DesignGalleryPage'));
+// Dev-only gallery route (BIBLE §8 T0.5). Gate the lazy construction itself, not
+// just the route: in a prod build `import.meta.env.DEV` is statically false, so the
+// dynamic import lives in dead code and Rollup emits no gallery chunk at all.
+const DesignGalleryPage = import.meta.env.DEV
+  ? lazy(() => import('./design/DesignGalleryPage'))
+  : null;
 
 // Placeholder home — no product UI before Sprint 1 (see docs/BIBLE.md §8).
 function Home() {
@@ -23,7 +26,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      {import.meta.env.DEV && (
+      {import.meta.env.DEV && DesignGalleryPage && (
         <Route
           path="/design"
           element={
