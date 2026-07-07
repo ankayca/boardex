@@ -75,7 +75,7 @@ def fake_registry() -> BackendRegistry[TargetController]:
 
 
 def test_run_checkpoint_rtt_pass(fake_registry, monkeypatch):
-    managed = ManagedSession("sess-1", "fake:001", session=MagicMock(), target=None)
+    managed = ManagedSession("sess-1", "fake:001", native=MagicMock(), target=None)
     managed.start_rtt = MagicMock(
         return_value=OperationResult.passed("RTT started", channel="Terminal")
     )
@@ -94,18 +94,15 @@ def test_run_checkpoint_rtt_pass(fake_registry, monkeypatch):
     result = workflows.run_checkpoint(
         fake_registry,
         sessions,
-        device_id="fake:001",
-        target=None,
-        session_id="sess-1",
-        project_dir=None,
-        firmware_path="/tmp/test.elf",
-        build_command=None,
-        artifact=None,
-        clean=False,
-        rtt_pattern="SELF-TEST PASS",
-        rtt_timeout_s=1.0,
-        inspect_on_failure="I2C1",
-        elf_path="/tmp/test.elf",
+        workflows.CheckpointSpec(
+            device_id="fake:001",
+            session_id="sess-1",
+            firmware_path="/tmp/test.elf",
+            rtt_pattern="SELF-TEST PASS",
+            rtt_timeout_s=1.0,
+            inspect_on_failure="I2C1",
+            elf_path="/tmp/test.elf",
+        ),
     )
 
     assert result.verdict == Verdict.PASS
@@ -114,7 +111,7 @@ def test_run_checkpoint_rtt_pass(fake_registry, monkeypatch):
 
 
 def test_run_checkpoint_rtt_fail_inspects(fake_registry, monkeypatch):
-    managed = ManagedSession("sess-1", "fake:001", session=MagicMock(), target=None)
+    managed = ManagedSession("sess-1", "fake:001", native=MagicMock(), target=None)
     managed.start_rtt = MagicMock(
         return_value=OperationResult.passed("RTT started", channel="Terminal")
     )
@@ -133,18 +130,14 @@ def test_run_checkpoint_rtt_fail_inspects(fake_registry, monkeypatch):
     result = workflows.run_checkpoint(
         fake_registry,
         sessions,
-        device_id="fake:001",
-        target=None,
-        session_id="sess-1",
-        project_dir=None,
-        firmware_path="/tmp/test.elf",
-        build_command=None,
-        artifact=None,
-        clean=False,
-        rtt_pattern="SELF-TEST PASS",
-        rtt_timeout_s=1.0,
-        inspect_on_failure="I2C1",
-        elf_path=None,
+        workflows.CheckpointSpec(
+            device_id="fake:001",
+            session_id="sess-1",
+            firmware_path="/tmp/test.elf",
+            rtt_pattern="SELF-TEST PASS",
+            rtt_timeout_s=1.0,
+            inspect_on_failure="I2C1",
+        ),
     )
 
     assert result.verdict == Verdict.FAIL

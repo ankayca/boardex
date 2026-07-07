@@ -7,13 +7,18 @@ just the contracts that keep the whole system decoupled.
 
 | Module | Purpose | Pattern |
 |---|---|---|
-| `interfaces.py` | Abstract base classes (`TargetController`, `Backend`) + `DeviceInfo` | Dependency Inversion |
+| `interfaces.py` | Abstract base classes (`TargetController`, `LogicAnalyzer`, `Backend`) + `DeviceInfo` | Dependency Inversion |
+| `capabilities.py` | Opt-in adapter capabilities (`SupportsSessions`, `NativeSession`, ...) | runtime-checkable Protocols |
 | `results.py` | `OperationResult` + `Verdict` — the uniform, agent-friendly return shape | — |
 | `errors.py` | Typed exception hierarchy (`DeviceNotFoundError`, ...) | — |
-| `registry.py` | `BackendRegistry` — discovers/owns backends, resolves `device_id` → adapter | Registry + Factory |
+| `registry.py` | `BackendRegistry` — owns backends, resolves `device_id` → adapter, and discovers third-party adapters via entry points (`load_plugins`) | Registry + Factory + Plugin |
+| `facade.py` | Shared MCP-facade plumbing (`guard`, `list_devices_result`) | — |
+| `evidence.py` | `EvidenceBundle` / `WorkflowStep` for composite workflows | — |
+| `testing/` | Reference fakes + reusable adapter **conformance suites** | — |
 
 Upper layers depend **only** on these abstractions, never on a vendor SDK. That's
-what lets a contributor add a new probe or instrument by writing a single adapter.
+what lets a contributor add a new probe or instrument by writing a single adapter
+package — see [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 See [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) for the full design.
 

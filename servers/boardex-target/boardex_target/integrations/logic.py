@@ -2,17 +2,17 @@
 
 Keeps ``boardex-target`` installable without ``boardex-logic`` while letting
 composite workflows drive a logic analyzer when both servers are present in the
-monorepo/venv.
+monorepo/venv. Every cross-package import of ``boardex_logic`` lives in this
+file (one import-guard policy), and the registry comes from
+``boardex_logic.backends.build_registry`` so backends are registered exactly
+once — plugins included.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 from boardex_core import BackendRegistry, LogicAnalyzer
-
-if TYPE_CHECKING:
-    pass
 
 _LOGIC_REGISTRY: BackendRegistry[LogicAnalyzer] | None = None
 
@@ -23,13 +23,11 @@ def logic_registry() -> BackendRegistry[LogicAnalyzer] | None:
     if _LOGIC_REGISTRY is not None:
         return _LOGIC_REGISTRY
     try:
-        from boardex_logic.adapters.sigrok_adapter import SigrokAdapter
+        from boardex_logic.backends import build_registry
     except ImportError:
         return None
-    reg: BackendRegistry[LogicAnalyzer] = BackendRegistry()
-    reg.register("sigrok", SigrokAdapter)
-    _LOGIC_REGISTRY = reg
-    return reg
+    _LOGIC_REGISTRY = build_registry()
+    return _LOGIC_REGISTRY
 
 
 def resolve_logic_analyzer(device_id: str) -> LogicAnalyzer | None:
@@ -40,3 +38,17 @@ def resolve_logic_analyzer(device_id: str) -> LogicAnalyzer | None:
         return reg.resolve(device_id)
     except Exception:  # noqa: BLE001 - unknown id / backend unavailable
         return None
+
+
+def match_i2c_expectations(
+    transactions: list[dict[str, Any]], expectations: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Match decoded I2C transactions against expected ones.
+
+    Returns None when boardex-logic (which owns the matcher) is not installed.
+    """
+    try:
+        from boardex_logic.decode.i2c import match_expectations
+    except ImportError:
+        return None
+    return match_expectations(transactions, expectations)

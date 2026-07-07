@@ -12,13 +12,73 @@ tools without hitting "device busy".
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Callable
 
-from boardex_core import DeviceInfo, OperationResult, TargetController
+from boardex_core import (
+    DeviceInfo,
+    OperationResult,
+    RttUnavailableError,
+    TargetController,
+)
 
 from .. import pyocd_ops
 from ..elf import ElfInfo
 from ..session import ManagedSession, SessionManager
+
+
+class _LockedRttChannel:
+    """RTT up channel whose reads are serialised with all other probe access."""
+
+    def __init__(self, channel: Any, lock: threading.RLock) -> None:
+        self._channel = channel
+        self._lock = lock
+        self.name: str = getattr(channel, "name", "rtt") or "rtt"
+
+    def read(self) -> bytes:
+        with self._lock:
+            return self._channel.read()
+
+
+class PyOcdNativeSession:
+    """``NativeSession`` implementation backed by an open pyOCD session.
+
+    Serialises every access to the probe/DAP through one re-entrant lock (a
+    single probe is not thread-safe) and translates raw pyOCD exceptions into
+    Boardex's typed error hierarchy.
+    """
+
+    def __init__(self, session: Any) -> None:
+        self._session = session
+        self._lock = threading.RLock()
+
+    def run(self, operation: Callable[[Any], OperationResult]) -> OperationResult:
+        with pyocd_ops.translate_errors():
+            with self._lock:
+                return operation(self._session)
+
+    def open_rtt(self, *, control_block_address: int | None = None) -> _LockedRttChannel:
+        from pyocd.core import exceptions as pyocd_exc
+
+        try:
+            with self._lock:
+                up_channel = pyocd_ops.open_up_channel(
+                    self._session, control_block_address=control_block_address
+                )
+        except pyocd_exc.RTTError as exc:
+            raise RttUnavailableError(
+                "No SEGGER RTT control block found. Is the firmware built with "
+                f"RTT enabled? ({exc})"
+            ) from exc
+        if up_channel is None:
+            raise RttUnavailableError(
+                "RTT control block found but it exposes no up channels."
+            )
+        return _LockedRttChannel(up_channel, self._lock)
+
+    def close(self) -> None:
+        with self._lock:
+            self._session.close()
 
 
 class PyOcdAdapter(TargetController):
@@ -66,6 +126,22 @@ class PyOcdAdapter(TargetController):
     def probe_unique_id(self, device_id: str) -> str:
         """Expose the raw probe id so the server can open a managed session."""
         return self._probe_uid(device_id)
+
+    def open_native_session(
+        self, device_id: str, *, target: str | None = None
+    ) -> PyOcdNativeSession:
+        """Open a persistent pyOCD session (``SupportsSessions`` capability).
+
+        Attach mode: don't reset/halt on connect, so the target keeps running
+        and RTT can stream immediately.
+        """
+        uid = self._probe_uid(device_id)
+        session_obj = pyocd_ops.open_session(
+            uid, target=target, connect_mode="attach"
+        )
+        with pyocd_ops.translate_errors():
+            session_obj.open()
+        return PyOcdNativeSession(session_obj)
 
     # -- operations --------------------------------------------------------
 
@@ -250,7 +326,7 @@ class PyOcdAdapter(TargetController):
             return
         dropped = managed.mark_fresh_run()
         result.data["rtt_backlog_discarded"] = dropped
-        result.data["run_epoch"] = managed._run_epoch
+        result.data["run_epoch"] = managed.run_epoch
 
     def _run(
         self,

@@ -12,18 +12,25 @@ from . import registry
 def inspect(
     read_block: Callable[[int, int], bytes],
     peripheral: str,
+    *,
+    family: str | None = None,
 ) -> OperationResult:
     """Fetch and decode one registered peripheral.
 
     ``read_block(address, length) -> bytes`` is supplied by the adapter (pyOCD,
     J-Link, ...). Keeps this module free of vendor SDK imports.
+
+    ``peripheral`` may be family-qualified (``"stm32:I2C1"``); ``family``
+    scopes a bare name when several silicon families provide it.
     """
-    profile = registry.get(peripheral)
+    profile = registry.get(peripheral, family=family)
     if profile is None:
         return OperationResult.errored(
-            f"Unknown peripheral {peripheral!r}.",
+            f"Unknown or ambiguous peripheral {peripheral!r}. Use one of the "
+            "supported names (family-qualified where shown).",
             peripheral=peripheral,
-            supported=registry.list_supported(),
+            supported=registry.list_supported(family=family),
+            families=registry.list_families(),
         )
 
     blocks: dict[str, bytes] = {}

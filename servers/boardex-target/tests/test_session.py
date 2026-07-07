@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-
 from boardex_target.session import ManagedSession, _find_match, _RttLogger
 
 
@@ -29,7 +27,7 @@ def test_find_match_regex():
 
 def _idle_logger() -> _RttLogger:
     """An _RttLogger with no thread running, safe to poke buffers directly."""
-    return _RttLogger(session=None, lock=threading.RLock())
+    return _RttLogger(channel=None)
 
 
 def test_rtt_logger_discard_clears_buffer_and_reports_count():
@@ -47,7 +45,7 @@ def test_rtt_logger_discard_clears_buffer_and_reports_count():
 
 
 def _session_with(logger: _RttLogger | None) -> ManagedSession:
-    ms = ManagedSession("sess-1", "pyocd:test", session=None, target=None)
+    ms = ManagedSession("sess-1", "pyocd:test", native=None, target=None)
     ms._rtt = logger
     return ms
 
@@ -99,6 +97,90 @@ def test_wait_for_rtt_matches_stale_buffer_when_opted_in():
     )
     assert result.data["matched"] is True
     assert result.data["timed_out"] is False
+
+
+# -- vendor-neutral session layer ------------------------------------------
+
+
+class _FakeChannel:
+    name = "Terminal"
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    def read(self) -> bytes:
+        return self._chunks.pop(0) if self._chunks else b""
+
+
+class _FakeNativeSession:
+    def __init__(self, channel: _FakeChannel | None = None) -> None:
+        self.closed = False
+        self._channel = channel
+
+    def run(self, operation):
+        return operation("fake-vendor-session")
+
+    def open_rtt(self, *, control_block_address: int | None = None):
+        from boardex_core import RttUnavailableError
+
+        if self._channel is None:
+            raise RttUnavailableError("no RTT on this fake target")
+        return self._channel
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeSessionAdapter:
+    """SupportsSessions implementation with no vendor SDK behind it."""
+
+    def __init__(self, native: _FakeNativeSession) -> None:
+        self._native = native
+
+    def probe_unique_id(self, device_id: str) -> str:
+        return device_id.split(":", 1)[-1]
+
+    def open_native_session(self, device_id: str, *, target: str | None = None):
+        return self._native
+
+
+def test_session_manager_opens_via_adapter_capability():
+    from boardex_core import SupportsSessions
+    from boardex_target.session import SessionManager
+
+    native = _FakeNativeSession()
+    adapter = _FakeSessionAdapter(native)
+    assert isinstance(adapter, SupportsSessions)
+
+    manager = SessionManager()
+    managed = manager.open(adapter, "fake:42", target=None)
+    assert managed.device_id == "fake:42"
+
+    manager.close(managed.session_id)
+    assert native.closed
+
+
+def test_start_rtt_reports_inconclusive_when_unavailable():
+    session = ManagedSession(
+        "sess-1", "fake:42", native=_FakeNativeSession(channel=None), target=None
+    )
+    result = session.start_rtt()
+    assert result.verdict.value == "inconclusive"
+    assert "no RTT" in result.summary
+
+
+def test_rtt_streams_through_fake_channel():
+    channel = _FakeChannel([b"hello ", b"world\n"])
+    session = ManagedSession(
+        "sess-1", "fake:42", native=_FakeNativeSession(channel), target=None
+    )
+    start = session.start_rtt()
+    assert start.ok
+    try:
+        result = session.wait_for_rtt("world", timeout_s=2.0, since_last_flash=False)
+        assert result.data["matched"] is True
+    finally:
+        session.stop_rtt()
 
 
 def test_prepare_for_run_discards_and_bumps_epoch():
