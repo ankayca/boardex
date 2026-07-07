@@ -206,6 +206,8 @@ export const BenchStatusSchema = z.object({
   contractVersion: z.string(),
   devices: z.array(
     z.object({
+      // Backend registry's stable device_id, e.g. "sigrok:kingst-la2016:conn=3.12".
+      id: z.string(),
       kind: BenchDeviceKindSchema,
       name: z.string(),
       state: BenchDeviceStateSchema,

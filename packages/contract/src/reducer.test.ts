@@ -181,6 +181,31 @@ describe('reduceRun — approval lifecycle', () => {
   });
 });
 
+describe('reduceRun — fix-loop iteration', () => {
+  it('reaches iteration 2 via run.iteration_started', () => {
+    const events: Event[] = [
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.status_changed', { status: 'diagnosing' }),
+      envelope(3, 'run.iteration_started', { iteration: 2, reason: 'applying approved fix' }),
+      envelope(4, 'run.status_changed', { status: 'running' }),
+    ];
+    const view = reduceRun(events);
+    expect(view.run.iteration).toBe(2);
+    expect(view.run.status).toBe('running');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('applies the duplicate-seq no-op rule to run.iteration_started', () => {
+    const events: Event[] = [
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.iteration_started', { iteration: 2, reason: 'applying approved fix' }),
+    ];
+    const duplicated = [...events, events[1]!];
+    expect(reduceRun(duplicated)).toEqual(reduceRun(events));
+    expect(reduceRun(duplicated).run.iteration).toBe(2);
+  });
+});
+
 describe('reduceRun — evidence-linking law', () => {
   it('downgrades a check whose artifact has no prior artifact.created', () => {
     const orphanCheck = envelope(2, 'check.evaluated', {

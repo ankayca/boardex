@@ -54,6 +54,10 @@ const catalog: Record<string, Event> = {
     status: 'approved',
     resolvedAt: TS,
   }),
+  'run.iteration_started': envelope(18, 'run.iteration_started', {
+    iteration: 2,
+    reason: 'applying approved fix',
+  }),
   'run.completed': envelope(14, 'run.completed', {
     summary: 'All checks pass.',
     reportArtifactId: 'art_09',
@@ -92,6 +96,14 @@ describe('EventSchema envelope rules', () => {
   it('accepts unknown event types via the forward-compatibility envelope', () => {
     const unknown = { seq: 1, runId: 'run_01', ts: TS, type: 'run.paused', payload: {} };
     expect(EventEnvelopeSchema.parse(unknown)).toEqual(unknown);
+  });
+
+  it('rejects run.iteration_started with iteration 1 (iteration 1 is implicit)', () => {
+    const bad = {
+      ...catalog['run.iteration_started'],
+      payload: { iteration: 1, reason: 'never emitted for the first iteration' },
+    };
+    expect(() => EventSchema.parse(bad)).toThrow();
   });
 
   it('rejects run.stopped with byUser false', () => {

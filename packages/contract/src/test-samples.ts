@@ -126,9 +126,15 @@ export const sampleBench: BenchStatus = {
   runnerOnline: true,
   contractVersion: 'boardex-contract/0.1',
   devices: [
-    { kind: 'debug_probe', name: 'ST-Link', state: 'online' },
-    { kind: 'serial', name: '/dev/ttyACM0', state: 'online' },
-    { kind: 'logic_analyzer', name: 'Kingst LA2016', state: 'offline', detail: 'not detected' },
+    { id: 'pyocd:stlink-v2-1:0671', kind: 'debug_probe', name: 'ST-Link', state: 'online' },
+    { id: 'serial:ttyACM0', kind: 'serial', name: '/dev/ttyACM0', state: 'online' },
+    {
+      id: 'sigrok:kingst-la2016:conn=3.12',
+      kind: 'logic_analyzer',
+      name: 'Kingst LA2016',
+      state: 'offline',
+      detail: 'not detected',
+    },
   ],
 };
 

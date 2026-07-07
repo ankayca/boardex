@@ -588,6 +588,9 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string"
+              },
               "kind": {
                 "type": "string",
                 "enum": [
@@ -612,6 +615,7 @@
               }
             },
             "required": [
+              "id",
               "kind",
               "name",
               "state"
@@ -1166,6 +1170,49 @@
             },
             "type": {
               "type": "string",
+              "const": "run.iteration_started"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "iteration": {
+                  "type": "integer",
+                  "minimum": 2
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "iteration",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "seq",
+            "runId",
+            "ts",
+            "type",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "$ref": "#/definitions/Event/anyOf/0/properties/seq"
+            },
+            "runId": {
+              "$ref": "#/definitions/Id"
+            },
+            "ts": {
+              "$ref": "#/definitions/IsoDateTime"
+            },
+            "type": {
+              "type": "string",
               "const": "run.completed"
             },
             "payload": {
@@ -1490,9 +1537,6 @@
         },
         "updatedAt": {
           "$ref": "#/definitions/IsoDateTime"
-        },
-        "nextAction": {
-          "type": "string"
         }
       },
       "required": [
@@ -1500,8 +1544,7 @@
         "title",
         "status",
         "boardProfileId",
-        "updatedAt",
-        "nextAction"
+        "updatedAt"
       ],
       "additionalProperties": false
     },

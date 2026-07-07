@@ -177,6 +177,10 @@ export function reduceRun(events: readonly Event[]): RunView {
         approvals[index] = { ...approval, status, resolvedAt };
         break;
       }
+      case 'run.iteration_started': {
+        run = { ...requireRun(event), iteration: event.payload.iteration };
+        break;
+      }
       case 'run.completed': {
         run = { ...requireRun(event), status: 'completed' };
         break;

@@ -96,6 +96,13 @@ export const ApprovalResolvedEventSchema = event(
   }),
 );
 
+// Fix loop begins a new iteration; emitted for iteration >= 2 only — iteration 1
+// is implicit (§5.2, BIBLE v1.2).
+export const RunIterationStartedEventSchema = event(
+  'run.iteration_started',
+  z.object({ iteration: z.number().int().min(2), reason: z.string() }),
+);
+
 export const RunCompletedEventSchema = event(
   'run.completed',
   z.object({ summary: z.string(), reportArtifactId: IdSchema }),
@@ -124,6 +131,7 @@ export const EventSchema = z.discriminatedUnion('type', [
   DiagnosisCreatedEventSchema,
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
+  RunIterationStartedEventSchema,
   RunCompletedEventSchema,
   RunFailedEventSchema,
   RunStoppedEventSchema,
@@ -144,6 +152,7 @@ export type CheckEvaluatedEvent = z.infer<typeof CheckEvaluatedEventSchema>;
 export type DiagnosisCreatedEvent = z.infer<typeof DiagnosisCreatedEventSchema>;
 export type ApprovalRequestedEvent = z.infer<typeof ApprovalRequestedEventSchema>;
 export type ApprovalResolvedEvent = z.infer<typeof ApprovalResolvedEventSchema>;
+export type RunIterationStartedEvent = z.infer<typeof RunIterationStartedEventSchema>;
 export type RunCompletedEvent = z.infer<typeof RunCompletedEventSchema>;
 export type RunFailedEvent = z.infer<typeof RunFailedEventSchema>;
 export type RunStoppedEvent = z.infer<typeof RunStoppedEventSchema>;

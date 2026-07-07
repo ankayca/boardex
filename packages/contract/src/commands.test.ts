@@ -33,7 +33,6 @@ describe('command schemas', () => {
         status: 'awaiting_approval',
         boardProfileId: 'bp_01',
         updatedAt: '2026-07-07T14:03:22.114Z',
-        nextAction: 'Approve flash',
       },
     ];
     expect(ListRunsResponseSchema.parse(summaries)).toEqual(summaries);

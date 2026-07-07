@@ -37,7 +37,6 @@ export const RunSummarySchema = z.object({
   status: RunStatusSchema,
   boardProfileId: IdSchema,
   updatedAt: IsoDateTimeSchema,
-  nextAction: z.string(),
 });
 export type RunSummary = z.infer<typeof RunSummarySchema>;
 export const ListRunsResponseSchema = z.array(RunSummarySchema);

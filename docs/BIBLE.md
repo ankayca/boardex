@@ -1,7 +1,7 @@
 # BOARDEX UI BIBLE
 ## Master Build Document for the Boardex Desktop MVP — UI, Contracts, and Claude Code Execution Plan
 
-Version 1.1 · July 2026 — amended after inspecting the joint repo: cofounder ships MCP servers (boardex-core/target/logic); hardware reality is pyOCD + Kingst LA via sigrok + RTT on Nucleo-F303RE. §3 and §10 restructured accordingly.
+Version 1.2 · July 2026 — contract amendment per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`.
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -202,7 +202,8 @@ BoardProfile = { id, name, mcu: string,
   knownQuirks: string[] }
 
 BenchStatus = { runnerOnline: boolean, contractVersion: string,
-  devices: { kind: 'debug_probe'|'serial'|'logic_analyzer',
+  devices: { id: string,    // backend registry's stable device_id, e.g. "sigrok:kingst-la2016:conn=3.12"
+             kind: 'debug_probe'|'serial'|'logic_analyzer',
              name: string, state: 'online'|'offline'|'error', detail?: string }[] }
 ```
 
@@ -246,6 +247,7 @@ Rules: `seq` is per-run and gapless — the UI treats a gap as a protocol error 
 | `diagnosis.created` | `{ diagnosis: Diagnosis }` | after failed checks |
 | `approval.requested` | `{ approval: Approval }` | run pauses for human |
 | `approval.resolved` | `{ approvalId, status, resolvedAt }` | human decided |
+| `run.iteration_started` | `{ iteration: number, reason: string }` | fix loop begins a new iteration (emitted for iteration >= 2 only; iteration 1 is implicit) |
 | `run.completed` | `{ summary: string, reportArtifactId: string }` | terminal success |
 | `run.failed` | `{ summary: string }` | terminal failure |
 | `run.stopped` | `{ byUser: true }` | user stop honored |
@@ -258,7 +260,7 @@ GET  /health                         -> { ok, contractVersion, runnerKind: 'mock
 GET  /bench                          -> BenchStatus
 GET  /board-profiles                 -> BoardProfile[]
 POST /board-profiles                 -> create/update BoardProfile
-GET  /runs                           -> RunSummary[]  (id, title, status, boardProfileId, updatedAt, nextAction)
+GET  /runs                           -> RunSummary[]  (id, title, status, boardProfileId, updatedAt)
 POST /runs                           { taskPrompt, boardProfileId }        -> { runId }
 POST /runs/{id}/plan/approve         {}                                     -> 204
 POST /runs/{id}/approvals/{aid}      { status: 'approved'|'rejected' }      -> 204
@@ -373,7 +375,7 @@ Purpose: delegate a task. Content: the **hero** — a large "Ask Boardex" textar
 Purpose: watch and control the active run; embodies §2.2's six states. Layout per §6.3.
 
 - **Left rail — Board Context:** compact card: board name, MCU, repo (basename), instrument list with StatusDots, safety line ("Flash requires approval · Max 3 iterations · Manual power: 3V3 confirmed"), "View details" → drawer with full profile incl. connection checklist.
-- **Center — Plan & Progress:** task prompt (collapsed to 2 lines, expandable); the plan as a vertical timeline — each step shows status (pending/active/succeeded/failed), title, and when expanded: summary, artifact chips, and a log pane (LogViewer, per-stream tabs: agent/build/flash/serial). Active step auto-expanded. Iteration ≥2 renders a divider: "Iteration 2 — applying fix".
+- **Center — Plan & Progress:** task prompt (collapsed to 2 lines, expandable); the plan as a vertical timeline — each step shows status (pending/active/succeeded/failed), title, and when expanded: summary, artifact chips, and a log pane (LogViewer, per-stream tabs: agent/build/flash/serial). Active step auto-expanded. Iteration ≥2 renders a divider: "Iteration 2 — applying fix" (driven by the `run.iteration_started` event).
 - **Right rail — Status & Approval:** current status card (status badge, elapsed, Stop Run — danger, always visible while non-terminal, with ConfirmDialog). When `awaiting_approval`: the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
 - **Bottom — Evidence Summary band:** one chip per MeasurementCheck (verdict badge + short name, e.g. "I2C clock · PASS"), plus Open Logs / Open Diff / Open Report buttons. Clicking a chip opens Evidence Detail.
 

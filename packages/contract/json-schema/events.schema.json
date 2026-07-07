@@ -589,6 +589,9 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string"
+              },
               "kind": {
                 "type": "string",
                 "enum": [
@@ -613,6 +616,7 @@
               }
             },
             "required": [
+              "id",
               "kind",
               "name",
               "state"
@@ -665,6 +669,9 @@
         },
         {
           "$ref": "#/definitions/ApprovalResolvedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunIterationStartedEvent"
         },
         {
           "$ref": "#/definitions/RunCompletedEvent"
@@ -1190,6 +1197,49 @@
             "approvalId",
             "status",
             "resolvedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunIterationStartedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.iteration_started"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "iteration": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "iteration",
+            "reason"
           ],
           "additionalProperties": false
         }
