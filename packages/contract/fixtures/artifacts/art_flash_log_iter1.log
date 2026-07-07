@@ -1,0 +1,17 @@
+$ pyocd list
+  #   Probe/Board                       Unique ID                  Target
+--------------------------------------------------------------------------------------
+  0   STMicroelectronics ST-LINK/V2-1  066EFF383733554157254923   stm32f303retx
+      NUCLEO-F303RE
+$ pyocd flash --target stm32f303retx --frequency 4000000 bme280-f303re.elf
+0001279 I Target type is stm32f303retx [board]
+0001496 I DP IDR = 0x2ba01477 (v1 rev2) [dap]
+0001621 I AHB-AP#0 IDR = 0x24770011 (AHB-AP var1 rev2) [discovery]
+0001688 I CPU core #0 is Cortex-M4 r0p1 [cortex_m]
+0001694 I FPU present: FPv4-SP-D16-M [cortex_m]
+0001710 I 6 hardware watchpoints [dwt]
+0001716 I 6 hardware breakpoints, 4 literal comparators [fpb]
+0001891 I Loading /bench/firmware/bme280-f303re/bme280-f303re.elf [load_cmd]
+[==================================================] 100%
+0004618 I Erased 4096 bytes (2 sectors), programmed 4096 bytes (2 pages), skipped 0 bytes (0 pages) at 1.42 kB/s [loader]
+0004651 I Resetting target [flash_cmd]

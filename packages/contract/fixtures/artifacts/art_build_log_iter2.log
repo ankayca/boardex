@@ -1,0 +1,16 @@
+$ arm-none-eabi-gcc --version | head -n 1
+arm-none-eabi-gcc (Arm GNU Toolchain 13.2.rel1 (Build arm-13.7)) 13.2.1 20231009
+$ make clean && make
+make: Entering directory '/bench/firmware/bme280-f303re'
+rm -f bme280-f303re.elf bme280-f303re.bin bme280-f303re.map
+make: Leaving directory '/bench/firmware/bme280-f303re'
+make: Entering directory '/bench/firmware/bme280-f303re'
+arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Wall -Wextra -O2 -g -ffreestanding -nostdlib -std=c11 -T linker.ld -nostdlib -Wl,--gc-sections -Wl,-Map=bme280-f303re.map -Wl,--print-memory-usage main.c -o bme280-f303re.elf
+Memory region         Used Size  Region Size  %age Used
+           FLASH:        3340 B       512 KB      0.64%
+             RAM:        1112 B        64 KB      1.70%
+arm-none-eabi-objcopy -O binary bme280-f303re.elf bme280-f303re.bin
+arm-none-eabi-size bme280-f303re.elf
+   text	   data	    bss	    dec	    hex	filename
+   3212	    128	    984	   4324	   10e4	bme280-f303re.elf
+make: Leaving directory '/bench/firmware/bme280-f303re'

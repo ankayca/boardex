@@ -1,0 +1,12 @@
+$ pyocd flash --target stm32f303retx --frequency 4000000 bme280-f303re.elf
+0001304 I Target type is stm32f303retx [board]
+0001518 I DP IDR = 0x2ba01477 (v1 rev2) [dap]
+0001645 I AHB-AP#0 IDR = 0x24770011 (AHB-AP var1 rev2) [discovery]
+0001709 I CPU core #0 is Cortex-M4 r0p1 [cortex_m]
+0001715 I FPU present: FPv4-SP-D16-M [cortex_m]
+0001731 I 6 hardware watchpoints [dwt]
+0001737 I 6 hardware breakpoints, 4 literal comparators [fpb]
+0001904 I Loading /bench/firmware/bme280-f303re/bme280-f303re.elf [load_cmd]
+[==================================================] 100%
+0004701 I Erased 4096 bytes (2 sectors), programmed 4096 bytes (2 pages), skipped 0 bytes (0 pages) at 1.38 kB/s [loader]
+0004733 I Resetting target [flash_cmd]

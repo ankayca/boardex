@@ -1,0 +1,589 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.12",
+  "channel_map": {
+    "scl": 0,
+    "sda": 1
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 8000000,
+  "duration_s": 2,
+  "bus_state": "decoded_ok",
+  "annotations": [
+    {
+      "start_sample": 60000,
+      "end_sample": 60010,
+      "text": "START"
+    },
+    {
+      "start_sample": 60010,
+      "end_sample": 60370,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 60370,
+      "end_sample": 60730,
+      "text": "DATA WRITE: D0 ACK"
+    },
+    {
+      "start_sample": 60730,
+      "end_sample": 60740,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 60740,
+      "end_sample": 61100,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 61100,
+      "end_sample": 61460,
+      "text": "DATA READ: 60 NACK"
+    },
+    {
+      "start_sample": 61460,
+      "end_sample": 61470,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 63870,
+      "end_sample": 63880,
+      "text": "START"
+    },
+    {
+      "start_sample": 63880,
+      "end_sample": 64240,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 64240,
+      "end_sample": 64600,
+      "text": "DATA WRITE: 88 ACK"
+    },
+    {
+      "start_sample": 64600,
+      "end_sample": 64610,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 64610,
+      "end_sample": 64970,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 64970,
+      "end_sample": 65330,
+      "text": "DATA READ: 5C ACK"
+    },
+    {
+      "start_sample": 65330,
+      "end_sample": 65690,
+      "text": "DATA READ: 6D ACK"
+    },
+    {
+      "start_sample": 65690,
+      "end_sample": 66050,
+      "text": "DATA READ: 98 ACK"
+    },
+    {
+      "start_sample": 66050,
+      "end_sample": 66410,
+      "text": "DATA READ: 66 ACK"
+    },
+    {
+      "start_sample": 66410,
+      "end_sample": 66770,
+      "text": "DATA READ: 32 ACK"
+    },
+    {
+      "start_sample": 66770,
+      "end_sample": 67130,
+      "text": "DATA READ: 00 NACK"
+    },
+    {
+      "start_sample": 67130,
+      "end_sample": 67140,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 69540,
+      "end_sample": 69550,
+      "text": "START"
+    },
+    {
+      "start_sample": 69550,
+      "end_sample": 69910,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 69910,
+      "end_sample": 70270,
+      "text": "DATA WRITE: A1 ACK"
+    },
+    {
+      "start_sample": 70270,
+      "end_sample": 70280,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 70280,
+      "end_sample": 70640,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 70640,
+      "end_sample": 71000,
+      "text": "DATA READ: 4B NACK"
+    },
+    {
+      "start_sample": 71000,
+      "end_sample": 71010,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 73410,
+      "end_sample": 73420,
+      "text": "START"
+    },
+    {
+      "start_sample": 73420,
+      "end_sample": 73780,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 73780,
+      "end_sample": 74140,
+      "text": "DATA WRITE: E1 ACK"
+    },
+    {
+      "start_sample": 74140,
+      "end_sample": 74150,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 74150,
+      "end_sample": 74510,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 74510,
+      "end_sample": 74870,
+      "text": "DATA READ: 69 ACK"
+    },
+    {
+      "start_sample": 74870,
+      "end_sample": 75230,
+      "text": "DATA READ: 01 ACK"
+    },
+    {
+      "start_sample": 75230,
+      "end_sample": 75590,
+      "text": "DATA READ: 00 ACK"
+    },
+    {
+      "start_sample": 75590,
+      "end_sample": 75950,
+      "text": "DATA READ: 14 ACK"
+    },
+    {
+      "start_sample": 75950,
+      "end_sample": 76310,
+      "text": "DATA READ: 2A ACK"
+    },
+    {
+      "start_sample": 76310,
+      "end_sample": 76670,
+      "text": "DATA READ: 03 ACK"
+    },
+    {
+      "start_sample": 76670,
+      "end_sample": 77030,
+      "text": "DATA READ: 1E NACK"
+    },
+    {
+      "start_sample": 77030,
+      "end_sample": 77040,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 79440,
+      "end_sample": 79450,
+      "text": "START"
+    },
+    {
+      "start_sample": 79450,
+      "end_sample": 79810,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 79810,
+      "end_sample": 80170,
+      "text": "DATA WRITE: F2 ACK"
+    },
+    {
+      "start_sample": 80170,
+      "end_sample": 80530,
+      "text": "DATA WRITE: 01 ACK"
+    },
+    {
+      "start_sample": 80530,
+      "end_sample": 80540,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 82940,
+      "end_sample": 82950,
+      "text": "START"
+    },
+    {
+      "start_sample": 82950,
+      "end_sample": 83310,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 83310,
+      "end_sample": 83670,
+      "text": "DATA WRITE: F4 ACK"
+    },
+    {
+      "start_sample": 83670,
+      "end_sample": 84030,
+      "text": "DATA WRITE: 27 ACK"
+    },
+    {
+      "start_sample": 84030,
+      "end_sample": 84040,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 86440,
+      "end_sample": 86450,
+      "text": "START"
+    },
+    {
+      "start_sample": 86450,
+      "end_sample": 86810,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 86810,
+      "end_sample": 87170,
+      "text": "DATA WRITE: F5 ACK"
+    },
+    {
+      "start_sample": 87170,
+      "end_sample": 87530,
+      "text": "DATA WRITE: A0 ACK"
+    },
+    {
+      "start_sample": 87530,
+      "end_sample": 87540,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 89940,
+      "end_sample": 89950,
+      "text": "START"
+    },
+    {
+      "start_sample": 89950,
+      "end_sample": 90310,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 90310,
+      "end_sample": 90670,
+      "text": "DATA WRITE: F7 ACK"
+    },
+    {
+      "start_sample": 90670,
+      "end_sample": 90680,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 90680,
+      "end_sample": 91040,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 91040,
+      "end_sample": 91400,
+      "text": "DATA READ: 54 ACK"
+    },
+    {
+      "start_sample": 91400,
+      "end_sample": 91760,
+      "text": "DATA READ: 5B ACK"
+    },
+    {
+      "start_sample": 91760,
+      "end_sample": 92120,
+      "text": "DATA READ: C0 ACK"
+    },
+    {
+      "start_sample": 92120,
+      "end_sample": 92480,
+      "text": "DATA READ: 83 ACK"
+    },
+    {
+      "start_sample": 92480,
+      "end_sample": 92840,
+      "text": "DATA READ: E6 ACK"
+    },
+    {
+      "start_sample": 92840,
+      "end_sample": 93200,
+      "text": "DATA READ: 00 ACK"
+    },
+    {
+      "start_sample": 93200,
+      "end_sample": 93560,
+      "text": "DATA READ: 66 ACK"
+    },
+    {
+      "start_sample": 93560,
+      "end_sample": 93920,
+      "text": "DATA READ: 8A NACK"
+    },
+    {
+      "start_sample": 93920,
+      "end_sample": 93930,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 3280000,
+      "end_sample": 3280010,
+      "text": "START"
+    },
+    {
+      "start_sample": 3280010,
+      "end_sample": 3280370,
+      "text": "ADDRESS WRITE: EC ACK"
+    },
+    {
+      "start_sample": 3280370,
+      "end_sample": 3280730,
+      "text": "DATA WRITE: F7 ACK"
+    },
+    {
+      "start_sample": 3280730,
+      "end_sample": 3280740,
+      "text": "START REPEAT"
+    },
+    {
+      "start_sample": 3280740,
+      "end_sample": 3281100,
+      "text": "ADDRESS READ: ED ACK"
+    },
+    {
+      "start_sample": 3281100,
+      "end_sample": 3281460,
+      "text": "DATA READ: 54 ACK"
+    },
+    {
+      "start_sample": 3281460,
+      "end_sample": 3281820,
+      "text": "DATA READ: 5B ACK"
+    },
+    {
+      "start_sample": 3281820,
+      "end_sample": 3282180,
+      "text": "DATA READ: B0 ACK"
+    },
+    {
+      "start_sample": 3282180,
+      "end_sample": 3282540,
+      "text": "DATA READ: 83 ACK"
+    },
+    {
+      "start_sample": 3282540,
+      "end_sample": 3282900,
+      "text": "DATA READ: E7 ACK"
+    },
+    {
+      "start_sample": 3282900,
+      "end_sample": 3283260,
+      "text": "DATA READ: 00 ACK"
+    },
+    {
+      "start_sample": 3283260,
+      "end_sample": 3283620,
+      "text": "DATA READ: 66 ACK"
+    },
+    {
+      "start_sample": 3283620,
+      "end_sample": 3283980,
+      "text": "DATA READ: 86 NACK"
+    },
+    {
+      "start_sample": 3283980,
+      "end_sample": 3283990,
+      "text": "STOP"
+    }
+  ],
+  "transactions": [
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        208
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        96
+      ],
+      "nack_at": "data"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        136
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        92,
+        109,
+        152,
+        102,
+        50,
+        0
+      ],
+      "nack_at": "data"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        161
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        75
+      ],
+      "nack_at": "data"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        225
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        105,
+        1,
+        0,
+        20,
+        42,
+        3,
+        30
+      ],
+      "nack_at": "data"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        242,
+        1
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        244,
+        39
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        245,
+        160
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        247
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        84,
+        91,
+        192,
+        131,
+        230,
+        0,
+        102,
+        138
+      ],
+      "nack_at": "data"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [
+        247
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "r",
+      "write": [],
+      "read": [
+        84,
+        91,
+        176,
+        131,
+        231,
+        0,
+        102,
+        134
+      ],
+      "nack_at": "data"
+    }
+  ]
+}

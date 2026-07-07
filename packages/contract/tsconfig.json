@@ -1,4 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "include": ["src"],
+  // fixture.test.ts reads the fixture with node:fs, so it needs node types; it
+  // is typechecked by tsconfig.scripts.json (which includes src with them).
+  "exclude": ["src/fixture.test.ts"]
 }

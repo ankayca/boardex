@@ -1,0 +1,82 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.12",
+  "channel_map": {
+    "scl": 0,
+    "sda": 1
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 8000000,
+  "duration_s": 2,
+  "bus_state": "decoded_ok",
+  "annotations": [
+    {
+      "start_sample": 812000,
+      "end_sample": 812010,
+      "text": "START"
+    },
+    {
+      "start_sample": 812010,
+      "end_sample": 812370,
+      "text": "ADDRESS WRITE: 76 NACK"
+    },
+    {
+      "start_sample": 812370,
+      "end_sample": 812380,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 4030000,
+      "end_sample": 4030010,
+      "text": "START"
+    },
+    {
+      "start_sample": 4030010,
+      "end_sample": 4030370,
+      "text": "ADDRESS WRITE: 76 NACK"
+    },
+    {
+      "start_sample": 4030370,
+      "end_sample": 4030380,
+      "text": "STOP"
+    },
+    {
+      "start_sample": 7250000,
+      "end_sample": 7250010,
+      "text": "START"
+    },
+    {
+      "start_sample": 7250010,
+      "end_sample": 7250370,
+      "text": "ADDRESS WRITE: 76 NACK"
+    },
+    {
+      "start_sample": 7250370,
+      "end_sample": 7250380,
+      "text": "STOP"
+    }
+  ],
+  "transactions": [
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    }
+  ]
+}

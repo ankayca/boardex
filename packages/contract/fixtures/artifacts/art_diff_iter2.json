@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "path": "main.c",
+      "reason": "I2C1 CR2 SADD[7:1] expects the 7-bit address in wire-byte position; iteration 1 loaded 0x76 unshifted, addressing 0x3B. Introduce BME280_SADD ((uint32_t)BME280_ADDR << 1) and use it in all three CR2 loads.",
+      "diff": "--- a/main.c\n+++ b/main.c\n@@ -60,6 +60,8 @@\n \n /* BME280 breakout, SDO tied low -> 7-bit address 0x76 (datasheet 5.4.1). */\n #define BME280_ADDR 0x76U\n+/* I2C1 CR2 SADD[7:1] carries the 7-bit address as the wire byte: shift it. */\n+#define BME280_SADD ((uint32_t)BME280_ADDR << 1)\n #define BME280_CHIP_ID 0x60U\n #define BME280_REG_ID 0xD0U\n #define BME280_REG_CTRL_HUM 0xF2U\n@@ -180,7 +182,7 @@\n }\n \n static int bme280_write_reg(uint8_t reg, uint8_t val) {\n-    I2C1_CR2 = (uint32_t)BME280_ADDR | (2U << 16) | I2C_CR2_AUTOEND | I2C_CR2_START;\n+    I2C1_CR2 = BME280_SADD | (2U << 16) | I2C_CR2_AUTOEND | I2C_CR2_START;\n     if (i2c1_wait(I2C_ISR_TXIS, \"TXIS (write reg)\") != 0) {\n         return -1;\n     }\n@@ -194,7 +196,7 @@\n \n static int bme280_read_regs(uint8_t reg, uint8_t *dst, uint32_t n) {\n     /* Pointer write without AUTOEND, then repeated-start read of n bytes. */\n-    I2C1_CR2 = (uint32_t)BME280_ADDR | (1U << 16) | I2C_CR2_START;\n+    I2C1_CR2 = BME280_SADD | (1U << 16) | I2C_CR2_START;\n     if (i2c1_wait(I2C_ISR_TXIS, \"TXIS (read setup)\") != 0) {\n         return -1;\n     }\n@@ -202,7 +204,7 @@\n     if (i2c1_wait(I2C_ISR_TC, \"TC (read setup)\") != 0) {\n         return -1;\n     }\n-    I2C1_CR2 = (uint32_t)BME280_ADDR | I2C_CR2_RD_WRN | (n << 16) | I2C_CR2_AUTOEND |\n+    I2C1_CR2 = BME280_SADD | I2C_CR2_RD_WRN | (n << 16) | I2C_CR2_AUTOEND |\n                I2C_CR2_START;\n     for (uint32_t i = 0; i < n; i++) {\n         if (i2c1_wait(I2C_ISR_RXNE, \"RXNE (read data)\") != 0) {\n"
+    }
+  ]
+}
