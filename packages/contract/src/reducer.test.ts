@@ -63,6 +63,7 @@ describe('reduceRun — happy transition sequence', () => {
       'LD firmware.elf',
       'text 9184 data 120 bss 1648',
     ]);
+    expect(view.riskSummary).toBe('One medium-risk hardware action (flash).');
     expect(view.lastSeq).toBe(11);
     expect(view.warnings).toEqual([]);
   });
@@ -203,6 +204,25 @@ describe('reduceRun — fix-loop iteration', () => {
     const duplicated = [...events, events[1]!];
     expect(reduceRun(duplicated)).toEqual(reduceRun(events));
     expect(reduceRun(duplicated).run.iteration).toBe(2);
+  });
+});
+
+describe('reduceRun — riskSummary (BIBLE v1.3 §5.4)', () => {
+  it('is undefined before run.plan_generated', () => {
+    const view = reduceRun(happyEvents().slice(0, 1));
+    expect(view.riskSummary).toBeUndefined();
+  });
+
+  it('is populated from run.plan_generated', () => {
+    const view = reduceRun(happyEvents().slice(0, 2));
+    expect(view.riskSummary).toBe('One medium-risk hardware action (flash).');
+  });
+
+  it('survives a duplicate-seq no-op of the plan_generated event', () => {
+    const events = happyEvents();
+    const duplicated = [...events.slice(0, 2), events[1]!, ...events.slice(2)];
+    expect(reduceRun(duplicated).riskSummary).toBe('One medium-risk hardware action (flash).');
+    expect(reduceRun(duplicated)).toEqual(reduceRun(events));
   });
 });
 

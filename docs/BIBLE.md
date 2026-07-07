@@ -1,7 +1,7 @@
 # BOARDEX UI BIBLE
 ## Master Build Document for the Boardex Desktop MVP — UI, Contracts, and Claude Code Execution Plan
 
-Version 1.2 · July 2026 — contract amendment per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`.
+Version 1.3 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged).
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -281,10 +281,10 @@ Command errors: HTTP 409 with `{ error, currentStatus }` when a command is inval
 ```ts
 reduceRun(events: Event[]): RunView
 // RunView = { run, steps[], artifacts[], checks[], approvals[],
-//             diagnosis?, logsByStep: Map, lastSeq }
+//             diagnosis?, riskSummary?: string, logsByStep: Map, lastSeq }
 ```
 
-Pure, deterministic, unit-tested against the fixture. The UI NEVER derives run state any other way. This is what makes reconnect, history, and mock replay one code path.
+Pure, deterministic, unit-tested against the fixture. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
 
 ## 5.5 Fixture: `bme280_run_001.jsonl`
 

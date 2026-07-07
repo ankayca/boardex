@@ -9,13 +9,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
 import { api, StateConflict } from '../../lib/api';
-import { useRunStore, useRunView } from '../../lib/runStore';
+import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
 import { BenchReadiness } from './BenchReadiness';
 import { offlineDevices } from './benchDevices';
 import { ContextChips } from './ContextChips';
 import { PlanReview } from './PlanReview';
-import { planRiskSummary } from './planEvents';
 import { useBenchStatus } from './useBenchStatus';
 
 const COMPOSER_STATUSES: ReadonlySet<Run['status']> = new Set(['draft', 'planning', 'plan_ready']);
@@ -35,7 +34,6 @@ export default function RunPage() {
 
   useRunStream(id);
   const view = useRunView(id);
-  const events = useRunStore((state) => state.runs[id]?.events);
 
   const profilesQuery = useQuery({
     queryKey: ['board-profiles'],
@@ -93,7 +91,7 @@ export default function RunPage() {
         {planReady && run.plan ? (
           <PlanReview
             plan={run.plan}
-            riskSummary={planRiskSummary(events ?? [])}
+            riskSummary={view.riskSummary ?? null}
             checklist={profile?.connectionChecklist ?? []}
             degradedDevices={offlineDevices(bench)}
             approving={approve.isPending}

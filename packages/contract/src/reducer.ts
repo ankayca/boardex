@@ -11,6 +11,8 @@ export interface RunView {
   checks: MeasurementCheck[];
   approvals: Approval[];
   diagnosis?: Diagnosis;
+  // From run.plan_generated (§5.2); undefined before the plan exists.
+  riskSummary?: string;
   logsByStep: Map<string, string[]>;
   lastSeq: number;
   // Contract violations observed while reducing (e.g. the evidence-linking law).
@@ -49,6 +51,7 @@ function upsertById<T extends { id: string }>(items: T[], item: T): void {
 export function reduceRun(events: readonly Event[]): RunView {
   let run: Run | undefined;
   let diagnosis: Diagnosis | undefined;
+  let riskSummary: string | undefined;
   const steps: RunStep[] = [];
   const artifacts: Artifact[] = [];
   const checks: MeasurementCheck[] = [];
@@ -92,6 +95,7 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'run.plan_generated': {
         run = { ...requireRun(event), plan: event.payload.plan };
+        riskSummary = event.payload.riskSummary;
         break;
       }
       case 'run.status_changed': {
@@ -208,5 +212,16 @@ export function reduceRun(events: readonly Event[]): RunView {
     throw new ProtocolError('missing_run', 'event stream contains no run.created');
   }
 
-  return { run, steps, artifacts, checks, approvals, diagnosis, logsByStep, lastSeq, warnings };
+  return {
+    run,
+    steps,
+    artifacts,
+    checks,
+    approvals,
+    diagnosis,
+    riskSummary,
+    logsByStep,
+    lastSeq,
+    warnings,
+  };
 }
