@@ -1,0 +1,120 @@
+// /runs/:id (BIBLE §7.2 for now): while the run is in a pre-execution state
+// (draft/planning/plan_ready) this page stays in composer mode — the submitted task,
+// context chips, bench readiness, then the plan rendered in place when
+// run.plan_generated arrives, and Approve Plan → POST plan/approve behind the D12
+// connection checklist. Any later status hands over to the Run Workspace (Sprint 2 —
+// placeholder until then). State comes exclusively from the run store's reduced view
+// (D5), fed by the run WS + HTTP replay.
+import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import type { Run } from '@boardex/contract';
+import { api, StateConflict } from '../../lib/api';
+import { useRunStore, useRunView } from '../../lib/runStore';
+import { useRunStream } from '../../lib/useRunStream';
+import { BenchReadiness } from './BenchReadiness';
+import { offlineDevices } from './benchDevices';
+import { ContextChips } from './ContextChips';
+import { PlanReview } from './PlanReview';
+import { planRiskSummary } from './planEvents';
+import { useBenchStatus } from './useBenchStatus';
+
+const COMPOSER_STATUSES: ReadonlySet<Run['status']> = new Set(['draft', 'planning', 'plan_ready']);
+
+function WorkspacePlaceholder({ run }: { run: Run }) {
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-16">
+      <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
+      <p className="mt-2 text-body text-text-secondary">Run Workspace is built in Sprint 2.</p>
+    </main>
+  );
+}
+
+export default function RunPage() {
+  const { id = '' } = useParams();
+  const navigate = useNavigate();
+
+  useRunStream(id);
+  const view = useRunView(id);
+  const events = useRunStore((state) => state.runs[id]?.events);
+
+  const profilesQuery = useQuery({
+    queryKey: ['board-profiles'],
+    queryFn: () => api.listBoardProfiles(),
+  });
+  const bench = useBenchStatus();
+
+  const approve = useMutation({
+    mutationFn: () => api.approvePlan(id),
+    onError: (error) => {
+      // A 409 means the run already moved on; the event stream reconciles the view,
+      // so a StateConflict is not an error to surface (§5.3).
+      if (error instanceof StateConflict) approve.reset();
+    },
+  });
+
+  if (!view) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 py-16">
+        <p className="text-body text-text-secondary">Connecting to run…</p>
+      </main>
+    );
+  }
+
+  const { run } = view;
+  if (!COMPOSER_STATUSES.has(run.status)) {
+    return <WorkspacePlaceholder run={run} />;
+  }
+
+  const profile = (profilesQuery.data ?? []).find((p) => p.id === run.boardProfileId) ?? null;
+  // Don't render plan review before the profile resolves: with the profile unknown the
+  // checklist would be empty and Approve would skip the D12 gate.
+  const planReady =
+    run.status === 'plan_ready' && run.plan !== undefined && !profilesQuery.isPending;
+
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-8">
+      <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
+
+      <div className="mt-6 space-y-4">
+        <p className="whitespace-pre-wrap rounded-card border border-border bg-bg-panel p-5 text-section text-text-primary shadow-subtle">
+          {run.taskPrompt}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          {profile ? (
+            <ContextChips profile={profile} />
+          ) : (
+            <p className="text-meta text-text-secondary">Board: {run.boardProfileId}</p>
+          )}
+        </div>
+
+        <BenchReadiness bench={bench} />
+
+        {planReady && run.plan ? (
+          <PlanReview
+            plan={run.plan}
+            riskSummary={planRiskSummary(events ?? [])}
+            checklist={profile?.connectionChecklist ?? []}
+            degradedDevices={offlineDevices(bench)}
+            approving={approve.isPending}
+            approveError={
+              approve.isError && !(approve.error instanceof StateConflict)
+                ? 'Could not approve the plan — check that the runner is online, then try again.'
+                : null
+            }
+            onApprove={() => approve.mutate()}
+            onEditTask={() =>
+              navigate('/runs/new', {
+                state: { taskPrompt: run.taskPrompt, boardProfileId: run.boardProfileId },
+              })
+            }
+          />
+        ) : (
+          <p role="status" className="text-body text-text-secondary">
+            Generating the plan…
+          </p>
+        )}
+      </div>
+    </main>
+  );
+}

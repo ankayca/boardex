@@ -20,10 +20,13 @@ export interface FixtureEntry {
 export const FIXTURE_RUN_ID = 'run_bme280_001';
 
 // The fixture and its artifacts live in the contract package (§3). Resolve them
-// relative to this file so the path holds regardless of the process cwd.
-const FIXTURES_DIR = fileURLToPath(
-  new URL('../../../packages/contract/fixtures/', import.meta.url),
-);
+// relative to this file so the path holds regardless of the process cwd. The base
+// goes through a variable because bundlers (Vite) statically rewrite the literal
+// `new URL('...', import.meta.url)` pattern into an http asset URL, which breaks
+// this node-only path resolution when the runner is embedded in a browser-flavored
+// test host (the UI's jsdom integration tests).
+const moduleUrl = import.meta.url;
+const FIXTURES_DIR = fileURLToPath(new URL('../../../packages/contract/fixtures/', moduleUrl));
 const FIXTURE_FILE = FIXTURES_DIR + 'bme280_run_001.jsonl';
 const ARTIFACTS_DIR = FIXTURES_DIR + 'artifacts/';
 
