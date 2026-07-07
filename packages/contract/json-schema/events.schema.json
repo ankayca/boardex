@@ -1,0 +1,1364 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Boardex event stream",
+  "description": "Event envelope and complete MVP event catalog for boardex-contract/0.1 (BIBLE §5.1-5.2). Validate a single event against #/definitions/Event. seq is monotonic per run, starts at 1, no gaps; events are immutable and append-only.",
+  "$ref": "#/definitions/Event",
+  "definitions": {
+    "Id": {
+      "type": "string",
+      "description": "String ULID identifier (format not enforced)"
+    },
+    "IsoDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "RunStatus": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "planning",
+        "plan_ready",
+        "running",
+        "awaiting_approval",
+        "diagnosing",
+        "completed",
+        "failed",
+        "stopped"
+      ]
+    },
+    "RiskLevel": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "StepKind": {
+      "type": "string",
+      "enum": [
+        "understand_context",
+        "edit_code",
+        "build",
+        "flash",
+        "capture",
+        "read_serial",
+        "evaluate",
+        "diagnose",
+        "report"
+      ]
+    },
+    "StepStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "succeeded",
+        "failed",
+        "skipped"
+      ]
+    },
+    "PlanStep": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "riskLevel": {
+          "$ref": "#/definitions/RiskLevel"
+        },
+        "hardwareAction": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "index",
+        "title",
+        "detail",
+        "riskLevel",
+        "hardwareAction"
+      ],
+      "additionalProperties": false
+    },
+    "Run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "taskPrompt": {
+          "type": "string"
+        },
+        "boardProfileId": {
+          "$ref": "#/definitions/Id"
+        },
+        "status": {
+          "$ref": "#/definitions/RunStatus"
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PlanStep"
+          }
+        },
+        "createdAt": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "updatedAt": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "iteration": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "taskPrompt",
+        "boardProfileId",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "iteration"
+      ],
+      "additionalProperties": false
+    },
+    "RunStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "planIndex": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/definitions/StepKind"
+        },
+        "status": {
+          "$ref": "#/definitions/StepStatus"
+        },
+        "title": {
+          "type": "string"
+        },
+        "startedAt": {
+          "$ref": "#/definitions/IsoDateTime",
+          "description": "ISO 8601 timestamp"
+        },
+        "endedAt": {
+          "$ref": "#/definitions/IsoDateTime",
+          "description": "ISO 8601 timestamp"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "artifactIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "planIndex",
+        "kind",
+        "status",
+        "title",
+        "artifactIds"
+      ],
+      "additionalProperties": false
+    },
+    "Artifact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "stepId": {
+          "$ref": "#/definitions/Id"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "serial_log",
+            "build_log",
+            "flash_log",
+            "logic_capture",
+            "protocol_decode",
+            "code_diff",
+            "timing_measurement",
+            "report_md"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "stepId",
+        "kind",
+        "label",
+        "mimeType",
+        "sizeBytes"
+      ],
+      "additionalProperties": false
+    },
+    "MeasurementCheck": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "requirementId": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "measurement": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "equals": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "pattern": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "actual": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "number",
+                "boolean",
+                "string"
+              ]
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "needs_review"
+          ]
+        },
+        "artifactId": {
+          "$ref": "#/definitions/Id"
+        },
+        "sourceRef": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "requirementId",
+        "description",
+        "measurement",
+        "expected",
+        "actual",
+        "verdict",
+        "artifactId"
+      ],
+      "additionalProperties": false
+    },
+    "Approval": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "proposal": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "riskLevel": {
+              "$ref": "#/definitions/RiskLevel"
+            },
+            "filesChanged": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hardwareActions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "reason",
+            "riskLevel",
+            "filesChanged",
+            "hardwareActions"
+          ],
+          "additionalProperties": false
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "resolvedAt": {
+          "$ref": "#/definitions/IsoDateTime",
+          "description": "ISO 8601 timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "proposal",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "Diagnosis": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "failedCheckIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id"
+          }
+        },
+        "hypotheses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cause": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "moderate",
+                  "low"
+                ]
+              }
+            },
+            "required": [
+              "cause",
+              "evidence",
+              "confidence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "proposedFix": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "riskLevel": {
+              "$ref": "#/definitions/RiskLevel"
+            },
+            "filesChanged": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "summary",
+            "riskLevel",
+            "filesChanged"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "failedCheckIds",
+        "hypotheses",
+        "proposedFix"
+      ],
+      "additionalProperties": false
+    },
+    "BoardProfile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mcu": {
+          "type": "string"
+        },
+        "repoPath": {
+          "type": "string"
+        },
+        "buildCommand": {
+          "type": "string"
+        },
+        "flashCommand": {
+          "type": "string"
+        },
+        "resetCommand": {
+          "type": "string"
+        },
+        "serial": {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "string"
+            },
+            "baud": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "port",
+            "baud"
+          ],
+          "additionalProperties": false
+        },
+        "instruments": {
+          "type": "object",
+          "properties": {
+            "debugProbe": {
+              "type": "string"
+            },
+            "logicAnalyzer": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "debugProbe"
+          ],
+          "additionalProperties": false
+        },
+        "safety": {
+          "type": "object",
+          "properties": {
+            "maxIterations": {
+              "type": "integer"
+            },
+            "flashRequiresApproval": {
+              "type": "boolean"
+            },
+            "powerNote": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "maxIterations",
+            "flashRequiresApproval",
+            "powerNote"
+          ],
+          "additionalProperties": false
+        },
+        "connectionChecklist": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "detail"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "knownQuirks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "mcu",
+        "repoPath",
+        "buildCommand",
+        "flashCommand",
+        "resetCommand",
+        "serial",
+        "instruments",
+        "safety",
+        "connectionChecklist",
+        "knownQuirks"
+      ],
+      "additionalProperties": false
+    },
+    "BenchStatus": {
+      "type": "object",
+      "properties": {
+        "runnerOnline": {
+          "type": "boolean"
+        },
+        "contractVersion": {
+          "type": "string"
+        },
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "debug_probe",
+                  "serial",
+                  "logic_analyzer"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "online",
+                  "offline",
+                  "error"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "runnerOnline",
+        "contractVersion",
+        "devices"
+      ],
+      "additionalProperties": false
+    },
+    "Event": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RunCreatedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunPlanGeneratedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunStatusChangedEvent"
+        },
+        {
+          "$ref": "#/definitions/StepStartedEvent"
+        },
+        {
+          "$ref": "#/definitions/StepLogEvent"
+        },
+        {
+          "$ref": "#/definitions/StepCompletedEvent"
+        },
+        {
+          "$ref": "#/definitions/StepFailedEvent"
+        },
+        {
+          "$ref": "#/definitions/ArtifactCreatedEvent"
+        },
+        {
+          "$ref": "#/definitions/CheckEvaluatedEvent"
+        },
+        {
+          "$ref": "#/definitions/DiagnosisCreatedEvent"
+        },
+        {
+          "$ref": "#/definitions/ApprovalRequestedEvent"
+        },
+        {
+          "$ref": "#/definitions/ApprovalResolvedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunCompletedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunFailedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunStoppedEvent"
+        },
+        {
+          "$ref": "#/definitions/RunnerStatusEvent"
+        }
+      ]
+    },
+    "RunCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.created"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run": {
+              "$ref": "#/definitions/Run"
+            }
+          },
+          "required": [
+            "run"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanGeneratedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.plan_generated"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PlanStep"
+              }
+            },
+            "riskSummary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan",
+            "riskSummary"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunStatusChangedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.status_changed"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/RunStatus"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "StepStartedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "step.started"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "step": {
+              "$ref": "#/definitions/RunStep"
+            }
+          },
+          "required": [
+            "step"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "StepLogEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "step.log"
+        },
+        "payload": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "stepId": {
+                  "$ref": "#/definitions/Id"
+                },
+                "stream": {
+                  "type": "string",
+                  "enum": [
+                    "build",
+                    "flash",
+                    "serial",
+                    "rtt",
+                    "agent"
+                  ]
+                },
+                "line": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stepId",
+                "stream",
+                "line"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "stepId": {
+                  "$ref": "#/definitions/Id"
+                },
+                "stream": {
+                  "$ref": "#/definitions/StepLogEvent/properties/payload/anyOf/0/properties/stream"
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "stepId",
+                "stream",
+                "lines"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "StepCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "step.completed"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "stepId": {
+              "$ref": "#/definitions/Id"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "artifactIds": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Id"
+              }
+            }
+          },
+          "required": [
+            "stepId",
+            "summary",
+            "artifactIds"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "StepFailedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "step.failed"
+        },
+        "payload": {
+          "$ref": "#/definitions/StepCompletedEvent/properties/payload"
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "artifact.created"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "artifact": {
+              "$ref": "#/definitions/Artifact"
+            }
+          },
+          "required": [
+            "artifact"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "CheckEvaluatedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "check.evaluated"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "check": {
+              "$ref": "#/definitions/MeasurementCheck"
+            }
+          },
+          "required": [
+            "check"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "DiagnosisCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "diagnosis.created"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "diagnosis": {
+              "$ref": "#/definitions/Diagnosis"
+            }
+          },
+          "required": [
+            "diagnosis"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "approval.requested"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "approval": {
+              "$ref": "#/definitions/Approval"
+            }
+          },
+          "required": [
+            "approval"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalResolvedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "approval.resolved"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "approvalId": {
+              "$ref": "#/definitions/Id"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "approved",
+                "rejected"
+              ]
+            },
+            "resolvedAt": {
+              "$ref": "#/definitions/IsoDateTime"
+            }
+          },
+          "required": [
+            "approvalId",
+            "status",
+            "resolvedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.completed"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "reportArtifactId": {
+              "$ref": "#/definitions/Id"
+            }
+          },
+          "required": [
+            "summary",
+            "reportArtifactId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunFailedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.failed"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunStoppedEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "run.stopped"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "byUser": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "byUser"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RunnerStatusEvent": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "$ref": "#/definitions/RunCreatedEvent/properties/seq"
+        },
+        "runId": {
+          "$ref": "#/definitions/Id"
+        },
+        "ts": {
+          "$ref": "#/definitions/IsoDateTime"
+        },
+        "type": {
+          "type": "string",
+          "const": "runner.status"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "bench": {
+              "$ref": "#/definitions/BenchStatus"
+            }
+          },
+          "required": [
+            "bench"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seq",
+        "runId",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
