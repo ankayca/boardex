@@ -1,0 +1,15 @@
+{
+  "name": "@boardex/contract",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The Boardex contract: Zod schemas, inferred types, reducer (BIBLE §4-5). Zero runtime deps besides zod.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

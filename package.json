@@ -1,0 +1,32 @@
+{
+  "name": "boardex-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Boardex UI monorepo (UI + contract + mock runner). servers/ is Python-land, invisible to npm — see docs/BIBLE.md §3.",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n ui,mock -c blue,magenta \"npm run dev -w @boardex/ui\" \"npm run dev -w @boardex/mock-runner\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "npm run test --workspaces --if-present",
+    "verify": "npm run typecheck && npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/node": "^22.5.0",
+    "concurrently": "^9.0.0",
+    "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.4.0"
+  }
+}

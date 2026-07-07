@@ -1,0 +1,12 @@
+# Backend owner's domain — never reformat (see docs/BIBLE.md §3)
+servers/
+examples/
+docs/
+README.md
+
+# Generated / vendored
+node_modules/
+dist/
+coverage/
+packages/contract/json-schema/
+packages/contract/fixtures/

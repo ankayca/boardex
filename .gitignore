@@ -33,3 +33,7 @@ out/
 # work-in-progress firmware here and it stays out of git. Committed reference
 # demos that validate the tooling live in examples/firmware/ instead.
 /firmware/
+
+# Node workspaces (Boardex UI/contract/mock scaffold) — additive
+dist/
+coverage/

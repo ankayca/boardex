@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * BIBLE §6.1 design tokens — EXACT values. These are the only colors in the system.
+ * Semantic reservation (D14): green = pass/success only, red = fail/stop only,
+ * amber = approval-needed/warning only. One accent. No gradients, no dark mode.
+ */
+:root {
+  --color-bg-app: #fafaf9;
+  --color-bg-panel: #ffffff;
+  --color-border: #e7e5e4;
+  --color-border-strong: #d6d3d1;
+  --color-text-primary: #1c1917;
+  --color-text-secondary: #57534e;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-pass: #16a34a;
+  --color-pass-bg: #f0fdf4;
+  --color-fail: #dc2626;
+  --color-fail-bg: #fef2f2;
+  --color-warn: #d97706;
+  --color-warn-bg: #fffbeb;
+  --color-neutral-badge: #78716c;
+  --color-neutral-badge-bg: #f5f5f4;
+
+  --radius-card: 10px;
+  --radius-button: 8px;
+
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
