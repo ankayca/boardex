@@ -24,7 +24,9 @@ source of truth and encodes the non-negotiable rules for working in this repo.
    cofounder's `docs/*.md`, and existing `.gitignore` content (extend it additively only).
 5. **Prove it works.** Every task ships tests where logic exists, keeps `npm run verify`
    green (typecheck + lint + test across workspaces), and lands as atomic,
-   conventionally-named commits.
+   conventionally-named commits. **If the task or review brief names a behavior to
+   verify, ship the test proving it in the same commit — untested-but-correct is
+   FIX_FIRST by default.**
 
 ## Color semantics (BIBLE §6.1 / D14) — reserved, never decorative
 
