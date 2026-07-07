@@ -1,6 +1,6 @@
-// Route placeholders wired in T1.1. Each is replaced by its real screen in a later
-// sprint — Home (T1.2), New Run composer (T1.3), Run Workspace (Sprint 2), Board
-// Profile screens (Sprint 4). See docs/BIBLE.md §7-8.
+// Route placeholders. Each is replaced by its real screen in a later sprint — New Run
+// composer (T1.3), Run Workspace (Sprint 2), Board Profile screens (Sprint 4). Home is
+// live in pages/home (T1.2). See docs/BIBLE.md §7-8.
 import { useParams } from 'react-router-dom';
 
 function Placeholder({ title, sprint }: { title: string; sprint: string }) {
@@ -10,10 +10,6 @@ function Placeholder({ title, sprint }: { title: string; sprint: string }) {
       <p className="mt-2 text-body text-text-secondary">Built in {sprint}.</p>
     </main>
   );
-}
-
-export function HomePage() {
-  return <Placeholder title="Runs" sprint="Sprint 1 (T1.2)" />;
 }
 
 export function NewRunPage() {

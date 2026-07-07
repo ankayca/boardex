@@ -2,29 +2,20 @@
 // a runner status pill on the right, over the routed page content. The pill's up/down
 // signal is the /health poll; the global WS runner.status feed keeps the bench
 // snapshot fresh for later readiness surfaces.
-import { useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { StatusDot } from '../design';
 import { api } from '../lib/api';
-import { RUNNER_WS_BASE } from '../lib/config';
-import { WsClient } from '../lib/ws';
+import { useGlobalEvents } from '../lib/globalStream';
 import { useBenchStore } from '../lib/benchStore';
 
-// Subscribe once to the global stream and mirror runner.status into the bench store.
+// Mirror the global stream's runner.status into the bench store. Rides the one shared
+// global connection (globalStream) alongside the Home list's live run updates.
 function useGlobalRunnerFeed(): void {
   const setBench = useBenchStore((state) => state.setBench);
-  useEffect(() => {
-    const client = new WsClient({
-      wsBase: RUNNER_WS_BASE,
-      target: { kind: 'global' },
-      onEvent: (event) => {
-        if (event.type === 'runner.status') setBench(event.payload.bench);
-      },
-    });
-    client.connect();
-    return () => client.close();
-  }, [setBench]);
+  useGlobalEvents((event) => {
+    if (event.type === 'runner.status') setBench(event.payload.bench);
+  });
 }
 
 function RunnerPill() {
