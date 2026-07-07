@@ -8,6 +8,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
+import { Button } from '../../design';
 import { api, StateConflict } from '../../lib/api';
 import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
@@ -18,6 +19,24 @@ import { PlanReview } from './PlanReview';
 import { useBenchStatus } from './useBenchStatus';
 
 const COMPOSER_STATUSES: ReadonlySet<Run['status']> = new Set(['draft', 'planning', 'plan_ready']);
+
+// Fail-closed blocked state (T1.3 review finding 1, decisions.md 2026-07-07): with the
+// profile unresolved there is no D12 checklist to confirm, so approval is blocked
+// outright — Approve Plan is not rendered at all, not merely disabled.
+function ProfileBlockedCard({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className="rounded-card border border-warn bg-warn-bg px-5 py-4">
+      <p className="text-body font-medium text-warn">Board profile unavailable</p>
+      <p className="mt-1 text-meta text-text-secondary">
+        The board profile for this run could not be loaded, so bench connections cannot be
+        confirmed. Plan approval is blocked until the profile loads.
+      </p>
+      <Button variant="secondary" onClick={onRetry} className="mt-3">
+        Retry
+      </Button>
+    </div>
+  );
+}
 
 function WorkspacePlaceholder({ run }: { run: Run }) {
   return (
@@ -63,11 +82,13 @@ export default function RunPage() {
     return <WorkspacePlaceholder run={run} />;
   }
 
-  const profile = (profilesQuery.data ?? []).find((p) => p.id === run.boardProfileId) ?? null;
-  // Don't render plan review before the profile resolves: with the profile unknown the
-  // checklist would be empty and Approve would skip the D12 gate.
-  const planReady =
-    run.status === 'plan_ready' && run.plan !== undefined && !profilesQuery.isPending;
+  // Fail-closed (decisions.md 2026-07-07): the profile is resolved only when the query
+  // succeeded AND the run's boardProfileId is in the list. Anything else — pending,
+  // errored, or unknown id — is unresolved safety context and blocks approval.
+  const profile = profilesQuery.isSuccess
+    ? (profilesQuery.data.find((p) => p.id === run.boardProfileId) ?? null)
+    : null;
+  const planReady = run.status === 'plan_ready' && run.plan !== undefined;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
@@ -89,24 +110,33 @@ export default function RunPage() {
         <BenchReadiness bench={bench} />
 
         {planReady && run.plan ? (
-          <PlanReview
-            plan={run.plan}
-            riskSummary={view.riskSummary ?? null}
-            checklist={profile?.connectionChecklist ?? []}
-            degradedDevices={offlineDevices(bench)}
-            approving={approve.isPending}
-            approveError={
-              approve.isError && !(approve.error instanceof StateConflict)
-                ? 'Could not approve the plan — check that the runner is online, then try again.'
-                : null
-            }
-            onApprove={() => approve.mutate()}
-            onEditTask={() =>
-              navigate('/runs/new', {
-                state: { taskPrompt: run.taskPrompt, boardProfileId: run.boardProfileId },
-              })
-            }
-          />
+          profile ? (
+            <PlanReview
+              plan={run.plan}
+              riskSummary={view.riskSummary ?? null}
+              checklist={profile.connectionChecklist}
+              profileResolved
+              degradedDevices={offlineDevices(bench)}
+              approving={approve.isPending}
+              approveError={
+                approve.isError && !(approve.error instanceof StateConflict)
+                  ? 'Could not approve the plan — check that the runner is online, then try again.'
+                  : null
+              }
+              onApprove={() => approve.mutate()}
+              onEditTask={() =>
+                navigate('/runs/new', {
+                  state: { taskPrompt: run.taskPrompt, boardProfileId: run.boardProfileId },
+                })
+              }
+            />
+          ) : profilesQuery.isPending ? (
+            <p role="status" className="text-body text-text-secondary">
+              Loading the board profile…
+            </p>
+          ) : (
+            <ProfileBlockedCard onRetry={() => void profilesQuery.refetch()} />
+          )
         ) : (
           <p role="status" className="text-body text-text-secondary">
             Generating the plan…

@@ -37,6 +37,7 @@ function renderReview(over: Partial<PlanReviewProps> = {}) {
       plan={PLAN}
       riskSummary="One medium-risk hardware action."
       checklist={CHECKLIST}
+      profileResolved
       degradedDevices={[]}
       approving={false}
       onApprove={onApprove}
@@ -89,10 +90,24 @@ describe('PlanReview checklist gate (D12)', () => {
     expect(approve).toBeDisabled();
   });
 
-  it('leaves Approve ungated when the profile has no checklist', () => {
+  it('leaves Approve ungated when a RESOLVED profile genuinely has no checklist (§7.2)', () => {
     renderReview({ checklist: [] });
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeEnabled();
+  });
+
+  it('fail-closed: an empty checklist never enables Approve while the profile is unresolved', () => {
+    renderReview({ checklist: [], profileResolved: false });
+    expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeDisabled();
+  });
+
+  it('fail-closed: unresolved profile keeps Approve disabled even with every line confirmed', async () => {
+    const user = userEvent.setup();
+    renderReview({ profileResolved: false });
+    for (const box of screen.getAllByRole('checkbox')) {
+      await user.click(box);
+    }
+    expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeDisabled();
   });
 
   it('renders the plan with risk badges, hardware markers and the risk summary', () => {

@@ -12,8 +12,15 @@ import type { OfflineDevice } from './benchDevices';
 export interface PlanReviewProps {
   plan: readonly PlanStep[];
   riskSummary: string | null;
-  /** BoardProfile.connectionChecklist (D12); empty = no gate. */
+  /** BoardProfile.connectionChecklist (D12); empty on a RESOLVED profile = no gate. */
   checklist: readonly { label: string; detail: string }[];
+  /**
+   * Fail-closed (decisions.md 2026-07-07): Approve only ungates when the run's board
+   * profile actually resolved. An empty checklist from a missing/unloaded profile must
+   * never read as "nothing to confirm" — the vacuous-true bypass dies here even if a
+   * caller renders this component without resolving the profile first.
+   */
+  profileResolved: boolean;
   /** Offline/error bench devices — the degraded warning repeats here (§7.2). */
   degradedDevices: readonly OfflineDevice[];
   approving: boolean;
@@ -26,6 +33,7 @@ export function PlanReview({
   plan,
   riskSummary,
   checklist,
+  profileResolved,
   degradedDevices,
   approving,
   approveError,
@@ -35,6 +43,7 @@ export function PlanReview({
   const checklistId = useId();
   const [confirmed, setConfirmed] = useState<ReadonlySet<number>>(new Set());
   const allConfirmed = checklist.every((_, index) => confirmed.has(index));
+  const approvable = profileResolved && allConfirmed;
 
   const toggle = (index: number) => {
     setConfirmed((prev) => {
@@ -123,7 +132,7 @@ export function PlanReview({
       )}
 
       <div className="mt-6 flex items-center gap-3">
-        <Button variant="primary" disabled={!allConfirmed || approving} onClick={onApprove}>
+        <Button variant="primary" disabled={!approvable || approving} onClick={onApprove}>
           {approving ? 'Approving…' : 'Approve Plan'}
         </Button>
         <Button variant="secondary" onClick={onEditTask}>
