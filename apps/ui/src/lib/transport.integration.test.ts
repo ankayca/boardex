@@ -92,6 +92,11 @@ describe('transport integration', () => {
     // Start driving, then sever the socket once the run is underway.
     const driving = driveToTerminal(runId, store);
     await waitFor(() => store.getState().runs[runId]?.view?.run.status === 'running');
+    // The drop must land mid-run: capture the status at that instant and assert it is
+    // non-terminal, so this genuinely exercises reconnect-during-an-active-run.
+    const statusAtDrop = store.getState().runs[runId]?.view?.run.status;
+    expect(statusAtDrop).toBeDefined();
+    expect(TERMINAL.has(statusAtDrop as string)).toBe(false);
     client.simulateDrop();
     await waitFor(() => statuses.includes('reconnecting'));
 
@@ -111,6 +116,46 @@ describe('transport integration', () => {
     expect(view?.warnings).toEqual([]);
     // The socket genuinely dropped and came back live (>= 2 distinct 'open' phases).
     expect(statuses.filter((s) => s === 'open').length).toBeGreaterThanOrEqual(2);
+
+    client.close();
+  }, 40000);
+
+  it('cycles a silent socket via the heartbeat watchdog and recovers the run', async () => {
+    const { runId } = await api.createRun({ taskPrompt: 'bring up BME280', boardProfileId: BOARD });
+    const store = createRunStore();
+    const statuses: WsConnectionStatus[] = [];
+    const client = connectRunStream({
+      runId,
+      api,
+      store,
+      wsBase,
+      WebSocketImpl: WS_IMPL,
+      // Short watchdog: the runner is silent for far longer than this while paused at
+      // an approval gate, so the socket is cycled with no explicit drop.
+      heartbeatTimeoutMs: 150,
+      onStatusChange: (status) => statuses.push(status),
+    });
+
+    // Approve the plan, then deliberately sit idle at the first approval gate.
+    await waitFor(() => store.getState().runs[runId]?.view?.run.status === 'plan_ready');
+    await api.approvePlan(runId);
+    await waitFor(
+      () => store.getState().runs[runId]?.view?.approvals.some((a) => a.status === 'pending') ?? false,
+    );
+
+    const opensBeforeIdle = statuses.filter((s) => s === 'open').length;
+    // Silence at the gate for well over the watchdog window + a reconnect backoff.
+    await sleep(900);
+    // The watchdog cycled and re-opened the socket without any explicit drop.
+    expect(statuses.filter((s) => s === 'open').length).toBeGreaterThan(opensBeforeIdle);
+
+    // The run still completes cleanly and the reduced view is unharmed.
+    await driveToTerminal(runId, store);
+    const view = store.getState().runs[runId]?.view;
+    expect(view?.run.status).toBe('completed');
+    expect(view?.lastSeq).toBe(90);
+    expect(view?.checks.every((c) => c.verdict === 'pass')).toBe(true);
+    expect(view?.warnings).toEqual([]);
 
     client.close();
   }, 40000);

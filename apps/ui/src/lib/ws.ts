@@ -68,6 +68,10 @@ export class WsClient {
   private disposed = false;
   private replayInFlight = false;
   private liveBuffer: Event[] = [];
+  // Connection generation. Bumped whenever a socket is opened, cycled, or closed, so
+  // an async onOpen continuation can detect that its socket was superseded while it
+  // awaited and bail out instead of corrupting the newer handshake's replay state.
+  private epoch = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -108,6 +112,7 @@ export class WsClient {
       this.setStatus('closed');
       return;
     }
+    const epoch = ++this.epoch;
     this.setStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
     let ws: WebSocketLike;
     try {
@@ -117,7 +122,7 @@ export class WsClient {
       return;
     }
     this.ws = ws;
-    ws.onopen = () => void this.onOpen();
+    ws.onopen = () => void this.onOpen(epoch);
     ws.onmessage = (ev) => this.onMessage(ev.data);
     ws.onclose = () => this.onClose();
     ws.onerror = () => {
@@ -125,8 +130,11 @@ export class WsClient {
     };
   }
 
-  private async onOpen(): Promise<void> {
-    if (this.disposed || !this.ws) return;
+  // `epoch` is captured when this socket opened. After each await we re-check it:
+  // if the socket has since been cycled or closed, the epoch has advanced and this
+  // stale continuation returns without touching the newer handshake's replay state.
+  private async onOpen(epoch: number): Promise<void> {
+    if (this.disposed || epoch !== this.epoch || !this.ws) return;
     this.attempt = 0;
     this.setStatus('open');
     this.armHeartbeat();
@@ -141,13 +149,15 @@ export class WsClient {
     try {
       replayed = await this.options.fetchReplay();
     } catch {
-      // Replay failed; cycle the socket and retry the whole handshake to avoid a gap.
+      // A stale handshake stays hands-off; only the live one reacts to the failure by
+      // cycling the socket and retrying the whole handshake to avoid a gap.
+      if (this.disposed || epoch !== this.epoch) return;
       this.replayInFlight = false;
       this.liveBuffer = [];
       this.cycleSocket();
       return;
     }
-    if (this.disposed) return;
+    if (this.disposed || epoch !== this.epoch) return;
     for (const event of replayed) this.options.onEvent(event);
     const buffered = this.liveBuffer;
     this.liveBuffer = [];
@@ -168,6 +178,7 @@ export class WsClient {
 
   private onClose(): void {
     if (this.disposed) return;
+    this.epoch++; // supersede any onOpen continuation still awaiting on this socket
     this.ws = null;
     this.clearHeartbeat();
     this.scheduleReconnect();
@@ -192,6 +203,7 @@ export class WsClient {
   private teardownSocket(): void {
     const ws = this.ws;
     this.ws = null;
+    this.epoch++; // supersede any onOpen continuation still awaiting on this socket
     this.clearHeartbeat();
     if (ws) {
       ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
