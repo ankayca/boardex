@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
+import { reduceRun } from '@boardex/contract';
 import { createApiClient, type ApiClient } from '../../lib/api';
 import { connectRunStream } from '../../lib/runStream';
 import { createRunStore, type RunStore } from '../../lib/runStore';
@@ -94,11 +95,22 @@ describe('workspace reconnect mid-run (ws drop → reconnect → replay)', () =>
       return view.run.status === 'completed';
     });
 
+    // Fast-fail spot checks first, so a broken run reports what broke…
     const finalView = store.getState().runs[runId]!.view!;
     expect(finalView.lastSeq).toBe(90);
     expect(finalView.warnings).toEqual([]);
     // Three checks, all passing at the end — exactly what the evidence band renders.
     expect(finalView.checks.map((c) => c.verdict)).toEqual(['pass', 'pass', 'pass']);
+
+    // …then the byte-identical assertion (CLAUDE.md rule 5): reduce the runner's
+    // full authoritative event log — the uninterrupted control stream — and deep-
+    // equal the ENTIRE RunView against the view the interrupted session reduced:
+    // run, steps, artifacts, checks, approvals, diagnosis, riskSummary, endedAt,
+    // logsByStep (Map), iterations, lastSeq, warnings. Any event dropped, duplicated,
+    // or reordered across the drop shows up here, not just in the spot fields.
+    const controlEvents = await api.getRunEvents(runId, 0);
+    expect(controlEvents).toHaveLength(90);
+    expect(finalView).toEqual(reduceRun(controlEvents));
 
     client.close();
   }, 40000);

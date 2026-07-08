@@ -5,16 +5,30 @@
 // simply replays the delta.
 //
 // Returns the live WS connection status so the workspace can raise the amber
-// reconnecting bar on a drop (§7.3). The callback is gated on the effect's lifetime,
-// so the teardown's own 'closed' transition never lands on an unmounted component.
+// reconnecting bar on a drop (§7.3). Status is keyed by runId and reset to
+// 'connecting' synchronously — during render, before commit — when runId changes,
+// so no frame ever paints the previous run's connection state. The callback is
+// additionally gated on the effect's lifetime, so a stale client's transitions
+// (including the teardown's own 'closed') never land after the switch.
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useRunStore } from './runStore';
 import { connectRunStream } from './runStream';
 import type { WsConnectionStatus } from './ws';
 
+interface StreamStatus {
+  runId: string | undefined;
+  status: WsConnectionStatus;
+}
+
 export function useRunStream(runId: string | undefined): WsConnectionStatus {
-  const [status, setStatus] = useState<WsConnectionStatus>('connecting');
+  const [state, setState] = useState<StreamStatus>({ runId, status: 'connecting' });
+  // Derived-state reset in render: React re-renders with the fresh state before
+  // committing, so the stale status is discarded without ever painting.
+  if (state.runId !== runId) {
+    setState({ runId, status: 'connecting' });
+  }
+
   useEffect(() => {
     if (!runId) return;
     let active = true;
@@ -23,7 +37,7 @@ export function useRunStream(runId: string | undefined): WsConnectionStatus {
       api,
       store: useRunStore,
       onStatusChange: (next) => {
-        if (active) setStatus(next);
+        if (active) setState({ runId, status: next });
       },
     });
     return () => {
@@ -31,5 +45,6 @@ export function useRunStream(runId: string | undefined): WsConnectionStatus {
       client.close();
     };
   }, [runId]);
-  return status;
+
+  return state.runId === runId ? state.status : 'connecting';
 }
