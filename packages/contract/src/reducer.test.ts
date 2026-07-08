@@ -103,6 +103,45 @@ describe('reduceRun — happy transition sequence', () => {
   });
 });
 
+describe('reduceRun — endedAt (§5.4 v1.5)', () => {
+  // A ts distinct from the shared TS proves endedAt comes from the terminal
+  // event's own envelope, not from any other event in the stream.
+  const END_TS = '2026-07-07T15:00:00.000Z';
+  const preTerminal = () => happyEvents().slice(0, 10);
+
+  it('is undefined while the run is non-terminal', () => {
+    expect(reduceRun(preTerminal()).endedAt).toBeUndefined();
+  });
+
+  it('is set from the terminal event envelope ts for each terminal type', () => {
+    const completed = [
+      ...preTerminal(),
+      { ...envelope(11, 'run.completed', { summary: 'done', reportArtifactId: 'art_01' }), ts: END_TS },
+    ];
+    expect(reduceRun(completed).endedAt).toBe(END_TS);
+
+    const failed = [
+      ...preTerminal(),
+      { ...envelope(11, 'run.failed', { summary: 'max iterations reached' }), ts: END_TS },
+    ];
+    expect(reduceRun(failed).endedAt).toBe(END_TS);
+
+    const stopped = [
+      ...preTerminal(),
+      { ...envelope(11, 'run.stopped', { byUser: true }), ts: END_TS },
+    ];
+    expect(reduceRun(stopped).endedAt).toBe(END_TS);
+  });
+
+  it('survives a duplicate of the terminal event (idempotent by seq)', () => {
+    const terminal = { ...envelope(11, 'run.stopped', { byUser: true }), ts: END_TS };
+    const events = [...preTerminal(), terminal];
+    const duplicated = [...events, { ...terminal, ts: '2026-07-07T16:00:00.000Z' }];
+    expect(reduceRun(duplicated).endedAt).toBe(END_TS);
+    expect(reduceRun(duplicated)).toEqual(reduceRun(events));
+  });
+});
+
 describe('reduceRun — idempotency by seq', () => {
   it('treats a duplicate seq as a no-op', () => {
     const events = happyEvents();

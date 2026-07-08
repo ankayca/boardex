@@ -29,6 +29,9 @@ export interface RunView {
   diagnosis?: Diagnosis;
   // From run.plan_generated (§5.2); undefined before the plan exists.
   riskSummary?: string;
+  // Envelope ts of the terminal event (run.completed / run.failed / run.stopped);
+  // undefined while the run is non-terminal (§5.4 v1.5).
+  endedAt?: string;
   logsByStep: Map<string, StepLogLine[]>;
   // Fix-loop iteration boundaries, ordered; empty until run.iteration_started.
   iterations: IterationMarker[];
@@ -70,6 +73,7 @@ export function reduceRun(events: readonly Event[]): RunView {
   let run: Run | undefined;
   let diagnosis: Diagnosis | undefined;
   let riskSummary: string | undefined;
+  let endedAt: string | undefined;
   const steps: RunStep[] = [];
   const artifacts: Artifact[] = [];
   const checks: MeasurementCheck[] = [];
@@ -212,14 +216,17 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'run.completed': {
         run = { ...requireRun(event), status: 'completed' };
+        endedAt = event.ts;
         break;
       }
       case 'run.failed': {
         run = { ...requireRun(event), status: 'failed' };
+        endedAt = event.ts;
         break;
       }
       case 'run.stopped': {
         run = { ...requireRun(event), status: 'stopped' };
+        endedAt = event.ts;
         break;
       }
       case 'runner.status': {
@@ -245,6 +252,7 @@ export function reduceRun(events: readonly Event[]): RunView {
     approvals,
     diagnosis,
     riskSummary,
+    endedAt,
     logsByStep,
     iterations,
     lastSeq,

@@ -49,8 +49,13 @@ const blockedView = (): RunView =>
     envelope(2, 'run.status_changed', { status: 'awaiting_approval' }),
   ]);
 
+// The stop event carries a ts 65s after createdAt: the frozen duration must come
+// from that envelope ts (§5.4 v1.5), never from the wall clock.
 const stoppedView = (): RunView =>
-  viewFrom([envelope(1, 'run.created', { run }), envelope(2, 'run.stopped', { byUser: true })]);
+  viewFrom([
+    envelope(1, 'run.created', { run }),
+    { ...envelope(2, 'run.stopped', { byUser: true }), ts: '2026-07-08T12:01:05.000Z' },
+  ]);
 
 const diagnosisEvents = (): Event[] => [
   envelope(1, 'run.created', { run }),
@@ -241,10 +246,16 @@ describe('elapsed timer', () => {
     expect(screen.getByText('0:08')).toBeInTheDocument();
   });
 
-  it('shows no elapsed figure for a terminal run (no honest end time in RunView)', () => {
+  it('freezes a terminal run at createdAt → endedAt, independent of the wall clock', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(Date.parse(TS) + 60000));
+    // Wall clock far past the run: the frozen figure must ignore it entirely.
+    vi.setSystemTime(new Date(Date.parse(TS) + 9_000_000));
     renderRail(stoppedView());
-    expect(screen.queryByText(/elapsed/i)).not.toBeInTheDocument();
+    expect(screen.getByText('1:05')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(screen.getByText('1:05')).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 // Right rail — current status card (BIBLE §7.3): status badge, elapsed since
-// run.createdAt (ticking while non-terminal), and Stop Run — danger, always visible
-// while the run is non-terminal, behind a ConfirmDialog.
+// run.createdAt (ticking while non-terminal; frozen at RunView.endedAt once
+// terminal, §5.4 v1.5 — reload-stable, no wall clock), and Stop Run — danger,
+// always visible while the run is non-terminal, behind a ConfirmDialog.
 import { useEffect, useState } from 'react';
 import type { Run } from '@boardex/contract';
 import { Badge, Button, ConfirmDialog } from '../../design';
@@ -8,13 +9,15 @@ import { elapsedLabel, isTerminalStatus } from './elapsed';
 
 export interface StatusCardProps {
   run: Run;
+  /** RunView.endedAt — the terminal event's envelope ts; undefined while non-terminal. */
+  endedAt: string | undefined;
   /** Stop command in flight, or accepted and awaiting the run.stopped event. */
   stopping: boolean;
   stopError: string | null;
   onStop: () => void;
 }
 
-// One-second tick while active; a terminal run renders no elapsed (see elapsed.ts).
+// One-second tick while active; a terminal run's duration is frozen at endedAt.
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -25,11 +28,15 @@ function useNow(active: boolean): number {
   return now;
 }
 
-export function StatusCard({ run, stopping, stopError, onStop }: StatusCardProps) {
+export function StatusCard({ run, endedAt, stopping, stopError, onStop }: StatusCardProps) {
   const terminal = isTerminalStatus(run.status);
   const now = useNow(!terminal);
   const [confirming, setConfirming] = useState(false);
-  const elapsed = terminal ? null : elapsedLabel(run.createdAt, now);
+  const elapsed = terminal
+    ? endedAt !== undefined
+      ? elapsedLabel(run.createdAt, Date.parse(endedAt))
+      : null
+    : elapsedLabel(run.createdAt, now);
 
   return (
     <section aria-label="Run status" className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">

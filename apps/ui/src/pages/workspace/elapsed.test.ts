@@ -31,6 +31,10 @@ describe('elapsedLabel', () => {
   it('returns null for an unparseable createdAt', () => {
     expect(elapsedLabel('not-a-timestamp', at(0))).toBeNull();
   });
+
+  it('returns null for a non-finite end (e.g. Date.parse of a malformed endedAt)', () => {
+    expect(elapsedLabel('2026-07-08T12:00:00.000Z', Date.parse('not-a-timestamp'))).toBeNull();
+  });
 });
 
 describe('isTerminalStatus', () => {

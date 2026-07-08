@@ -49,6 +49,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
     <div className="space-y-4">
       <StatusCard
         run={run}
+        endedAt={view.endedAt}
         stopping={stopping}
         stopError={commandError(
           stop.error,

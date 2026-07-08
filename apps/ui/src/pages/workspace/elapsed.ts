@@ -1,7 +1,7 @@
 // Elapsed-time derivation for the status card (BIBLE §7.3): the timer counts from
-// run.createdAt and ticks only while the run is non-terminal. RunView carries no
-// end timestamp for terminal runs, so a terminal run shows no elapsed figure at all —
-// wall-clock-derived elapsed on a reloaded terminal run would be silently wrong.
+// run.createdAt and ticks only while the run is non-terminal. A terminal run shows
+// the frozen total duration to RunView.endedAt (§5.4 v1.5) — no wall clock involved,
+// so it is identical live and after a reload.
 import type { RunStatus } from '@boardex/contract';
 
 export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
@@ -18,12 +18,12 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 
 /**
  * Elapsed between createdAt and nowMs as "M:SS" (or "H:MM:SS" past an hour).
- * Clamped at zero for clock skew; null when createdAt is unparseable, so the
+ * Clamped at zero for clock skew; null when either input is unparseable, so the
  * caller renders nothing rather than a wrong figure.
  */
 export function elapsedLabel(createdAt: string, nowMs: number): string | null {
   const startedMs = Date.parse(createdAt);
-  if (Number.isNaN(startedMs)) return null;
+  if (Number.isNaN(startedMs) || !Number.isFinite(nowMs)) return null;
   const totalSeconds = Math.max(0, Math.floor((nowMs - startedMs) / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
