@@ -10,7 +10,8 @@
     "verify:prodbundle": "vite build && if ls dist/assets 2>/dev/null | grep -q DesignGalleryPage || grep -rq DesignGalleryPage dist/assets 2>/dev/null; then echo 'PROD BUNDLE LEAK: DesignGalleryPage present in dist/assets' && exit 1; else echo 'prod bundle clean: no DesignGalleryPage chunk or reference'; fi",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "tsx smoke/run-smoke.ts"
   },
   "dependencies": {
     "@boardex/contract": "*",
@@ -35,6 +36,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
     "jsdom": "^26.0.0",
+    "playwright": "^1.48.0",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",
     "vite": "^6.0.0",
