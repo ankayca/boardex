@@ -1,9 +1,9 @@
 // Per-stream log tabs for one timeline step (BIBLE §7.3): the five step.log streams
 // from §5.2, each routed to its own LogViewer pane fed by RunView.logsByStep.
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { StepLogLine, StepLogStream } from '@boardex/contract';
 import { LogViewer } from '../../design';
-import { linesForStream, LOG_STREAMS, STREAM_LABELS } from './logStreams';
+import { groupLogsByStream, LOG_STREAMS, STREAM_LABELS } from './logStreams';
 
 export interface StepLogTabsProps {
   stepTitle: string;
@@ -11,15 +11,20 @@ export interface StepLogTabsProps {
 }
 
 export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
-  const [active, setActive] = useState<StepLogStream>('agent');
+  const grouped = useMemo(() => groupLogsByStream(logs), [logs]);
+  // Initial tab: the first stream with output (agent when the pane opens empty).
+  // Only the user switches after that — no effect re-picks as new streams arrive.
+  const [active, setActive] = useState<StepLogStream>(
+    () => LOG_STREAMS.find((stream) => grouped.has(stream)) ?? 'agent',
+  );
   const baseId = useId();
-  const activeLines = linesForStream(logs, active);
+  const activeLines = grouped.get(active) ?? [];
 
   return (
     <div>
       <div role="tablist" aria-label={`${stepTitle} log streams`} className="flex gap-1">
         {LOG_STREAMS.map((stream) => {
-          const count = linesForStream(logs, stream).length;
+          const count = grouped.get(stream)?.length ?? 0;
           const selected = stream === active;
           return (
             <button

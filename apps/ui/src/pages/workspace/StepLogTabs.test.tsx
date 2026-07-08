@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { StepLogLine } from '@boardex/contract';
-import { linesForStream } from './logStreams';
+import { groupLogsByStream } from './logStreams';
 import { StepLogTabs } from './StepLogTabs';
 
 // jsdom reports zero offset sizes, so the virtualizer would render no log rows at
@@ -27,16 +27,17 @@ const LOGS: readonly StepLogLine[] = [
   { stream: 'serial', line: 'TEMP=24.3 HUM=41.2' },
 ];
 
-describe('linesForStream', () => {
+describe('groupLogsByStream', () => {
   it('routes each line to its stream, preserving arrival order', () => {
-    expect(linesForStream(LOGS, 'agent')).toEqual([
+    const grouped = groupLogsByStream(LOGS);
+    expect(grouped.get('agent')).toEqual([
       'Flashing firmware via pyOCD…',
       'Flash complete, resetting target.',
     ]);
-    expect(linesForStream(LOGS, 'flash')).toEqual(['[pyocd] erased 2 sectors']);
-    expect(linesForStream(LOGS, 'serial')).toEqual(['TEMP=24.3 HUM=41.2']);
-    expect(linesForStream(LOGS, 'build')).toEqual([]);
-    expect(linesForStream(LOGS, 'rtt')).toEqual([]);
+    expect(grouped.get('flash')).toEqual(['[pyocd] erased 2 sectors']);
+    expect(grouped.get('serial')).toEqual(['TEMP=24.3 HUM=41.2']);
+    expect(grouped.has('build')).toBe(false);
+    expect(grouped.has('rtt')).toBe(false);
   });
 });
 
@@ -70,6 +71,28 @@ describe('StepLogTabs', () => {
     expect(serialPane).not.toHaveTextContent('Flashing firmware via pyOCD…');
 
     await user.click(screen.getByRole('tab', { name: 'RTT' }));
+    expect(screen.getByText('No output yet.')).toBeInTheDocument();
+  });
+
+  it('opens on the first stream that has lines when agent is silent', () => {
+    render(
+      <StepLogTabs
+        stepTitle="Build firmware"
+        logs={[
+          { stream: 'build', line: 'CC main.o' },
+          { stream: 'build', line: 'LD firmware.elf' },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: /Build/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('log', { name: 'Build firmware — Build log' })).toHaveTextContent(
+      'CC main.o',
+    );
+  });
+
+  it('falls back to the agent tab when no stream has output yet', () => {
+    render(<StepLogTabs stepTitle="Understand context" logs={[]} />);
+    expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No output yet.')).toBeInTheDocument();
   });
 });

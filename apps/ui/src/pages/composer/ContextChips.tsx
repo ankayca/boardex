@@ -4,12 +4,9 @@
 import { useState } from 'react';
 import type { BoardProfile } from '@boardex/contract';
 import { Drawer, KeyValue } from '../../design';
+import { repoBasename } from '../../lib/repoBasename';
 
 type ChipKind = 'board' | 'repo' | 'instruments' | 'safety';
-
-function repoBasename(repoPath: string): string {
-  return repoPath.split('/').filter(Boolean).pop() ?? repoPath;
-}
 
 function Chip({ label, value, onOpen }: { label: string; value: string; onOpen: () => void }) {
   return (

@@ -5,9 +5,7 @@
 import { useState } from 'react';
 import type { BenchDeviceKind, BenchDeviceState, BenchStatus, BoardProfile } from '@boardex/contract';
 import { Button, Drawer, KeyValue, StatusDot } from '../../design';
-
-const repoBasename = (repoPath: string): string =>
-  repoPath.replace(/\/+$/, '').split('/').pop() ?? repoPath;
+import { repoBasename } from '../../lib/repoBasename';
 
 // A profile instrument reads through the bench device of its kind; with no snapshot
 // or no device of that kind, it reads offline (degraded, amber per §7.2 — never an

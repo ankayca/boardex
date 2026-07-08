@@ -25,6 +25,10 @@ const statusLabels: Record<StepStatus, string> = {
   skipped: 'Skipped',
 };
 
+// Stable empty-log identity so StepLogTabs' grouping memo doesn't recompute for
+// steps that have no output yet.
+const NO_LOGS: readonly StepLogLine[] = [];
+
 const statusTextClasses: Record<StepStatus, string> = {
   pending: 'text-text-secondary',
   active: 'text-accent',
@@ -180,7 +184,7 @@ export function PlanTimeline({ view }: { view: RunView }) {
               <ExecutedStepRow
                 key={step.id}
                 step={step}
-                logs={view.logsByStep.get(step.id) ?? []}
+                logs={view.logsByStep.get(step.id) ?? NO_LOGS}
                 artifacts={step.artifactIds
                   .map((id) => artifactsById.get(id))
                   .filter((artifact): artifact is Artifact => artifact !== undefined)}

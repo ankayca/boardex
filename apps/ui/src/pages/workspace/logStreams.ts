@@ -12,7 +12,16 @@ export const STREAM_LABELS: Record<StepLogStream, string> = {
   rtt: 'RTT',
 };
 
-/** Lines belonging to one stream, in arrival order. */
-export function linesForStream(logs: readonly StepLogLine[], stream: StepLogStream): string[] {
-  return logs.filter((log) => log.stream === stream).map((log) => log.line);
+/** One pass over a step's log: lines per stream, each in arrival order. */
+export function groupLogsByStream(logs: readonly StepLogLine[]): Map<StepLogStream, string[]> {
+  const grouped = new Map<StepLogStream, string[]>();
+  for (const { stream, line } of logs) {
+    const lines = grouped.get(stream);
+    if (lines) {
+      lines.push(line);
+    } else {
+      grouped.set(stream, [line]);
+    }
+  }
+  return grouped;
 }
