@@ -1,6 +1,17 @@
 // Event factories for workspace tests: RunViews are always produced by the real
 // reduceRun over a synthetic stream (D5 — never hand-assembled views).
-import { reduceRun, type Event, type PlanStep, type Run, type RunStep, type RunView } from '@boardex/contract';
+import {
+  reduceRun,
+  type Approval,
+  type Artifact,
+  type Diagnosis,
+  type Event,
+  type MeasurementCheck,
+  type PlanStep,
+  type Run,
+  type RunStep,
+  type RunView,
+} from '@boardex/contract';
 
 export const TS = '2026-07-08T12:00:00.000Z';
 export const RUN_ID = 'run_t21';
@@ -31,6 +42,65 @@ export function runStep(id: string, planIndex: number, title: string): RunStep {
     title,
     startedAt: TS,
     artifactIds: [],
+  };
+}
+
+export function approval(id: string, proposal?: Partial<Approval['proposal']>): Approval {
+  return {
+    id,
+    runId: RUN_ID,
+    proposal: {
+      title: 'Flash firmware to the Nucleo-F303RE',
+      reason: 'The build must be programmed to the target before I2C capture.',
+      riskLevel: 'medium',
+      filesChanged: ['main.c'],
+      hardwareActions: ['Flash bme280-f303re.elf via pyOCD', 'Reset target after programming'],
+      ...proposal,
+    },
+    status: 'pending',
+  };
+}
+
+export function artifact(id: string): Artifact {
+  return {
+    id,
+    runId: RUN_ID,
+    stepId: 'st_capture',
+    kind: 'protocol_decode',
+    label: id,
+    mimeType: 'application/json',
+    sizeBytes: 512,
+  };
+}
+
+export function failedCheck(id: string, artifactId: string, description: string): MeasurementCheck {
+  return {
+    id,
+    runId: RUN_ID,
+    requirementId: id,
+    description,
+    measurement: 'logic_analyzer.i2c.ack',
+    expected: { equals: true },
+    actual: { value: false },
+    verdict: 'fail',
+    artifactId,
+  };
+}
+
+export function diagnosis(
+  hypotheses: Diagnosis['hypotheses'],
+  failedCheckIds: string[] = [],
+): Diagnosis {
+  return {
+    id: 'diag_t22',
+    runId: RUN_ID,
+    failedCheckIds,
+    hypotheses,
+    proposedFix: {
+      summary: 'Compose CR2 SADD from the shifted address and re-flash.',
+      riskLevel: 'medium',
+      filesChanged: ['main.c'],
+    },
   };
 }
 
