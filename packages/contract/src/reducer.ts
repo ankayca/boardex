@@ -2,7 +2,23 @@
 // derives run state any other way. Reconnect, history, and mock replay are all
 // this one code path.
 import type { Approval, Artifact, Diagnosis, MeasurementCheck, Run, RunStep } from './entities';
-import type { Event } from './events';
+import type { Event, StepLogStream } from './events';
+
+// One step.log line with the stream it arrived on (§5.2) — the per-stream log tabs
+// in the workspace route on this.
+export interface StepLogLine {
+  stream: StepLogStream;
+  line: string;
+}
+
+// Where a fix-loop iteration begins in the step list (from run.iteration_started,
+// emitted for iteration >= 2 only). firstStepIndex is the index into steps[] of the
+// first step of this iteration — steps.length at the moment the event arrived.
+export interface IterationMarker {
+  iteration: number;
+  reason: string;
+  firstStepIndex: number;
+}
 
 export interface RunView {
   run: Run;
@@ -13,7 +29,9 @@ export interface RunView {
   diagnosis?: Diagnosis;
   // From run.plan_generated (§5.2); undefined before the plan exists.
   riskSummary?: string;
-  logsByStep: Map<string, string[]>;
+  logsByStep: Map<string, StepLogLine[]>;
+  // Fix-loop iteration boundaries, ordered; empty until run.iteration_started.
+  iterations: IterationMarker[];
   lastSeq: number;
   // Contract violations observed while reducing (e.g. the evidence-linking law).
   warnings: string[];
@@ -56,7 +74,8 @@ export function reduceRun(events: readonly Event[]): RunView {
   const artifacts: Artifact[] = [];
   const checks: MeasurementCheck[] = [];
   const approvals: Approval[] = [];
-  const logsByStep = new Map<string, string[]>();
+  const logsByStep = new Map<string, StepLogLine[]>();
+  const iterations: IterationMarker[] = [];
   const warnings: string[] = [];
   const knownArtifactIds = new Set<string>();
   let lastSeq = 0;
@@ -108,12 +127,13 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'step.log': {
         const { payload } = event;
-        const lines = 'lines' in payload ? payload.lines : [payload.line];
+        const rawLines = 'lines' in payload ? payload.lines : [payload.line];
+        const lines = rawLines.map((line) => ({ stream: payload.stream, line }));
         const existing = logsByStep.get(payload.stepId);
         if (existing) {
           existing.push(...lines);
         } else {
-          logsByStep.set(payload.stepId, [...lines]);
+          logsByStep.set(payload.stepId, lines);
         }
         break;
       }
@@ -183,6 +203,11 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'run.iteration_started': {
         run = { ...requireRun(event), iteration: event.payload.iteration };
+        iterations.push({
+          iteration: event.payload.iteration,
+          reason: event.payload.reason,
+          firstStepIndex: steps.length,
+        });
         break;
       }
       case 'run.completed': {
@@ -221,6 +246,7 @@ export function reduceRun(events: readonly Event[]): RunView {
     diagnosis,
     riskSummary,
     logsByStep,
+    iterations,
     lastSeq,
     warnings,
   };

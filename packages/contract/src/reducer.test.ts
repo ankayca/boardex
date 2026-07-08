@@ -58,11 +58,13 @@ describe('reduceRun — happy transition sequence', () => {
     });
     expect(view.artifacts).toEqual([sampleArtifact]);
     expect(view.checks).toEqual([sampleCheck]);
+    // step.log lines keep their stream (§5.2) — the per-stream log tabs route on it.
     expect(view.logsByStep.get('step_01')).toEqual([
-      'CC main.o',
-      'LD firmware.elf',
-      'text 9184 data 120 bss 1648',
+      { stream: 'build', line: 'CC main.o' },
+      { stream: 'build', line: 'LD firmware.elf' },
+      { stream: 'build', line: 'text 9184 data 120 bss 1648' },
     ]);
+    expect(view.iterations).toEqual([]);
     expect(view.riskSummary).toBe('One medium-risk hardware action (flash).');
     expect(view.lastSeq).toBe(11);
     expect(view.warnings).toEqual([]);
@@ -204,6 +206,50 @@ describe('reduceRun — fix-loop iteration', () => {
     const duplicated = [...events, events[1]!];
     expect(reduceRun(duplicated)).toEqual(reduceRun(events));
     expect(reduceRun(duplicated).run.iteration).toBe(2);
+  });
+
+  it('records an IterationMarker with the index of the first iteration-2 step', () => {
+    const iter2Step = { ...sampleRunStep, id: 'step_02', planIndex: 1 };
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.started', { step: sampleRunStep }),
+      envelope(3, 'step.failed', { stepId: 'step_01', summary: 'NACK', artifactIds: [] }),
+      envelope(4, 'run.iteration_started', { iteration: 2, reason: 'applying approved fix' }),
+      envelope(5, 'step.started', { step: iter2Step }),
+    ]);
+    // firstStepIndex points at steps[1] — the first step started after the marker.
+    expect(view.iterations).toEqual([
+      { iteration: 2, reason: 'applying approved fix', firstStepIndex: 1 },
+    ]);
+    expect(view.steps[1]!.id).toBe('step_02');
+  });
+
+  it('places a marker with no subsequent steps yet at steps.length', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.started', { step: sampleRunStep }),
+      envelope(3, 'run.iteration_started', { iteration: 2, reason: 'applying approved fix' }),
+    ]);
+    expect(view.iterations).toEqual([
+      { iteration: 2, reason: 'applying approved fix', firstStepIndex: 1 },
+    ]);
+  });
+});
+
+describe('reduceRun — per-stream logs (BIBLE v1.4 §5.4)', () => {
+  it('keeps each line tagged with its step.log stream', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.started', { step: sampleRunStep }),
+      envelope(3, 'step.log', { stepId: 'step_01', stream: 'agent', line: 'Flashing…' }),
+      envelope(4, 'step.log', { stepId: 'step_01', stream: 'flash', lines: ['Erased 2 sectors'] }),
+      envelope(5, 'step.log', { stepId: 'step_01', stream: 'serial', line: 'TEMP=24.3' }),
+    ]);
+    expect(view.logsByStep.get('step_01')).toEqual([
+      { stream: 'agent', line: 'Flashing…' },
+      { stream: 'flash', line: 'Erased 2 sectors' },
+      { stream: 'serial', line: 'TEMP=24.3' },
+    ]);
   });
 });
 
