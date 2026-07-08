@@ -31,6 +31,7 @@ export interface DiagnosisCardProps {
   fixApproval: Approval | null;
   /** Resolve command in flight, or accepted and awaiting the approval.resolved event. */
   resolving: boolean;
+  resolveError: string | null;
   onApproveFix: (approval: Approval) => void;
 }
 
@@ -40,12 +41,17 @@ export function DiagnosisCard({
   runId,
   fixApproval,
   resolving,
+  resolveError,
   onApproveFix,
 }: DiagnosisCardProps) {
   const checksById = new Map(checks.map((check) => [check.id, check]));
-  const failedChecks = diagnosis.failedCheckIds
-    .map((id) => checksById.get(id))
-    .filter((check): check is MeasurementCheck => check !== undefined);
+  // Every cited id renders: resolvable ones as check rows, the rest as an explicit
+  // neutral "unavailable" line (T2.2 review F5) — never silently dropped. The
+  // reducer records the matching contract-violation warning.
+  const failedCheckRefs = diagnosis.failedCheckIds.map((id) => ({
+    id,
+    check: checksById.get(id),
+  }));
 
   return (
     <section
@@ -54,20 +60,26 @@ export function DiagnosisCard({
     >
       <h2 className="text-section font-semibold text-text-primary">Diagnosis</h2>
 
-      {failedChecks.length > 0 && (
+      {failedCheckRefs.length > 0 && (
         <ul aria-label="Failed checks" className="mt-3 space-y-2">
-          {failedChecks.map((check) => (
-            <li key={check.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <Badge kind="verdict" value={check.verdict} />
-              <span className="min-w-0 flex-1 text-meta text-text-primary">{check.description}</span>
-              <Link
-                to={`/runs/${runId}/evidence?artifact=${check.artifactId}`}
-                className="text-meta font-medium text-accent hover:text-accent-hover"
-              >
-                View evidence
-              </Link>
-            </li>
-          ))}
+          {failedCheckRefs.map(({ id, check }) =>
+            check ? (
+              <li key={id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Badge kind="verdict" value={check.verdict} />
+                <span className="min-w-0 flex-1 text-meta text-text-primary">{check.description}</span>
+                <Link
+                  to={`/runs/${runId}/evidence?artifact=${check.artifactId}`}
+                  className="text-meta font-medium text-accent hover:text-accent-hover"
+                >
+                  View evidence
+                </Link>
+              </li>
+            ) : (
+              <li key={id} className="text-meta text-text-secondary">
+                Referenced check unavailable
+              </li>
+            ),
+          )}
         </ul>
       )}
 
@@ -109,6 +121,12 @@ export function DiagnosisCard({
           </ul>
         )}
       </div>
+
+      {resolveError && (
+        <p role="alert" className="mt-4 rounded-card border border-warn bg-warn-bg px-3 py-2 text-meta text-warn">
+          {resolveError}
+        </p>
+      )}
 
       {fixApproval ? (
         <Button

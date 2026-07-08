@@ -30,11 +30,19 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
 
   const awaiting = run.status === 'awaiting_approval';
   const gate = awaiting ? deriveApprovalGate(view) : null;
-  // The Diagnosis Card shows while diagnosing and stays through the fix-approval
-  // gate (§2.2 "Failed measurement": likely causes + Approve Fix Plan together).
-  // Once the fix is approved and the run moves on, it leaves the rail.
-  const showDiagnosis = view.diagnosis !== undefined && (run.status === 'diagnosing' || awaiting);
-  const fixApproval = gate?.kind === 'ready' ? gate.approval : null;
+  // Exactly one approve surface per pending approval (T2.2 review F1/F3): the
+  // Diagnosis Card owns the fix approval — the pending approval whose id matches the
+  // reducer-derived diagnosis.fixApprovalId (§5.4 v1.6) — and the generic Approval
+  // Card owns every other approval, suppressed at the fix gate. A pending approval
+  // unrelated to the diagnosis never renders the Diagnosis Card.
+  const fixApproval =
+    gate?.kind === 'ready' &&
+    view.diagnosis?.fixApprovalId !== undefined &&
+    gate.approval.id === view.diagnosis.fixApprovalId
+      ? gate.approval
+      : null;
+  const showDiagnosis =
+    view.diagnosis !== undefined && (run.status === 'diagnosing' || fixApproval !== null);
 
   // isSuccess holds the buttons disabled until the resolved/stopped event arrives;
   // the approval-id check re-arms them if a later approval reuses this mutation.
@@ -57,7 +65,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
         )}
         onStop={() => stop.mutate()}
       />
-      {gate && (
+      {gate && fixApproval === null && (
         <ApprovalCard
           gate={gate}
           resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
@@ -75,6 +83,10 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
           runId={run.id}
           fixApproval={fixApproval}
           resolving={fixApproval !== null && resolvingFor(fixApproval)}
+          resolveError={commandError(
+            resolve.error,
+            'Could not resolve the approval — check that the runner is online, then try again.',
+          )}
           onApproveFix={(approval) => resolve.mutate({ approval, status: 'approved' })}
         />
       )}

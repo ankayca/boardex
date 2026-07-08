@@ -1,7 +1,7 @@
 # BOARDEX UI BIBLE
 ## Master Build Document for the Boardex Desktop MVP — UI, Contracts, and Claude Code Execution Plan
 
-Version 1.5 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged). v1.4: RunView's `logsByStep` values carry the `step.log` stream per line (`{stream, line}[]`), and RunView gains `iterations[]` (`{iteration, reason, firstStepIndex}` from `run.iteration_started`) — both reducer-only; wire contract unchanged (needed by T2.1's per-stream log tabs and iteration divider). v1.5: RunView gains `endedAt?` from the terminal event's envelope `ts` (reducer-only; wire contract unchanged — needed by T2.2's frozen terminal duration).
+Version 1.5 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged). v1.4: RunView's `logsByStep` values carry the `step.log` stream per line (`{stream, line}[]`), and RunView gains `iterations[]` (`{iteration, reason, firstStepIndex}` from `run.iteration_started`) — both reducer-only; wire contract unchanged (needed by T2.1's per-stream log tabs and iteration divider). v1.5: RunView gains `endedAt?` from the terminal event's envelope `ts` (reducer-only; wire contract unchanged — needed by T2.2's frozen terminal duration). v1.6: RunView's `diagnosis` gains `fixApprovalId?` — the id of the first `approval.requested` following `diagnosis.created` — so the UI binds the Diagnosis Card to exactly its fix approval (reducer-only; wire contract unchanged; T2.2 review F1/F3).
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -281,12 +281,13 @@ Command errors: HTTP 409 with `{ error, currentStatus }` when a command is inval
 ```ts
 reduceRun(events: Event[]): RunView
 // RunView = { run, steps[], artifacts[], checks[], approvals[],
-//             diagnosis?, riskSummary?: string, endedAt?: string,
+//             diagnosis?: Diagnosis & { fixApprovalId?: string },
+//             riskSummary?: string, endedAt?: string,
 //             logsByStep: Map<stepId, {stream, line}[]>,
 //             iterations: {iteration, reason, firstStepIndex}[], lastSeq }
 ```
 
-Pure, deterministic, unit-tested against the fixture. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`) and is undefined while the run is non-terminal. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
+Pure, deterministic, unit-tested against the fixture. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`, or a `run.status_changed` carrying a terminal status; the dedicated terminal events take precedence) and is undefined while the run is non-terminal. `diagnosis.fixApprovalId` is the id of the first `approval.requested` whose seq follows the `diagnosis.created`, and is undefined until that approval arrives — it is how the UI knows which pending approval is the fix approval. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
 
 ## 5.5 Fixture: `bme280_run_001.jsonl`
 

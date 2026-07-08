@@ -1,8 +1,23 @@
 // The contract-owned reducer — BIBLE §5.4. Pure and deterministic: the UI NEVER
 // derives run state any other way. Reconnect, history, and mock replay are all
 // this one code path.
-import type { Approval, Artifact, Diagnosis, MeasurementCheck, Run, RunStep } from './entities';
+import type {
+  Approval,
+  Artifact,
+  Diagnosis,
+  MeasurementCheck,
+  Run,
+  RunStatus,
+  RunStep,
+} from './entities';
 import type { Event, StepLogStream } from './events';
+
+// RunView's diagnosis carries the reducer-derived link to its fix approval: the id
+// of the first approval.requested whose seq follows the diagnosis.created (§5.4
+// v1.6); undefined until that approval arrives. The wire Diagnosis is unchanged.
+export interface DiagnosisView extends Diagnosis {
+  fixApprovalId?: string;
+}
 
 // One step.log line with the stream it arrived on (§5.2) — the per-stream log tabs
 // in the workspace route on this.
@@ -26,11 +41,12 @@ export interface RunView {
   artifacts: Artifact[];
   checks: MeasurementCheck[];
   approvals: Approval[];
-  diagnosis?: Diagnosis;
+  diagnosis?: DiagnosisView;
   // From run.plan_generated (§5.2); undefined before the plan exists.
   riskSummary?: string;
-  // Envelope ts of the terminal event (run.completed / run.failed / run.stopped);
-  // undefined while the run is non-terminal (§5.4 v1.5).
+  // Envelope ts of the terminal event (run.completed / run.failed / run.stopped,
+  // or a run.status_changed carrying a terminal status — the dedicated terminal
+  // events take precedence); undefined while non-terminal (§5.4 v1.5).
   endedAt?: string;
   logsByStep: Map<string, StepLogLine[]>;
   // Fix-loop iteration boundaries, ordered; empty until run.iteration_started.
@@ -60,6 +76,8 @@ export class ProtocolError extends Error {
   }
 }
 
+const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'stopped']);
+
 function upsertById<T extends { id: string }>(items: T[], item: T): void {
   const index = items.findIndex((existing) => existing.id === item.id);
   if (index === -1) {
@@ -71,9 +89,12 @@ function upsertById<T extends { id: string }>(items: T[], item: T): void {
 
 export function reduceRun(events: readonly Event[]): RunView {
   let run: Run | undefined;
-  let diagnosis: Diagnosis | undefined;
+  let diagnosis: DiagnosisView | undefined;
   let riskSummary: string | undefined;
   let endedAt: string | undefined;
+  // True once a dedicated terminal event set endedAt; a run.status_changed with a
+  // terminal status never overrides it.
+  let endedAtFromTerminalEvent = false;
   const steps: RunStep[] = [];
   const artifacts: Artifact[] = [];
   const checks: MeasurementCheck[] = [];
@@ -123,6 +144,9 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'run.status_changed': {
         run = { ...requireRun(event), status: event.payload.status };
+        if (TERMINAL_STATUSES.has(event.payload.status) && !endedAtFromTerminalEvent) {
+          endedAt = event.ts;
+        }
         break;
       }
       case 'step.started': {
@@ -185,11 +209,31 @@ export function reduceRun(events: readonly Event[]): RunView {
         break;
       }
       case 'diagnosis.created': {
-        diagnosis = event.payload.diagnosis;
+        const created = event.payload.diagnosis;
+        // Diagnosis↔checks law (parallel to evidence linking): every cited failed
+        // check must already exist in view.checks; a miss is recorded, never dropped.
+        const knownCheckIds = new Set(checks.map((check) => check.id));
+        for (const checkId of created.failedCheckIds) {
+          if (!knownCheckIds.has(checkId)) {
+            warnings.push(
+              `contract violation: diagnosis "${created.id}" (seq ${event.seq}) ` +
+                `references check "${checkId}" with no prior check.evaluated`,
+            );
+          }
+        }
+        // A fresh diagnosis carries no fixApprovalId — the next approval.requested
+        // claims it (§5.4 v1.6).
+        diagnosis = created;
         break;
       }
       case 'approval.requested': {
         upsertById(approvals, event.payload.approval);
+        // §5.4 v1.6: the first approval requested after diagnosis.created is that
+        // diagnosis's fix approval; earlier approvals can never claim it because
+        // events reduce in seq order and the diagnosis does not exist yet.
+        if (diagnosis && diagnosis.fixApprovalId === undefined) {
+          diagnosis = { ...diagnosis, fixApprovalId: event.payload.approval.id };
+        }
         break;
       }
       case 'approval.resolved': {
@@ -217,16 +261,19 @@ export function reduceRun(events: readonly Event[]): RunView {
       case 'run.completed': {
         run = { ...requireRun(event), status: 'completed' };
         endedAt = event.ts;
+        endedAtFromTerminalEvent = true;
         break;
       }
       case 'run.failed': {
         run = { ...requireRun(event), status: 'failed' };
         endedAt = event.ts;
+        endedAtFromTerminalEvent = true;
         break;
       }
       case 'run.stopped': {
         run = { ...requireRun(event), status: 'stopped' };
         endedAt = event.ts;
+        endedAtFromTerminalEvent = true;
         break;
       }
       case 'runner.status': {

@@ -206,18 +206,44 @@ describe('diagnosis interplay', () => {
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 
-  it('at the fix gate, Approve Fix Plan approves the pending fix approval and disables every approve control', async () => {
+  it('at the fix gate, the Diagnosis Card is the single approve surface (F1/F3)', async () => {
     const user = userEvent.setup();
     resolveApproval.mockResolvedValue(undefined);
     renderRail(fixGateView());
 
-    expect(screen.getByRole('region', { name: 'Approval required' })).toBeInTheDocument();
+    // The generic Approval Card is suppressed: exactly one approve control exists.
+    expect(screen.queryByRole('region', { name: 'Approval required' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve & Continue' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /approve/i })).toHaveLength(1);
+
     await user.click(screen.getByRole('button', { name: 'Approve Fix Plan' }));
     expect(resolveApproval).toHaveBeenCalledWith(RUN_ID, 'apr_fix', 'approved');
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: 'Resolving…' })).toHaveLength(2),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled());
     expect(resolveApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it('a later approval unrelated to the diagnosis gets the generic card, never the Diagnosis Card (F3)', async () => {
+    const user = userEvent.setup();
+    resolveApproval.mockResolvedValue(undefined);
+    renderRail(
+      viewFrom([
+        ...diagnosisEvents(),
+        envelope(6, 'run.status_changed', { status: 'awaiting_approval' }),
+        envelope(7, 'approval.requested', { approval: approval('apr_fix') }),
+        envelope(8, 'approval.resolved', { approvalId: 'apr_fix', status: 'approved', resolvedAt: TS }),
+        envelope(9, 'run.status_changed', { status: 'running' }),
+        envelope(10, 'run.status_changed', { status: 'awaiting_approval' }),
+        envelope(11, 'approval.requested', { approval: approval('apr_flash2') }),
+      ]),
+    );
+
+    expect(screen.getByRole('region', { name: 'Approval required' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Diagnosis' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Hypotheses' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve Fix Plan' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Approve & Continue' }));
+    expect(resolveApproval).toHaveBeenCalledWith(RUN_ID, 'apr_flash2', 'approved');
   });
 
   it('hides the Diagnosis Card once the run moves on (running, iteration 2)', () => {
@@ -257,5 +283,18 @@ describe('elapsed timer', () => {
       vi.advanceTimersByTime(5000);
     });
     expect(screen.getByText('1:05')).toBeInTheDocument();
+  });
+
+  it('freezes identically when the terminal state arrives via run.status_changed (F4)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(Date.parse(TS) + 9_000_000));
+    renderRail(
+      viewFrom([
+        envelope(1, 'run.created', { run }),
+        { ...envelope(2, 'run.status_changed', { status: 'stopped' }), ts: '2026-07-08T12:01:05.000Z' },
+      ]),
+    );
+    expect(screen.getByText('1:05')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /stop run/i })).not.toBeInTheDocument();
   });
 });

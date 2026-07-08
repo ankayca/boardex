@@ -140,6 +140,106 @@ describe('reduceRun — endedAt (§5.4 v1.5)', () => {
     expect(reduceRun(duplicated).endedAt).toBe(END_TS);
     expect(reduceRun(duplicated)).toEqual(reduceRun(events));
   });
+
+  it('is set from a run.status_changed carrying a terminal status', () => {
+    const view = reduceRun([
+      ...preTerminal(),
+      { ...envelope(11, 'run.status_changed', { status: 'stopped' }), ts: END_TS },
+    ]);
+    expect(view.run.status).toBe('stopped');
+    expect(view.endedAt).toBe(END_TS);
+  });
+
+  it('lets the dedicated terminal event take precedence over status_changed, in either order', () => {
+    const STATUS_TS = '2026-07-07T14:59:59.000Z';
+    const usual = reduceRun([
+      ...preTerminal(),
+      { ...envelope(11, 'run.status_changed', { status: 'stopped' }), ts: STATUS_TS },
+      { ...envelope(12, 'run.stopped', { byUser: true }), ts: END_TS },
+    ]);
+    expect(usual.endedAt).toBe(END_TS);
+
+    const reversed = reduceRun([
+      ...preTerminal(),
+      { ...envelope(11, 'run.stopped', { byUser: true }), ts: END_TS },
+      { ...envelope(12, 'run.status_changed', { status: 'stopped' }), ts: STATUS_TS },
+    ]);
+    expect(reversed.endedAt).toBe(END_TS);
+  });
+});
+
+describe('reduceRun — diagnosis fixApprovalId (§5.4 v1.6)', () => {
+  const base = () => [
+    envelope(1, 'run.created', { run: sampleRun }),
+    envelope(2, 'artifact.created', { artifact: sampleArtifact }),
+    envelope(3, 'check.evaluated', {
+      check: { ...sampleCheck, id: 'chk_02', verdict: 'fail' as const },
+    }),
+  ];
+
+  it('is undefined until an approval.requested follows the diagnosis', () => {
+    const view = reduceRun([...base(), envelope(4, 'diagnosis.created', { diagnosis: sampleDiagnosis })]);
+    expect(view.diagnosis?.fixApprovalId).toBeUndefined();
+  });
+
+  it('is the id of the first post-diagnosis approval.requested; later ones never overwrite', () => {
+    const view = reduceRun([
+      ...base(),
+      envelope(4, 'diagnosis.created', { diagnosis: sampleDiagnosis }),
+      envelope(5, 'approval.requested', { approval: { ...sampleApproval, id: 'apr_fix' } }),
+      envelope(6, 'approval.requested', { approval: { ...sampleApproval, id: 'apr_other' } }),
+    ]);
+    expect(view.diagnosis?.fixApprovalId).toBe('apr_fix');
+  });
+
+  it('a pre-diagnosis approval never claims it', () => {
+    const view = reduceRun([
+      ...base(),
+      envelope(4, 'approval.requested', { approval: { ...sampleApproval, id: 'apr_flash' } }),
+      envelope(5, 'diagnosis.created', { diagnosis: sampleDiagnosis }),
+      envelope(6, 'approval.requested', { approval: { ...sampleApproval, id: 'apr_fix' } }),
+    ]);
+    expect(view.diagnosis?.fixApprovalId).toBe('apr_fix');
+  });
+
+  it('survives duplicate-seq no-ops of the diagnosis and approval events', () => {
+    const events = [
+      ...base(),
+      envelope(4, 'diagnosis.created', { diagnosis: sampleDiagnosis }),
+      envelope(5, 'approval.requested', { approval: { ...sampleApproval, id: 'apr_fix' } }),
+    ];
+    const duplicated = [...events, events[3]!, events[4]!];
+    expect(reduceRun(duplicated).diagnosis?.fixApprovalId).toBe('apr_fix');
+    expect(reduceRun(duplicated)).toEqual(reduceRun(events));
+  });
+});
+
+describe('reduceRun — diagnosis↔checks law (T2.2 review F5)', () => {
+  it('records a warning for each cited check id with no prior check.evaluated', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'diagnosis.created', {
+        diagnosis: { ...sampleDiagnosis, failedCheckIds: ['chk_ghost', 'chk_phantom'] },
+      }),
+    ]);
+    expect(view.warnings).toHaveLength(2);
+    expect(view.warnings[0]).toContain('chk_ghost');
+    expect(view.warnings[1]).toContain('chk_phantom');
+    // The diagnosis itself is kept, never dropped.
+    expect(view.diagnosis?.failedCheckIds).toEqual(['chk_ghost', 'chk_phantom']);
+  });
+
+  it('records nothing when every cited check was evaluated first', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'artifact.created', { artifact: sampleArtifact }),
+      envelope(3, 'check.evaluated', {
+        check: { ...sampleCheck, id: 'chk_02', verdict: 'fail' as const },
+      }),
+      envelope(4, 'diagnosis.created', { diagnosis: sampleDiagnosis }),
+    ]);
+    expect(view.warnings).toEqual([]);
+  });
 });
 
 describe('reduceRun — idempotency by seq', () => {

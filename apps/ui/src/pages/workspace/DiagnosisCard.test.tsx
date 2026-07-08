@@ -32,6 +32,7 @@ function renderCard(overrides: Partial<DiagnosisCardProps> = {}) {
         runId={RUN_ID}
         fixApproval={null}
         resolving={false}
+        resolveError={null}
         onApproveFix={onApproveFix}
         {...overrides}
       />
@@ -108,5 +109,23 @@ describe('DiagnosisCard', () => {
   it('disables Approve Fix Plan while a resolution is pending', () => {
     renderCard({ fixApproval: approval('apr_fix'), resolving: true });
     expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled();
+  });
+
+  it('surfaces a non-conflict resolve error as an alert', () => {
+    renderCard({ fixApproval: approval('apr_fix'), resolveError: 'Could not resolve the approval.' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not resolve the approval.');
+  });
+
+  it('renders an explicit unavailable line for a cited check missing from view (F5), never dropping it', () => {
+    renderCard({
+      diagnosis: diagnosis(HYPOTHESES, ['chk_device_ack', 'chk_ghost']),
+    });
+    const failed = within(screen.getByRole('list', { name: 'Failed checks' }));
+    expect(failed.getAllByRole('listitem')).toHaveLength(2);
+    expect(failed.getByText('BME280 must ACK at address 0x76')).toBeInTheDocument();
+    expect(failed.getByText('Referenced check unavailable')).toBeInTheDocument();
+    // The unavailable line carries no verdict badge and no evidence link.
+    expect(failed.getAllByText('FAIL')).toHaveLength(1);
+    expect(failed.getAllByRole('link', { name: 'View evidence' })).toHaveLength(1);
   });
 });
