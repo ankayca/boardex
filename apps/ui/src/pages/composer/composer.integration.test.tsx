@@ -89,12 +89,14 @@ describe('composer → plan → approve (integration)', () => {
     expect(approve).toBeEnabled();
 
     // Approve Plan → POST /runs/{id}/plan/approve → replay resumes, the status leaves
-    // plan_ready, and composer mode hands over to the (Sprint 2) workspace.
+    // plan_ready, and composer mode hands over to the Run Workspace (T2.1): the
+    // timeline renders in the center zone and the composer's approval surface is gone.
     await user.click(approve);
     await waitFor(
-      () => expect(screen.getByText('Run Workspace is built in Sprint 2.')).toBeInTheDocument(),
+      () => expect(screen.getByRole('list', { name: 'Run timeline' })).toBeInTheDocument(),
       { timeout: 20000 },
     );
+    expect(screen.getByRole('complementary', { name: 'Board context' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Approve Plan' })).not.toBeInTheDocument();
   }, 60000);
 });

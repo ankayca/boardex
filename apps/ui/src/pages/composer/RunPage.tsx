@@ -1,10 +1,10 @@
-// /runs/:id (BIBLE §7.2 for now): while the run is in a pre-execution state
+// /runs/:id (BIBLE §7.2/§7.3): while the run is in a pre-execution state
 // (draft/planning/plan_ready) this page stays in composer mode — the submitted task,
 // context chips, bench readiness, then the plan rendered in place when
 // run.plan_generated arrives, and Approve Plan → POST plan/approve behind the D12
-// connection checklist. Any later status hands over to the Run Workspace (Sprint 2 —
-// placeholder until then). State comes exclusively from the run store's reduced view
-// (D5), fed by the run WS + HTTP replay.
+// connection checklist. Any later status hands over to the Run Workspace (T2.1).
+// State comes exclusively from the run store's reduced view (D5), fed by the run WS
+// + HTTP replay.
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
@@ -12,6 +12,7 @@ import { Button } from '../../design';
 import { api, StateConflict } from '../../lib/api';
 import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
+import { WorkspacePage } from '../workspace/WorkspacePage';
 import { BenchReadiness } from './BenchReadiness';
 import { offlineDevices } from './benchDevices';
 import { ContextChips } from './ContextChips';
@@ -35,15 +36,6 @@ function ProfileBlockedCard({ onRetry }: { onRetry: () => void }) {
         Retry
       </Button>
     </div>
-  );
-}
-
-function WorkspacePlaceholder({ run }: { run: Run }) {
-  return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
-      <p className="mt-2 text-body text-text-secondary">Run Workspace is built in Sprint 2.</p>
-    </main>
   );
 }
 
@@ -78,9 +70,6 @@ export default function RunPage() {
   }
 
   const { run } = view;
-  if (!COMPOSER_STATUSES.has(run.status)) {
-    return <WorkspacePlaceholder run={run} />;
-  }
 
   // Fail-closed (decisions.md 2026-07-07): the profile is resolved only when the query
   // succeeded AND the run's boardProfileId is in the list. Anything else — pending,
@@ -88,6 +77,17 @@ export default function RunPage() {
   const profile = profilesQuery.isSuccess
     ? (profilesQuery.data.find((p) => p.id === run.boardProfileId) ?? null)
     : null;
+
+  if (!COMPOSER_STATUSES.has(run.status)) {
+    return (
+      <WorkspacePage
+        view={view}
+        profile={profile}
+        profileLoading={profilesQuery.isPending}
+        bench={bench}
+      />
+    );
+  }
   const planReady = run.status === 'plan_ready' && run.plan !== undefined;
 
   return (
