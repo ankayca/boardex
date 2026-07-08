@@ -4,7 +4,7 @@ import Layout from './shell/Layout';
 import HomePage from './pages/home/HomePage';
 import NewRunPage from './pages/composer/NewRunPage';
 import RunPage from './pages/composer/RunPage';
-import { BoardDetailPage, BoardsPage } from './pages/placeholders';
+import { BoardDetailPage, BoardsPage, EvidencePage } from './pages/placeholders';
 
 // Dev-only gallery route (BIBLE §8 T0.5). Gate the lazy construction itself, not just
 // the route: in a prod build `import.meta.env.DEV` is statically false, so the dynamic
@@ -20,6 +20,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/runs/new" element={<NewRunPage />} />
         <Route path="/runs/:id" element={<RunPage />} />
+        <Route path="/runs/:id/evidence" element={<EvidencePage />} />
         <Route path="/boards" element={<BoardsPage />} />
         <Route path="/boards/:id" element={<BoardDetailPage />} />
       </Route>

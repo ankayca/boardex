@@ -73,6 +73,37 @@ export function artifact(id: string): Artifact {
   };
 }
 
+export function artifactOf(id: string, kind: Artifact['kind']): Artifact {
+  return {
+    id,
+    runId: RUN_ID,
+    stepId: 'st',
+    kind,
+    label: id,
+    mimeType: 'application/octet-stream',
+    sizeBytes: 128,
+  };
+}
+
+export function checkOf(
+  id: string,
+  requirementId: string,
+  artifactId: string,
+  verdict: MeasurementCheck['verdict'],
+): MeasurementCheck {
+  return {
+    id,
+    runId: RUN_ID,
+    requirementId,
+    description: `${requirementId} requirement`,
+    measurement: `measurement.${requirementId}`,
+    expected: { equals: true },
+    actual: { value: verdict === 'pass' },
+    verdict,
+    artifactId,
+  };
+}
+
 export function failedCheck(id: string, artifactId: string, description: string): MeasurementCheck {
   return {
     id,

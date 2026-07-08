@@ -43,7 +43,7 @@ export default function RunPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
 
-  useRunStream(id);
+  const connection = useRunStream(id);
   const view = useRunView(id);
 
   const profilesQuery = useQuery({
@@ -85,6 +85,7 @@ export default function RunPage() {
         profile={profile}
         profileLoading={profilesQuery.isPending}
         bench={bench}
+        connection={connection}
       />
     );
   }

@@ -1,12 +1,16 @@
 // Run Workspace — the three zones + evidence band (BIBLE §6.3/§7.3): left Board
 // Context rail (280px), center Plan & Progress (fluid, min 560px), right Run Status
 // & Approval rail (340px — status card, approval card, diagnosis card, stop), bottom
-// Evidence Summary band (88px collapsed — placeholder until T2.3). Below 1280px the
+// Evidence Summary band (88px collapsed strip of check chips + evidence actions).
+// A thin amber reconnecting bar sits above it all on a WS drop. Below 1280px the
 // right rail stacks under center.
 import type { BenchStatus, BoardProfile, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
+import type { WsConnectionStatus } from '../../lib/ws';
 import { BoardContextRail } from './BoardContextRail';
+import { EvidenceBand } from './EvidenceBand';
 import { PlanTimeline } from './PlanTimeline';
+import { ReconnectingBar } from './ReconnectingBar';
 import { StatusApprovalRail } from './StatusApprovalRail';
 
 export interface WorkspacePageProps {
@@ -14,39 +18,44 @@ export interface WorkspacePageProps {
   profile: BoardProfile | null;
   profileLoading: boolean;
   bench: BenchStatus | null;
+  connection: WsConnectionStatus;
 }
 
-export function WorkspacePage({ view, profile, profileLoading, bench }: WorkspacePageProps) {
+export function WorkspacePage({
+  view,
+  profile,
+  profileLoading,
+  bench,
+  connection,
+}: WorkspacePageProps) {
   const { run } = view;
   return (
-    <main className="px-6 py-6">
-      <header className="flex items-center gap-3">
-        <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
-        <Badge kind="status" value={run.status} />
-      </header>
+    <>
+      <ReconnectingBar status={connection} />
+      <main className="px-6 py-6">
+        <header className="flex items-center gap-3">
+          <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
+          <Badge kind="status" value={run.status} />
+        </header>
 
-      <div className="mt-6 grid grid-cols-[280px_minmax(0,1fr)] gap-6 xl:grid-cols-[280px_minmax(560px,1fr)_340px]">
-        <BoardContextRail
-          profile={profile}
-          profileLoading={profileLoading}
-          bench={bench}
-          boardProfileId={run.boardProfileId}
-        />
-        <PlanTimeline view={view} />
-        <aside
-          aria-label="Run status and approval"
-          className="col-start-2 xl:col-auto xl:col-start-3"
-        >
-          <StatusApprovalRail view={view} />
-        </aside>
-      </div>
+        <div className="mt-6 grid grid-cols-[280px_minmax(0,1fr)] gap-6 xl:grid-cols-[280px_minmax(560px,1fr)_340px]">
+          <BoardContextRail
+            profile={profile}
+            profileLoading={profileLoading}
+            bench={bench}
+            boardProfileId={run.boardProfileId}
+          />
+          <PlanTimeline view={view} />
+          <aside
+            aria-label="Run status and approval"
+            className="col-start-2 xl:col-auto xl:col-start-3"
+          >
+            <StatusApprovalRail view={view} />
+          </aside>
+        </div>
 
-      <section
-        aria-label="Evidence summary"
-        className="mt-6 flex h-[88px] items-center rounded-card border border-border bg-bg-panel px-5 shadow-subtle"
-      >
-        <p className="text-meta text-text-secondary">Evidence summary arrives with T2.3.</p>
-      </section>
-    </main>
+        <EvidenceBand view={view} />
+      </main>
+    </>
   );
 }
