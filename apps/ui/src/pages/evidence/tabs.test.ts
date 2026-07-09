@@ -1,9 +1,10 @@
-// Deep-link routing per artifact kind (§7.4 / T3.1). resolveDeepLink is the one
-// place a ?artifact=<id> param becomes a tab + highlight target; every branch is
-// fail-closed and covered here.
+// Deep-link routing per artifact kind (§7.4). resolveDeepLink is the one place
+// a ?artifact=<id> param becomes a tab + content target; as of T3.2 every kind
+// has a live tab, so a known id routes to its viewer and only an unknown id
+// fails closed (Checks + explicit notice).
 import type { Artifact, ArtifactKind } from '@boardex/contract';
 import { describe, expect, it } from 'vitest';
-import { AVAILABLE_TABS, resolveDeepLink, tabForArtifactKind } from './tabs';
+import { latestOfKind, resolveDeepLink, tabForArtifactKind } from './tabs';
 
 const artifact = (id: string, kind: ArtifactKind): Artifact => ({
   id,
@@ -28,11 +29,26 @@ describe('tabForArtifactKind', () => {
   });
 });
 
+describe('latestOfKind', () => {
+  it('returns the most recently created artifact of the kind, or null', () => {
+    const artifacts = [
+      artifact('art_diff_1', 'code_diff'),
+      artifact('art_decode', 'protocol_decode'),
+      artifact('art_diff_2', 'code_diff'),
+    ];
+    expect(latestOfKind(artifacts, 'code_diff')?.id).toBe('art_diff_2');
+    expect(latestOfKind(artifacts, 'report_md')).toBeNull();
+  });
+});
+
 describe('resolveDeepLink', () => {
   const artifacts = [
     artifact('art_decode', 'protocol_decode'),
     artifact('art_timing', 'timing_measurement'),
     artifact('art_serial', 'serial_log'),
+    artifact('art_build', 'build_log'),
+    artifact('art_diff', 'code_diff'),
+    artifact('art_report', 'report_md'),
   ];
 
   it('defaults to the Checks tab without a param', () => {
@@ -43,19 +59,20 @@ describe('resolveDeepLink', () => {
     });
   });
 
-  it('opens the decode tab for a protocol_decode artifact', () => {
-    const target = resolveDeepLink(artifacts, 'art_decode');
-    expect(target.tab).toBe('decode');
-    expect(target.artifact?.id).toBe('art_decode');
-    expect(target.notice).toBeNull();
-  });
-
-  it('lands T3.2 kinds on Checks with the arrives-with-T3.2 notice, artifact kept for highlighting', () => {
-    for (const id of ['art_timing', 'art_serial']) {
+  it('routes every known artifact to its own kind tab with no notice', () => {
+    const expected: [string, string][] = [
+      ['art_decode', 'decode'],
+      ['art_serial', 'logs'],
+      ['art_build', 'logs'],
+      ['art_diff', 'diff'],
+      ['art_timing', 'raw'],
+      ['art_report', 'raw'],
+    ];
+    for (const [id, tab] of expected) {
       const target = resolveDeepLink(artifacts, id);
-      expect(target.tab).toBe('checks');
+      expect(target.tab).toBe(tab);
       expect(target.artifact?.id).toBe(id);
-      expect(target.notice).toMatch(/T3\.2/);
+      expect(target.notice).toBeNull();
     }
   });
 
@@ -64,11 +81,5 @@ describe('resolveDeepLink', () => {
     expect(target.tab).toBe('checks');
     expect(target.artifact).toBeNull();
     expect(target.notice).toMatch(/isn't part of this run's evidence/);
-  });
-
-  it('always lands on a tab that has T3.1 content', () => {
-    for (const candidate of [null, 'art_decode', 'art_timing', 'art_serial', 'nope']) {
-      expect(AVAILABLE_TABS.has(resolveDeepLink(artifacts, candidate).tab)).toBe(true);
-    }
   });
 });

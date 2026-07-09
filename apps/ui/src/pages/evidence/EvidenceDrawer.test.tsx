@@ -1,8 +1,9 @@
-// Evidence Detail drawer (§7.4, T3.1): deep-link routing per artifact kind at the
-// component level, the two live tabs, and the T3.2 tabs rendered disabled with
-// their tooltip. Views come from the real reduceRun (D5); artifact content is
-// stubbed at the api seam — transport is covered by the integration test.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// Evidence Detail drawer (§7.4, T3.1+T3.2): deep-link routing per artifact kind
+// at the component level across all five live tabs, plus the fail-closed states
+// for malformed log/diff content and the rollback affordance rules. Views come
+// from the real reduceRun (D5); artifact content is stubbed at the api seam —
+// transport is covered by the integration tests.
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,7 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { Event, MeasurementCheck, RunView } from '@boardex/contract';
 import { reduceRun } from '@boardex/contract';
 import { api } from '../../lib/api';
-import { artifactOf, envelope, run, RUN_ID } from '../workspace/test-events';
+import { artifactOf, envelope, run, runStep, RUN_ID } from '../workspace/test-events';
 import { EvidenceDrawer } from './EvidenceDrawer';
 
 const DECODE_JSON = JSON.stringify({
@@ -24,6 +25,25 @@ const DECODE_JSON = JSON.stringify({
   transactions: [{ addr_7bit: 59, rw: 'w', write: [], read: [], nack_at: 'address' }],
 });
 
+const SERIAL_LOG = 'BME280: probing at 0x76\nI2C1 ERROR: timeout waiting for TXIS (read setup)\n';
+
+const DIFF_JSON = JSON.stringify({
+  files: [
+    {
+      path: 'main.c',
+      reason: 'Shift the 7-bit address into SADD[7:1].',
+      diff: '@@ -60,2 +60,3 @@\n #define BME280_ADDR 0x76U\n+#define BME280_SADD ((uint32_t)BME280_ADDR << 1)\n #define BME280_CHIP_ID 0x60U\n',
+    },
+  ],
+});
+
+const CONTENT_BY_ID: Record<string, string> = {
+  art_decode: DECODE_JSON,
+  art_serial_1: SERIAL_LOG,
+  art_serial_2: 'TEMP=24.3 HUM=41.2\n',
+  art_diff: DIFF_JSON,
+};
+
 const ackCheck: MeasurementCheck = {
   id: 'chk_ack',
   runId: RUN_ID,
@@ -36,40 +56,62 @@ const ackCheck: MeasurementCheck = {
   artifactId: 'art_decode',
 };
 
-const clockCheck: MeasurementCheck = {
-  id: 'chk_clock',
-  runId: RUN_ID,
-  requirementId: 'i2c_clock',
-  description: 'I2C SCL clock must be 100 kHz ±10%',
-  measurement: 'logic_analyzer.i2c.scl_frequency',
-  expected: { min: 90000, max: 110000 },
-  actual: { value: 99600, unit: 'Hz' },
-  verdict: 'pass',
-  artifactId: 'art_timing',
-};
-
-function buildView(): RunView {
-  const stream: Event[] = [
+// One of each T3.2 kind plus a decode, two serial logs across two iterations,
+// and a timing measurement — the fixture's evidence surface in miniature.
+function baseEvents(): Event[] {
+  return [
     envelope(1, 'run.created', { run }),
-    envelope(2, 'artifact.created', { artifact: artifactOf('art_decode', 'protocol_decode') }),
-    envelope(3, 'artifact.created', { artifact: artifactOf('art_timing', 'timing_measurement') }),
-    envelope(4, 'check.evaluated', { check: ackCheck }),
-    envelope(5, 'check.evaluated', { check: clockCheck }),
+    envelope(2, 'step.started', { step: runStep('st_serial_1', 3, 'Read serial') }),
+    envelope(3, 'artifact.created', {
+      artifact: { ...artifactOf('art_serial_1', 'serial_log'), stepId: 'st_serial_1' },
+    }),
+    envelope(4, 'artifact.created', { artifact: artifactOf('art_decode', 'protocol_decode') }),
+    envelope(5, 'artifact.created', { artifact: artifactOf('art_timing', 'timing_measurement') }),
+    envelope(6, 'artifact.created', {
+      artifact: { ...artifactOf('art_diff', 'code_diff'), label: 'Code diff — address fix' },
+    }),
+    envelope(7, 'check.evaluated', { check: ackCheck }),
+    envelope(8, 'run.iteration_started', { iteration: 2, reason: 'Applying fix' }),
+    envelope(9, 'step.started', { step: runStep('st_serial_2', 3, 'Read serial') }),
+    envelope(10, 'artifact.created', {
+      artifact: { ...artifactOf('art_serial_2', 'serial_log'), stepId: 'st_serial_2' },
+    }),
   ];
-  return reduceRun(stream);
 }
 
-function renderDrawer(search: string) {
-  vi.spyOn(api, 'getArtifactText').mockResolvedValue(DECODE_JSON);
+function buildView(extra: Event[] = []): RunView {
+  return reduceRun([...baseEvents(), ...extra]);
+}
+
+function renderDrawer(search: string, view: RunView = buildView()) {
+  vi.spyOn(api, 'getArtifactText').mockImplementation((id) => {
+    const content = CONTENT_BY_ID[id];
+    return content !== undefined
+      ? Promise.resolve(content)
+      : Promise.reject(new Error(`no stub for ${id}`));
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence${search}`]}>
-        <EvidenceDrawer view={buildView()} onClose={() => {}} />
+        <EvidenceDrawer view={view} onClose={() => {}} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
+
+// jsdom reports zero offset sizes, so the LogViewer's virtualizer would render
+// no rows at all — give every element a box (same treatment as LogViewer.test).
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get: () => 640,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get: () => 320,
+  });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -78,54 +120,80 @@ afterEach(() => {
 const tab = (name: string) => screen.getByRole('tab', { name });
 
 describe('EvidenceDrawer tabs', () => {
-  it('defaults to Checks and renders the T3.2 tabs disabled with the tooltip', () => {
+  it('defaults to Checks with every tab enabled', () => {
     renderDrawer('');
     expect(tab('Checks')).toHaveAttribute('aria-selected', 'true');
-    for (const name of ['Logs', 'Code Diff', 'Raw artifacts']) {
-      const t32Tab = tab(name);
-      expect(t32Tab).toHaveAttribute('aria-disabled', 'true');
-      expect(t32Tab).toHaveAttribute('title', 'Arrives with T3.2');
+    for (const name of ['Protocol Decode', 'Logs', 'Code Diff', 'Raw artifacts']) {
+      expect(tab(name)).not.toHaveAttribute('aria-disabled');
     }
     expect(screen.getByRole('table', { name: 'Measurement checks' })).toBeInTheDocument();
   });
 
-  it('ignores clicks on disabled tabs', async () => {
+  it('switches to each content tab by hand, rendering the latest subject of its kind', async () => {
     const user = userEvent.setup();
     renderDrawer('');
-    await user.click(tab('Logs'));
-    expect(tab('Checks')).toHaveAttribute('aria-selected', 'true');
-  });
 
-  it('switches to Protocol Decode by hand, rendering the latest decode', async () => {
-    const user = userEvent.setup();
-    renderDrawer('');
     await user.click(tab('Protocol Decode'));
-    expect(tab('Protocol Decode')).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('table', { name: 'Decoded transactions' })).toBeInTheDocument();
-    expect(api.getArtifactText).toHaveBeenCalledWith('art_decode');
+
+    await user.click(tab('Logs'));
+    // Opened by hand: first log sub-tab selected, labeled by kind + iteration.
+    const logTabs = screen.getByRole('tablist', { name: 'Log artifacts' });
+    expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 1' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(tab('Code Diff'));
+    expect(await screen.findByText('main.c')).toBeInTheDocument();
+
+    await user.click(tab('Raw artifacts'));
+    expect(screen.getByRole('table', { name: 'Raw artifacts' })).toBeInTheDocument();
   });
 });
 
 describe('EvidenceDrawer deep links (?artifact=…)', () => {
-  it('a protocol_decode artifact opens the decode tab with its failed rows tinted', async () => {
-    renderDrawer('?artifact=art_decode');
-    expect(tab('Protocol Decode')).toHaveAttribute('aria-selected', 'true');
-    const table = await screen.findByRole('table', { name: 'Decoded transactions' });
-    const failedRows = table.querySelectorAll('tbody tr[data-failed]');
-    expect(failedRows).toHaveLength(1);
-    expect(failedRows[0]).toHaveClass('bg-fail-bg');
-    expect(failedRows[0]).toHaveTextContent('0x3B');
-    expect(failedRows[0]).toHaveTextContent('NACK (address)');
+  it('a serial_log artifact opens the Logs tab on that exact sub-tab with its content', async () => {
+    renderDrawer('?artifact=art_serial_2');
+    expect(tab('Logs')).toHaveAttribute('aria-selected', 'true');
+    const logTabs = screen.getByRole('tablist', { name: 'Log artifacts' });
+    expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 2' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const log = await screen.findByRole('log');
+    expect(log).toHaveTextContent('TEMP=24.3 HUM=41.2');
   });
 
-  it('a T3.2-kind artifact lands on Checks with its rows highlighted and the notice shown', () => {
+  it('the other iteration’s serial log stays reachable from its own sub-tab', async () => {
+    const user = userEvent.setup();
+    renderDrawer('?artifact=art_serial_2');
+    await user.click(
+      within(screen.getByRole('tablist', { name: 'Log artifacts' })).getByRole('tab', {
+        name: 'Serial — iteration 1',
+      }),
+    );
+    expect(await screen.findByRole('log')).toHaveTextContent('BME280: probing at 0x76');
+  });
+
+  it('a code_diff artifact opens the Code Diff tab with the per-file diff and reason', async () => {
+    renderDrawer('?artifact=art_diff');
+    expect(tab('Code Diff')).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText('main.c')).toBeInTheDocument();
+    expect(screen.getByText('Shift the 7-bit address into SADD[7:1].')).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Unified diff for main.c' });
+    const added = table.querySelectorAll('tr[data-diff="add"]');
+    expect(added).toHaveLength(1);
+    expect(added[0]).toHaveTextContent('#define BME280_SADD');
+  });
+
+  it('a timing_measurement artifact opens Raw artifacts with its row highlighted', () => {
     renderDrawer('?artifact=art_timing');
-    expect(tab('Checks')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('status')).toHaveTextContent(/arrives with T3\.2/);
-    const table = screen.getByRole('table', { name: 'Measurement checks' });
+    expect(tab('Raw artifacts')).toHaveAttribute('aria-selected', 'true');
+    const table = screen.getByRole('table', { name: 'Raw artifacts' });
     const highlighted = table.querySelectorAll('tbody tr[data-highlighted]');
     expect(highlighted).toHaveLength(1);
-    expect(highlighted[0]).toHaveTextContent('i2c_clock');
+    expect(highlighted[0]).toHaveTextContent('timing_measurement');
   });
 
   it('an unknown artifact id fails closed on Checks with an explicit notice', () => {
@@ -137,35 +205,66 @@ describe('EvidenceDrawer deep links (?artifact=…)', () => {
   });
 });
 
-describe('EvidenceDrawer decode failure states', () => {
-  it('renders a fail-closed error state on unparseable artifact content, not a crash', async () => {
-    vi.spyOn(api, 'getArtifactText').mockResolvedValue('not json at all');
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence?artifact=art_decode`]}>
-          <EvidenceDrawer view={buildView()} onClose={() => {}} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Decode artifact unreadable');
-    expect(alert).toHaveTextContent('not valid JSON');
-    expect(screen.queryByRole('table', { name: 'Decoded transactions' })).not.toBeInTheDocument();
+describe('EvidenceDrawer fail-closed content states', () => {
+  it('renders an error state for a malformed code_diff artifact, not a crash', async () => {
+    CONTENT_BY_ID['art_diff'] = '{"files": "nope"}';
+    try {
+      renderDrawer('?artifact=art_diff');
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Diff artifact unreadable');
+      expect(alert).toHaveTextContent('code-diff shape');
+    } finally {
+      CONTENT_BY_ID['art_diff'] = DIFF_JSON;
+    }
   });
 
-  it('renders a retryable error state when the artifact fetch fails', async () => {
-    vi.spyOn(api, 'getArtifactText').mockRejectedValue(new Error('network down'));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence?artifact=art_decode`]}>
-          <EvidenceDrawer view={buildView()} onClose={() => {}} />
-        </MemoryRouter>
-      </QueryClientProvider>,
+  it('renders a per-file error when a file’s unified diff text is unreadable', async () => {
+    CONTENT_BY_ID['art_diff'] = JSON.stringify({
+      files: [{ path: 'main.c', reason: 'r', diff: 'not a diff' }],
+    });
+    try {
+      renderDrawer('?artifact=art_diff');
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Diff unreadable');
+      expect(alert).toHaveTextContent('No unified-diff hunks');
+    } finally {
+      CONTENT_BY_ID['art_diff'] = DIFF_JSON;
+    }
+  });
+
+  it('renders an error state for non-text log content, not mojibake', async () => {
+    CONTENT_BY_ID['art_serial_2'] = 'ELF\u0000binary';
+    try {
+      renderDrawer('?artifact=art_serial_2');
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Log artifact unreadable');
+      expect(alert).toHaveTextContent('not renderable text');
+    } finally {
+      CONTENT_BY_ID['art_serial_2'] = 'TEMP=24.3 HUM=41.2\n';
+    }
+  });
+});
+
+describe('EvidenceDrawer rollback affordance (§7.4)', () => {
+  it('is enabled while the run is non-terminal and surfaces the MVP notice on click', async () => {
+    const user = userEvent.setup();
+    renderDrawer('?artifact=art_diff');
+    const rollback = await screen.findByRole('button', { name: 'Rollback' });
+    expect(rollback).toBeEnabled();
+    await user.click(rollback);
+    expect(screen.getByRole('status')).toHaveTextContent(/performed by the runner/);
+  });
+
+  it('is disabled with an explanatory tooltip once the run is terminal', async () => {
+    const terminalView = buildView([
+      envelope(11, 'run.status_changed', { status: 'completed' }),
+    ]);
+    renderDrawer('?artifact=art_diff', terminalView);
+    const rollback = await screen.findByRole('button', { name: 'Rollback' });
+    expect(rollback).toBeDisabled();
+    expect(rollback).toHaveAttribute(
+      'title',
+      expect.stringMatching(/completed.*only available while a run is active/),
     );
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Couldn’t load the decode artifact');
-    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });

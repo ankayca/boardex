@@ -62,10 +62,10 @@ function buildView(): RunView {
   return reduceRun(stream);
 }
 
-function renderTab(view: RunView, highlightArtifactId: string | null = null) {
+function renderTab(view: RunView) {
   return render(
     <MemoryRouter>
-      <ChecksTab view={view} highlightArtifactId={highlightArtifactId} />
+      <ChecksTab view={view} />
     </MemoryRouter>,
   );
 }
@@ -114,13 +114,6 @@ describe('ChecksTab', () => {
     expect(inert).not.toBeNull();
     expect(inert).toHaveTextContent('View evidence');
     expect(inert).not.toHaveAttribute('href');
-  });
-
-  it('highlights the rows backed by the deep-linked artifact', () => {
-    renderTab(buildView(), 'art_timing');
-    const [, clockRow, ackRow] = rows();
-    expect(clockRow).toHaveAttribute('data-highlighted');
-    expect(ackRow).not.toHaveAttribute('data-highlighted');
   });
 
   it('renders a quiet status line before any check is evaluated', () => {

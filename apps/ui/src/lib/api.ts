@@ -75,6 +75,12 @@ export interface ApiClient {
    * typed by artifact.mimeType (§5.3); structured kinds are parsed by their reader.
    */
   getArtifactText(artifactId: string): Promise<string>;
+  /**
+   * Raw artifact content as a Blob typed by the artifact's own mimeType (§4 meta
+   * is the MIME authority) — the download path for the Raw artifacts tab, binary-
+   * safe for logic captures.
+   */
+  getArtifactBlob(artifactId: string, mimeType: string): Promise<Blob>;
 }
 
 export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
@@ -143,6 +149,13 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
       }
       return res.text();
+    },
+    getArtifactBlob: async (artifactId, mimeType) => {
+      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      if (!res.ok) {
+        throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
+      }
+      return new Blob([await res.arrayBuffer()], { type: mimeType });
     },
   };
 }

@@ -2,9 +2,9 @@
 // requirement, expected window, actual value with unit, verdict badge, source ref,
 // and a "view evidence" link deep-linking the check's artifact. The link is law-
 // gated exactly like the band's chips: an artifactId with no artifact.created in
-// RunView renders inert (aria-disabled, no href), never a dead link. A deep link
-// whose artifact has no T3.1 viewer highlights the rows it backs instead.
-import { useEffect, useRef } from 'react';
+// RunView renders inert (aria-disabled, no href), never a dead link. (The T3.1
+// highlight-on-Checks fallback is gone: every artifact kind now has its own tab,
+// so deep links never land here carrying an artifact.)
 import { Link } from 'react-router-dom';
 import type { RunView } from '@boardex/contract';
 import { Badge } from '../../design';
@@ -16,17 +16,10 @@ const EVIDENCE_LINK_BASE = 'whitespace-nowrap text-meta font-medium';
 
 export interface ChecksTabProps {
   view: RunView;
-  /** Artifact id from the deep link; rows backed by it highlight and scroll into view. */
-  highlightArtifactId: string | null;
 }
 
-export function ChecksTab({ view, highlightArtifactId }: ChecksTabProps) {
+export function ChecksTab({ view }: ChecksTabProps) {
   const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
-  const highlightRef = useRef<HTMLTableRowElement | null>(null);
-
-  useEffect(() => {
-    highlightRef.current?.scrollIntoView?.({ block: 'center' });
-  }, [highlightArtifactId]);
 
   if (view.checks.length === 0) {
     return (
@@ -35,8 +28,6 @@ export function ChecksTab({ view, highlightArtifactId }: ChecksTabProps) {
       </p>
     );
   }
-
-  let highlightAssigned = false;
 
   return (
     <div className="overflow-x-auto">
@@ -53,19 +44,8 @@ export function ChecksTab({ view, highlightArtifactId }: ChecksTabProps) {
         </thead>
         <tbody>
           {view.checks.map((check) => {
-            const highlighted =
-              highlightArtifactId !== null && check.artifactId === highlightArtifactId;
-            const isScrollTarget = highlighted && !highlightAssigned;
-            if (isScrollTarget) highlightAssigned = true;
             return (
-              <tr
-                key={check.id}
-                ref={isScrollTarget ? highlightRef : undefined}
-                data-highlighted={highlighted || undefined}
-                className={`border-b border-border ${
-                  highlighted ? 'outline outline-2 -outline-offset-2 outline-accent' : ''
-                }`}
-              >
+              <tr key={check.id} className="border-b border-border">
                 <td className={CELL}>
                   <span className="font-mono text-text-primary">{check.requirementId}</span>
                   <p className="mt-0.5 text-text-secondary">{check.description}</p>

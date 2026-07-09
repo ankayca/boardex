@@ -1,8 +1,8 @@
-// Evidence Detail tab model (BIBLE §7.4). T3.1 ships Checks + Protocol Decode;
-// Logs / Code Diff / Raw artifacts exist as disabled tabs until T3.2. Deep links
-// (?artifact=<id>) resolve fail-closed: an id that isn't in RunView.artifacts, or
-// whose tab isn't built yet, lands on the Checks tab with an explicit notice —
-// never a blank panel, never a crash.
+// Evidence Detail tab model (BIBLE §7.4). All five tabs are live as of T3.2:
+// Checks (default), Protocol Decode, Logs, Code Diff, Raw artifacts. Deep links
+// (?artifact=<id>) resolve fail-closed: an id that isn't in RunView.artifacts
+// lands on the Checks tab with an explicit notice — never a blank panel, never a
+// crash. A known id always lands on its kind's own tab with the exact content.
 import type { Artifact, ArtifactKind } from '@boardex/contract';
 
 export type EvidenceTabId = 'checks' | 'decode' | 'logs' | 'diff' | 'raw';
@@ -20,11 +20,6 @@ export const EVIDENCE_TABS: readonly EvidenceTab[] = [
   { id: 'diff', label: 'Code Diff' },
   { id: 'raw', label: 'Raw artifacts' },
 ];
-
-// Tabs with content in T3.1; the rest render disabled with the T3.2 tooltip.
-export const AVAILABLE_TABS: ReadonlySet<EvidenceTabId> = new Set(['checks', 'decode']);
-
-export const T32_TOOLTIP = 'Arrives with T3.2';
 
 // Which tab renders an artifact of this kind (§7.4's per-kind tab assignment).
 export function tabForArtifactKind(kind: ArtifactKind): EvidenceTabId {
@@ -44,18 +39,29 @@ export function tabForArtifactKind(kind: ArtifactKind): EvidenceTabId {
   }
 }
 
+// The most recently created artifact of a kind (artifacts[] is creation-ordered),
+// or null when the run has produced none — a tab opened by hand shows the latest
+// subject of its kind, mirroring the band's evidenceTargets rule.
+export function latestOfKind(artifacts: readonly Artifact[], kind: ArtifactKind): Artifact | null {
+  for (let i = artifacts.length - 1; i >= 0; i--) {
+    const artifact = artifacts[i];
+    if (artifact && artifact.kind === kind) return artifact;
+  }
+  return null;
+}
+
 export interface DeepLinkTarget {
-  /** Tab to activate — always one that has content in T3.1. */
+  /** Tab to activate. */
   tab: EvidenceTabId;
-  /** The resolved artifact to highlight/scroll to, or null when none applies. */
+  /** The resolved artifact to open/highlight, or null when none applies. */
   artifact: Artifact | null;
   /** Fail-closed explanation when the link couldn't land on its natural surface. */
   notice: string | null;
 }
 
-// Resolve ?artifact=<id> against RunView.artifacts. Fail-closed on every branch:
-// unknown ids get an explicit notice, kinds whose tab is still T3.2 land on Checks
-// with their linked check rows highlighted instead.
+// Resolve ?artifact=<id> against RunView.artifacts. Every kind has a live tab as
+// of T3.2, so a known id routes straight to its viewer; the only fail-closed
+// branch left is an id that isn't part of this run's evidence.
 export function resolveDeepLink(
   artifacts: readonly Artifact[],
   artifactParam: string | null,
@@ -71,12 +77,5 @@ export function resolveDeepLink(
     };
   }
 
-  const tab = tabForArtifactKind(artifact.kind);
-  if (AVAILABLE_TABS.has(tab)) return { tab, artifact, notice: null };
-
-  return {
-    tab: 'checks',
-    artifact,
-    notice: `The viewer for “${artifact.label}” arrives with T3.2. Checks backed by this artifact are highlighted below.`,
-  };
+  return { tab: tabForArtifactKind(artifact.kind), artifact, notice: null };
 }
