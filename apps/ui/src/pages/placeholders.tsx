@@ -16,13 +16,6 @@ export function BoardsPage() {
   return <Placeholder title="Board Profiles" sprint="Sprint 4" />;
 }
 
-// The evidence surface (Evidence Detail, §7.4) is Sprint 3. The route exists now so
-// the Run Workspace's real deep links — evidence-band chips and Open Logs/Diff/Report,
-// plus the Diagnosis Card's stub links — resolve to a clean page instead of a 404.
-export function EvidencePage() {
-  return <Placeholder title="Evidence" sprint="Sprint 3" />;
-}
-
 export function BoardDetailPage() {
   const { id } = useParams();
   return <Placeholder title={`Board ${id ?? ''}`.trim()} sprint="Sprint 4" />;

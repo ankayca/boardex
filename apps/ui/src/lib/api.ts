@@ -70,6 +70,11 @@ export interface ApiClient {
   getArtifactMeta(artifactId: string): Promise<Artifact>;
   /** URL of an artifact's raw content (GET /artifacts/{id}); fetched by reference (§D4). */
   artifactUrl(artifactId: string): string;
+  /**
+   * Raw artifact content as text (GET /artifacts/{id}). No schema here: content is
+   * typed by artifact.mimeType (§5.3); structured kinds are parsed by their reader.
+   */
+  getArtifactText(artifactId: string): Promise<string>;
 }
 
 export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
@@ -132,6 +137,13 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
     getArtifactMeta: (artifactId) =>
       requestJson(`/artifacts/${artifactId}/meta`, GetArtifactMetaResponseSchema),
     artifactUrl: (artifactId) => `${base}/artifacts/${artifactId}`,
+    getArtifactText: async (artifactId) => {
+      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      if (!res.ok) {
+        throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
+      }
+      return res.text();
+    },
   };
 }
 

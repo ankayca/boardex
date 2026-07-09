@@ -5,13 +5,14 @@
 // connection checklist. Any later status hands over to the Run Workspace (T2.1).
 // State comes exclusively from the run store's reduced view (D5), fed by the run WS
 // + HTTP replay.
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMatch, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
 import { Button } from '../../design';
 import { api, StateConflict } from '../../lib/api';
 import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
+import { EvidenceDrawer } from '../evidence/EvidenceDrawer';
 import { WorkspacePage } from '../workspace/WorkspacePage';
 import { BenchReadiness } from './BenchReadiness';
 import { offlineDevices } from './benchDevices';
@@ -42,6 +43,9 @@ function ProfileBlockedCard({ onRetry }: { onRetry: () => void }) {
 export default function RunPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  // Evidence Detail (§7.4) is a drawer over this page: /runs/:id/evidence renders
+  // the same RunPage with the drawer open; closing it returns to /runs/:id.
+  const evidenceOpen = useMatch('/runs/:id/evidence') !== null;
 
   const connection = useRunStream(id);
   const view = useRunView(id);
@@ -71,6 +75,10 @@ export default function RunPage() {
 
   const { run } = view;
 
+  const evidenceDrawer = evidenceOpen ? (
+    <EvidenceDrawer view={view} onClose={() => navigate(`/runs/${id}`)} />
+  ) : null;
+
   // Fail-closed (decisions.md 2026-07-07): the profile is resolved only when the query
   // succeeded AND the run's boardProfileId is in the list. Anything else — pending,
   // errored, or unknown id — is unresolved safety context and blocks approval.
@@ -80,13 +88,16 @@ export default function RunPage() {
 
   if (!COMPOSER_STATUSES.has(run.status)) {
     return (
-      <WorkspacePage
-        view={view}
-        profile={profile}
-        profileLoading={profilesQuery.isPending}
-        bench={bench}
-        connection={connection}
-      />
+      <>
+        <WorkspacePage
+          view={view}
+          profile={profile}
+          profileLoading={profilesQuery.isPending}
+          bench={bench}
+          connection={connection}
+        />
+        {evidenceDrawer}
+      </>
     );
   }
   const planReady = run.status === 'plan_ready' && run.plan !== undefined;
@@ -144,6 +155,7 @@ export default function RunPage() {
           </p>
         )}
       </div>
+      {evidenceDrawer}
     </main>
   );
 }
