@@ -7,10 +7,18 @@ const DEFAULT_RUNNER_URL = 'http://localhost:4319';
 // that typechecks the transport integration test.
 const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
 
-export const RUNNER_HTTP_BASE: string = (env?.VITE_RUNNER_URL ?? DEFAULT_RUNNER_URL).replace(
-  /\/+$/,
-  '',
-);
+// Under vitest, import.meta.env is snapshotted before tests run, so vi.stubEnv only
+// reaches process.env — integration tests stub VITE_RUNNER_URL there to point this
+// module at an ephemeral mock runner. process doesn't exist in the browser; read it
+// through globalThis so no node types are needed and the browser path is untouched.
+const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process?.env;
+
+export const RUNNER_HTTP_BASE: string = (
+  env?.VITE_RUNNER_URL ??
+  processEnv?.VITE_RUNNER_URL ??
+  DEFAULT_RUNNER_URL
+).replace(/\/+$/, '');
 
 export function httpBaseToWs(httpBase: string): string {
   return httpBase.replace(/^http/, 'ws');
