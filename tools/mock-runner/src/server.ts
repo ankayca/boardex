@@ -23,6 +23,9 @@ export interface MockRunnerOptions {
   host?: string;
   speed?: number;
   degraded?: boolean;
+  // Replay the fail variant (T5.0/F9): iteration 2's checks fail again and the
+  // run ends in run.failed with no further fix approval.
+  failVariant?: boolean;
   // Validate every outbound event against the contract at send time (§5.6). On by
   // default; a conforming runner never trips it, so a throw here is a real defect.
   validateOutbound?: boolean;
@@ -41,7 +44,7 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
   const degraded = options.degraded ?? false;
   const validateOutbound = options.validateOutbound ?? true;
 
-  const fixture = loadFixture();
+  const fixture = loadFixture(options.failVariant ? 'fail' : 'default');
   const artifactCatalog = buildArtifactCatalog(fixture);
   const bench: BenchStatus = buildBenchStatus(degraded);
 

@@ -105,6 +105,40 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
   const knownArtifactIds = new Set<string>();
   let lastSeq = 0;
 
+  // Legal-ordering buffers (T5.0/F5): an event that references an entity which has
+  // not arrived yet is buffered and reconciled when it does — never dropped. seq is
+  // per-run and ordered, but nothing in §5.2 promises an artifact.created lands
+  // before the check that cites it, a step.started before its outcome, or an
+  // approval.requested before its resolution. Whatever is still pending when this
+  // reduction ends becomes a contract warning (see the end of this function) — so a
+  // mid-stream prefix truthfully reports the violation-in-progress, and the very
+  // next event can dissolve it.
+  const pendingChecks = new Map<string, { check: MeasurementCheck; seq: number }>();
+  const pendingStepOutcomes = new Map<
+    string,
+    { type: 'step.completed' | 'step.failed'; summary: string; artifactIds: string[]; ts: string; seq: number }
+  >();
+  const pendingApprovalResolutions = new Map<
+    string,
+    { status: Approval['status']; resolvedAt: string; seq: number }
+  >();
+
+  const applyStepOutcome = (
+    index: number,
+    outcome: { type: 'step.completed' | 'step.failed'; summary: string; artifactIds: string[]; ts: string },
+  ): void => {
+    const step = steps[index] as RunStep;
+    steps[index] = {
+      ...step,
+      status: outcome.type === 'step.completed' ? 'succeeded' : 'failed',
+      summary: outcome.summary,
+      artifactIds: outcome.artifactIds,
+      // step.completed/step.failed carries no step object, so the envelope ts is
+      // the only source for endedAt.
+      endedAt: outcome.ts,
+    };
+  };
+
   const requireRun = (event: Event): Run => {
     if (!run) {
       throw new ProtocolError(
@@ -158,7 +192,17 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
         break;
       }
       case 'step.started': {
-        upsertById(steps, event.payload.step);
+        const { step } = event.payload;
+        upsertById(steps, step);
+        // A buffered early outcome reconciles the moment its step exists (F5).
+        const buffered = pendingStepOutcomes.get(step.id);
+        if (buffered) {
+          pendingStepOutcomes.delete(step.id);
+          applyStepOutcome(
+            steps.findIndex((existing) => existing.id === step.id),
+            buffered,
+          );
+        }
         break;
       }
       case 'step.log': {
@@ -176,43 +220,43 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
       case 'step.completed':
       case 'step.failed': {
         const { stepId, summary, artifactIds } = event.payload;
+        const outcome = { type: event.type, summary, artifactIds, ts: event.ts, seq: event.seq };
         const index = steps.findIndex((step) => step.id === stepId);
-        const step = index === -1 ? undefined : steps[index];
-        if (!step) {
-          warnings.push(
-            `contract violation: ${event.type} (seq ${event.seq}) references unknown step "${stepId}"`,
-          );
+        if (index === -1) {
+          // Early outcome: buffer until step.started introduces the step (F5).
+          pendingStepOutcomes.set(stepId, outcome);
           break;
         }
-        steps[index] = {
-          ...step,
-          status: event.type === 'step.completed' ? 'succeeded' : 'failed',
-          summary,
-          artifactIds,
-          // step.completed/step.failed carries no step object, so the envelope
-          // ts is the only source for endedAt.
-          endedAt: event.ts,
-        };
+        pendingStepOutcomes.delete(stepId);
+        applyStepOutcome(index, outcome);
         break;
       }
       case 'artifact.created': {
-        upsertById(artifacts, event.payload.artifact);
-        knownArtifactIds.add(event.payload.artifact.id);
+        const { artifact } = event.payload;
+        upsertById(artifacts, artifact);
+        knownArtifactIds.add(artifact.id);
+        // The evidence law re-resolves (F5): a check downgraded to needs_review
+        // because this artifact had not arrived yet gets its verdict back now.
+        for (const [checkId, pending] of pendingChecks) {
+          if (pending.check.artifactId === artifact.id) {
+            pendingChecks.delete(checkId);
+            upsertById(checks, pending.check);
+          }
+        }
         break;
       }
       case 'check.evaluated': {
         const { check } = event.payload;
-        // Evidence-linking law (§4): a check whose artifactId has no prior
-        // artifact.created is downgraded to needs_review, with a warning.
+        // Evidence-linking law (§4): a check whose artifactId is not resolvable is
+        // needs_review in the view. Not resolvable YET is not dropped-for-good:
+        // the wire verdict is buffered and restored if the artifact lands (F5);
+        // still unresolved at the end of the stream, it becomes the warning.
         if (knownArtifactIds.has(check.artifactId)) {
+          pendingChecks.delete(check.id);
           upsertById(checks, check);
         } else {
+          pendingChecks.set(check.id, { check, seq: event.seq });
           upsertById(checks, { ...check, verdict: 'needs_review' });
-          warnings.push(
-            `evidence-linking violation: check "${check.id}" (${check.requirementId}, seq ${event.seq}) ` +
-              `references artifact "${check.artifactId}" with no prior artifact.created; ` +
-              `verdict marked needs_review`,
-          );
         }
         break;
       }
@@ -235,12 +279,24 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
         break;
       }
       case 'approval.requested': {
-        upsertById(approvals, event.payload.approval);
+        const { approval } = event.payload;
+        upsertById(approvals, approval);
         // §5.4 v1.6: the first approval requested after diagnosis.created is that
         // diagnosis's fix approval; earlier approvals can never claim it because
         // events reduce in seq order and the diagnosis does not exist yet.
         if (diagnosis && diagnosis.fixApprovalId === undefined) {
-          diagnosis = { ...diagnosis, fixApprovalId: event.payload.approval.id };
+          diagnosis = { ...diagnosis, fixApprovalId: approval.id };
+        }
+        // A buffered early resolution reconciles now (F5): the human's decision
+        // arrived before the request did, but it is still the decision.
+        const buffered = pendingApprovalResolutions.get(approval.id);
+        if (buffered) {
+          pendingApprovalResolutions.delete(approval.id);
+          upsertById(approvals, {
+            ...approval,
+            status: buffered.status,
+            resolvedAt: buffered.resolvedAt,
+          });
         }
         break;
       }
@@ -249,11 +305,11 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
         const index = approvals.findIndex((approval) => approval.id === approvalId);
         const approval = index === -1 ? undefined : approvals[index];
         if (!approval) {
-          warnings.push(
-            `contract violation: approval.resolved (seq ${event.seq}) references unknown approval "${approvalId}"`,
-          );
+          // Early resolution: buffer until approval.requested introduces it (F5).
+          pendingApprovalResolutions.set(approvalId, { status, resolvedAt, seq: event.seq });
           break;
         }
+        pendingApprovalResolutions.delete(approvalId);
         approvals[index] = { ...approval, status, resolvedAt };
         break;
       }
@@ -293,6 +349,26 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
 
   if (!run) {
     throw new ProtocolError('missing_run', 'event stream contains no run.created');
+  }
+
+  // Whatever the stream never reconciled is a real contract violation (F5): the
+  // buffered originals above were the benefit of the doubt, this is the verdict.
+  for (const { check, seq } of pendingChecks.values()) {
+    warnings.push(
+      `evidence-linking violation: check "${check.id}" (${check.requirementId}, seq ${seq}) ` +
+        `references artifact "${check.artifactId}" with no prior artifact.created; ` +
+        `verdict marked needs_review`,
+    );
+  }
+  for (const [stepId, outcome] of pendingStepOutcomes) {
+    warnings.push(
+      `contract violation: ${outcome.type} (seq ${outcome.seq}) references unknown step "${stepId}"`,
+    );
+  }
+  for (const [approvalId, resolution] of pendingApprovalResolutions) {
+    warnings.push(
+      `contract violation: approval.resolved (seq ${resolution.seq}) references unknown approval "${approvalId}"`,
+    );
   }
 
   return {

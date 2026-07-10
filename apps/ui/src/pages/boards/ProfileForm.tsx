@@ -4,11 +4,12 @@
 // referenced instrument found/missing (advisory). Save runs the contract schema over
 // the draft and POSTs it to /board-profiles; field errors land inline.
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BoardProfile } from '@boardex/contract';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
 import { matchInstruments, type InstrumentMatch } from '../../lib/benchReadiness';
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { ChecklistEditor } from './ChecklistEditor';
 import { FormSection, TextField, ToggleField } from './Field';
 import { InstrumentField } from './InstrumentField';
@@ -34,9 +35,13 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [matches, setMatches] = useState<InstrumentMatch[] | null>(null);
 
-  // Populates the detected-device picker. Validate Profile re-fetches rather than
-  // reading this cache: "validated" must mean "checked against the bench just now".
-  const benchQuery = useQuery({ queryKey: ['bench'], queryFn: () => api.getBench(), retry: false });
+  // Populates the detected-device picker — through useBenchStatus like every other
+  // bench surface (T5.0/F8): the liveness rule from T4.2 F1 (a snapshot is dropped
+  // when the connection that delivered it dies) applies to the picker too; a private
+  // ['bench'] query here would happily offer devices from a bench we can no longer
+  // see. Validate Profile below still re-fetches rather than reading any snapshot:
+  // "validated" must mean "checked against the bench just now".
+  const bench = useBenchStatus();
 
   const set = <K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -164,7 +169,7 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
           value={draft.debugProbe}
           onChange={(value) => setInstrument('debugProbe', value)}
           error={errors['instruments.debugProbe']}
-          bench={benchQuery.data ?? null}
+          bench={bench}
         />
         <InstrumentField
           label="Logic analyzer"
@@ -173,7 +178,7 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
           onChange={(value) => setInstrument('logicAnalyzer', value)}
           error={errors['instruments.logicAnalyzer']}
           hint="Optional — leave blank if this board is validated without one."
-          bench={benchQuery.data ?? null}
+          bench={bench}
         />
 
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">

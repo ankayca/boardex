@@ -27,8 +27,17 @@ export const FIXTURE_RUN_ID = 'run_bme280_001';
 // test host (the UI's jsdom integration tests).
 const moduleUrl = import.meta.url;
 const FIXTURES_DIR = fileURLToPath(new URL('../../../packages/contract/fixtures/', moduleUrl));
-const FIXTURE_FILE = FIXTURES_DIR + 'bme280_run_001.jsonl';
 const ARTIFACTS_DIR = FIXTURES_DIR + 'artifacts/';
+
+// The two authored stories (§5.5 + the T5.0/F9 fail variant: identical through
+// iteration-2's flash, then the checks fail again and the run ends in run.failed
+// with no further fix approval).
+export type FixtureVariant = 'default' | 'fail';
+
+const FIXTURE_FILE_BY_VARIANT: Record<FixtureVariant, string> = {
+  default: FIXTURES_DIR + 'bme280_run_001.jsonl',
+  fail: FIXTURES_DIR + 'bme280_run_001_fail.jsonl',
+};
 
 // Artifact file extension by kind — logs are text, structured kinds are JSON,
 // the report is Markdown, raw captures are sigrok .sr (none in this fixture).
@@ -43,8 +52,8 @@ const EXTENSION_BY_KIND: Record<ArtifactKind, string> = {
   report_md: '.md',
 };
 
-export function loadFixture(): FixtureEntry[] {
-  const text = readFileSync(FIXTURE_FILE, 'utf8');
+export function loadFixture(variant: FixtureVariant = 'default'): FixtureEntry[] {
+  const text = readFileSync(FIXTURE_FILE_BY_VARIANT[variant], 'utf8');
   const entries: FixtureEntry[] = [];
   for (const line of text.split('\n')) {
     const trimmed = line.trim();

@@ -500,3 +500,130 @@ describe('reduceRun — ignored envelopes count toward continuity (§5.1, T5.0/F
     expect(view.endedAt).toBeUndefined();
   });
 });
+
+describe('reduceRun — legal-ordering reconciliation (T5.0/F5)', () => {
+  it('a check downgraded needs_review upgrades when its artifact lands', () => {
+    const early = [
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'check.evaluated', { check: sampleCheck }),
+    ];
+    // The prefix truthfully reports the violation-in-progress…
+    const before = reduceRun(early);
+    expect(before.checks[0]!.verdict).toBe('needs_review');
+    expect(before.warnings).toHaveLength(1);
+
+    // …and the artifact dissolves it: verdict restored, warning gone.
+    const after = reduceRun([
+      ...early,
+      envelope(3, 'artifact.created', { artifact: sampleArtifact }),
+    ]);
+    expect(after.checks).toHaveLength(1);
+    expect(after.checks[0]!.verdict).toBe('pass');
+    expect(after.warnings).toEqual([]);
+  });
+
+  it('re-resolution restores the LATEST wire verdict for a re-evaluated pending check', () => {
+    const failed = { ...sampleCheck, verdict: 'fail' as const, actual: { value: false } };
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'check.evaluated', { check: sampleCheck }),
+      envelope(3, 'check.evaluated', { check: failed }),
+      envelope(4, 'artifact.created', { artifact: sampleArtifact }),
+    ]);
+    expect(view.checks).toHaveLength(1);
+    expect(view.checks[0]!.verdict).toBe('fail');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('a check whose artifact never arrives stays needs_review with the warning', () => {
+    const orphan = { ...sampleCheck, artifactId: 'art_never' };
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'check.evaluated', { check: orphan }),
+      envelope(3, 'artifact.created', { artifact: sampleArtifact }), // a different artifact
+    ]);
+    expect(view.checks[0]!.verdict).toBe('needs_review');
+    expect(view.warnings).toHaveLength(1);
+    expect(view.warnings[0]).toContain('art_never');
+  });
+
+  it('an early step.completed is buffered and reconciled by step.started, not dropped', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      { ...envelope(2, 'step.completed', {
+        stepId: 'step_01',
+        summary: 'Build succeeded.',
+        artifactIds: ['art_01'],
+      }), ts: '2026-07-07T14:05:30.312Z' },
+      envelope(3, 'step.started', { step: sampleRunStep }),
+    ]);
+    expect(view.steps).toHaveLength(1);
+    expect(view.steps[0]!.status).toBe('succeeded');
+    expect(view.steps[0]!.summary).toBe('Build succeeded.');
+    expect(view.steps[0]!.artifactIds).toEqual(['art_01']);
+    // endedAt comes from the OUTCOME event's envelope ts, as in the normal order.
+    expect(view.steps[0]!.endedAt).toBe('2026-07-07T14:05:30.312Z');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('an early step.failed reconciles to a failed step', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.failed', { stepId: 'step_01', summary: 'Link failed.', artifactIds: [] }),
+      envelope(3, 'step.started', { step: sampleRunStep }),
+    ]);
+    expect(view.steps[0]!.status).toBe('failed');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('a step outcome that never finds its step remains a warning', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.completed', { stepId: 'step_ghost', summary: 'x', artifactIds: [] }),
+    ]);
+    expect(view.steps).toHaveLength(0);
+    expect(view.warnings).toHaveLength(1);
+    expect(view.warnings[0]).toContain('step_ghost');
+  });
+
+  it('an early approval.resolved is buffered and reconciled by approval.requested', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'approval.resolved', {
+        approvalId: sampleApproval.id,
+        status: 'approved',
+        resolvedAt: TS,
+      }),
+      envelope(3, 'approval.requested', { approval: sampleApproval }),
+    ]);
+    expect(view.approvals).toHaveLength(1);
+    expect(view.approvals[0]!.status).toBe('approved');
+    expect(view.approvals[0]!.resolvedAt).toBe(TS);
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('an early resolution still lets the approval claim fixApprovalId', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'diagnosis.created', { diagnosis: { ...sampleDiagnosis, failedCheckIds: [] } }),
+      envelope(3, 'approval.resolved', {
+        approvalId: sampleApproval.id,
+        status: 'approved',
+        resolvedAt: TS,
+      }),
+      envelope(4, 'approval.requested', { approval: sampleApproval }),
+    ]);
+    expect(view.diagnosis?.fixApprovalId).toBe(sampleApproval.id);
+    expect(view.approvals[0]!.status).toBe('approved');
+  });
+
+  it('a resolution that never finds its approval remains a warning', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'approval.resolved', { approvalId: 'apr_ghost', status: 'rejected', resolvedAt: TS }),
+    ]);
+    expect(view.approvals).toHaveLength(0);
+    expect(view.warnings).toHaveLength(1);
+    expect(view.warnings[0]).toContain('apr_ghost');
+  });
+});

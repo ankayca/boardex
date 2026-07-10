@@ -317,6 +317,67 @@ describe('mock runner', () => {
     }
   });
 
+  it('replays the fail variant to run.failed with no further fix approval (T5.0/F9)', async () => {
+    const failing = await createMockRunner({ port: 0, speed: 200, failVariant: true });
+    try {
+      const res = await fetch(`${failing.url}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskPrompt: 'bring up BME280', boardProfileId: 'bp_nucleo_f303re' }),
+      });
+      const { runId } = (await res.json()) as { runId: string };
+
+      // Drive the same three gates as the happy path; the ending differs.
+      const resolved = new Set<string>();
+      let events: Event[] = [];
+      for (let i = 0; i < 1000; i++) {
+        const raw = await (await fetch(`${failing.url}/runs/${runId}/events?afterSeq=0`)).json();
+        events = (raw as unknown[]).map((e) => EventSchema.parse(e));
+        if (events.length > 0) {
+          const view = reduceRun(events);
+          if (TERMINAL.has(view.run.status)) break;
+          if (view.run.status === 'plan_ready' && !resolved.has('__plan__')) {
+            const r = await fetch(`${failing.url}/runs/${runId}/plan/approve`, { method: 'POST' });
+            if (r.status === 204) resolved.add('__plan__');
+          }
+          const pending = view.approvals.find((a) => a.status === 'pending');
+          if (pending && !resolved.has(pending.id)) {
+            const r = await fetch(`${failing.url}/runs/${runId}/approvals/${pending.id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'approved' }),
+            });
+            if (r.status === 204) resolved.add(pending.id);
+          }
+        }
+        await sleep(15);
+      }
+
+      expect(events).toHaveLength(85);
+      assertContiguous(events, 1, 85);
+      expect(events[events.length - 1]?.type).toBe('run.failed');
+
+      const view = reduceRun(events);
+      expect(view.run.status).toBe('failed');
+      expect(view.run.iteration).toBe(2);
+      expect(view.warnings).toEqual([]);
+      // Both approvals were the base story's; nothing new was requested after the
+      // iteration-2 checks failed.
+      expect(view.approvals).toHaveLength(2);
+      expect(view.approvals.every((a) => a.status === 'approved')).toBe(true);
+      const verdicts = new Map(view.checks.map((c) => [c.requirementId, c.verdict]));
+      expect(verdicts.get('i2c_clock')).toBe('pass');
+      expect(verdicts.get('device_ack')).toBe('fail');
+      expect(verdicts.get('serial_output')).toBe('fail');
+      // The variant's evidence is fetchable like any other artifact.
+      const decode = await fetch(`${failing.url}/artifacts/art_i2c_decode_iter2f`);
+      expect(decode.status).toBe(200);
+      expect(decode.headers.get('content-type')).toBe('application/json');
+    } finally {
+      await failing.close();
+    }
+  });
+
   it('marks the logic analyzer offline under --degraded', async () => {
     const degraded = await createMockRunner({ port: 0, speed: 200, degraded: true });
     try {

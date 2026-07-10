@@ -143,7 +143,7 @@ describe('bme280_run_001 fixture', () => {
   it('decode annotations are the house parser shape — raw line plus parsed fields', () => {
     // Reconciled in T5.0/F2 to parse.py::parse_annotations output; the invented
     // start_sample/end_sample keys are gone.
-    for (const id of ['art_i2c_decode_iter1', 'art_i2c_decode_iter2']) {
+    for (const id of ['art_i2c_decode_iter1', 'art_i2c_decode_iter2', 'art_i2c_decode_iter2f']) {
       const content = ProtocolDecodeContentSchema.parse(
         JSON.parse(readFileSync(join(artifactsDir, `${id}.json`), 'utf8')),
       );
@@ -154,5 +154,69 @@ describe('bme280_run_001 fixture', () => {
         );
       }
     }
+  });
+});
+
+describe('bme280_run_001_fail fixture (T5.0/F9 — the fail variant)', () => {
+  const failLines = readFileSync(join(fixturesDir, 'bme280_run_001_fail.jsonl'), 'utf8')
+    .split('\n')
+    .filter((line) => line.length > 0);
+  const failEvents: Event[] = failLines.map((line, i) => {
+    const result = FixtureLineSchema.safeParse(JSON.parse(line));
+    if (!result.success) {
+      throw new Error(`fail-variant line ${i + 1} invalid: ${result.error.message}`);
+    }
+    return result.data.event;
+  });
+
+  it('shares the base story verbatim through seq 68 (iteration-2 flash complete)', () => {
+    for (let i = 0; i < 68; i++) {
+      expect(failEvents[i]).toEqual(events[i]);
+    }
+  });
+
+  it('has gapless seq and ends in run.failed with NO further approval requested', () => {
+    failEvents.forEach((event, i) => {
+      expect(event.seq).toBe(i + 1);
+    });
+    expect(failEvents[failEvents.length - 1]?.type).toBe('run.failed');
+    // "without a fix approval": no approval.requested after iteration 2's checks fail.
+    const approvalSeqs = failEvents
+      .filter((event) => event.type === 'approval.requested')
+      .map((event) => event.seq);
+    expect(approvalSeqs.every((seq) => seq <= 68)).toBe(true);
+  });
+
+  it('reduces to the failed terminal: iteration 2, 2 approvals approved, pass/fail/fail checks, zero warnings', () => {
+    const view = reduceRun(failEvents);
+    expect(view.run.status).toBe('failed');
+    expect(view.endedAt).toBe(failEvents[failEvents.length - 1]?.ts);
+    expect(view.run.iteration).toBe(2);
+    expect(view.warnings).toEqual([]);
+    expect(view.approvals).toHaveLength(2);
+    expect(view.approvals.every((approval) => approval.status === 'approved')).toBe(true);
+
+    const verdicts = new Map(view.checks.map((check) => [check.requirementId, check.verdict]));
+    expect(verdicts.get('i2c_clock')).toBe('pass');
+    expect(verdicts.get('device_ack')).toBe('fail');
+    expect(verdicts.get('serial_output')).toBe('fail');
+  });
+
+  it('links every artifact to a real fixture file with matching size, contents schema-valid', () => {
+    const view = reduceRun(failEvents);
+    const files = readdirSync(artifactsDir);
+    for (const artifact of view.artifacts) {
+      const file = files.find((name) => name.replace(/\.[^.]+$/, '') === artifact.id);
+      expect(file, `artifact file for ${artifact.id}`).toBeDefined();
+      expect(statSync(join(artifactsDir, file as string)).size).toBe(artifact.sizeBytes);
+    }
+    const decode = ProtocolDecodeContentSchema.parse(
+      JSON.parse(readFileSync(join(artifactsDir, 'art_i2c_decode_iter2f.json'), 'utf8')),
+    );
+    // The story's point: the CORRECTED wire byte (0x76 << 1 = 0xEC) still NACKs.
+    expect(decode.transactions.every((tx) => tx.addr_7bit === 0x76 && tx.nack_at === 'address')).toBe(true);
+    TimingMeasurementContentSchema.parse(
+      JSON.parse(readFileSync(join(artifactsDir, 'art_scl_timing_iter2f.json'), 'utf8')),
+    );
   });
 });

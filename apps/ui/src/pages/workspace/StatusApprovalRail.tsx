@@ -77,6 +77,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       <StatusCard
         run={run}
         endedAt={view.endedAt}
+        warnings={view.warnings}
         stopping={stopping}
         stopError={commandError(
           stop.error,

@@ -22,6 +22,14 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 
+// The picker reads the bench through useBenchStatus (T5.0/F8). Its connection-
+// liveness behavior is covered by benchLiveness.integration.test.tsx; here the
+// global socket is stubbed inert so the snapshot generation cannot churn mid-test
+// (jsdom has a real WebSocket that fails and reconnects against nothing).
+vi.mock('../../lib/globalStream', () => ({
+  subscribeGlobalStatus: () => () => undefined,
+}));
+
 import { ProfileForm } from './ProfileForm';
 import { blankDraft, fromProfile } from './profileDraft';
 

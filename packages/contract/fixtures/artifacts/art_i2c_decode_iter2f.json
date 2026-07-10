@@ -1,0 +1,100 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.12",
+  "channel_map": {
+    "scl": 0,
+    "sda": 1
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 8000000,
+  "duration_s": 2,
+  "bus_state": "decoded_ok",
+  "annotations": [
+    {
+      "raw": "812000-812010 i2c-1: START",
+      "start": 812000,
+      "end": 812010,
+      "decoder": "i2c-1",
+      "text": "START"
+    },
+    {
+      "raw": "812010-812370 i2c-1: ADDRESS WRITE: EC NACK",
+      "start": 812010,
+      "end": 812370,
+      "decoder": "i2c-1",
+      "text": "ADDRESS WRITE: EC NACK"
+    },
+    {
+      "raw": "812370-812380 i2c-1: STOP",
+      "start": 812370,
+      "end": 812380,
+      "decoder": "i2c-1",
+      "text": "STOP"
+    },
+    {
+      "raw": "4030000-4030010 i2c-1: START",
+      "start": 4030000,
+      "end": 4030010,
+      "decoder": "i2c-1",
+      "text": "START"
+    },
+    {
+      "raw": "4030010-4030370 i2c-1: ADDRESS WRITE: EC NACK",
+      "start": 4030010,
+      "end": 4030370,
+      "decoder": "i2c-1",
+      "text": "ADDRESS WRITE: EC NACK"
+    },
+    {
+      "raw": "4030370-4030380 i2c-1: STOP",
+      "start": 4030370,
+      "end": 4030380,
+      "decoder": "i2c-1",
+      "text": "STOP"
+    },
+    {
+      "raw": "7250000-7250010 i2c-1: START",
+      "start": 7250000,
+      "end": 7250010,
+      "decoder": "i2c-1",
+      "text": "START"
+    },
+    {
+      "raw": "7250010-7250370 i2c-1: ADDRESS WRITE: EC NACK",
+      "start": 7250010,
+      "end": 7250370,
+      "decoder": "i2c-1",
+      "text": "ADDRESS WRITE: EC NACK"
+    },
+    {
+      "raw": "7250370-7250380 i2c-1: STOP",
+      "start": 7250370,
+      "end": 7250380,
+      "decoder": "i2c-1",
+      "text": "STOP"
+    }
+  ],
+  "transactions": [
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    },
+    {
+      "addr_7bit": 118,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": "address"
+    }
+  ]
+}

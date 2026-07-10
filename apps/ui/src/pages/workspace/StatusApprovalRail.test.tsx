@@ -376,3 +376,36 @@ describe('bench-degraded warning repeats at hardware-action approvals (T5.0 adju
     expect(screen.queryByText('Bench degraded')).not.toBeInTheDocument();
   });
 });
+
+describe('contract warnings line (T5.0/F5)', () => {
+  const warnedView = (): RunView =>
+    viewFrom([
+      envelope(1, 'run.created', { run }),
+      // Evidence-law violation the stream never repairs: exactly one warning.
+      envelope(2, 'check.evaluated', {
+        check: failedCheck('chk_orphan', 'art_never_created', 'BME280 must ACK at 0x76'),
+      }),
+    ]);
+
+  it('renders a compact amber count that expands to the reducer messages', async () => {
+    const user = userEvent.setup();
+    renderRail(warnedView());
+
+    const toggle = screen.getByRole('button', { name: '1 contract warning' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/art_never_created/)).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/evidence-linking violation/)).toBeInTheDocument();
+    expect(screen.getByText(/art_never_created/)).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.queryByText(/art_never_created/)).not.toBeInTheDocument();
+  });
+
+  it('renders nothing at zero warnings', () => {
+    renderRail(runningView());
+    expect(screen.queryByText(/contract warning/)).not.toBeInTheDocument();
+  });
+});
