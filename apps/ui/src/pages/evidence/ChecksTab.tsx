@@ -43,43 +43,39 @@ export function ChecksTab({ view }: ChecksTabProps) {
           </tr>
         </thead>
         <tbody>
-          {view.checks.map((check) => {
-            return (
-              <tr key={check.id} className="border-b border-border">
-                <td className={CELL}>
-                  <span className="font-mono text-text-primary">{check.requirementId}</span>
-                  <p className="mt-0.5 text-text-secondary">{check.description}</p>
-                </td>
-                <td className={`${CELL} font-mono text-text-primary`}>
-                  {formatExpected(check.expected, check.actual.unit)}
-                </td>
-                <td className={`${CELL} font-mono text-text-primary`}>
-                  {formatActual(check.actual)}
-                </td>
-                <td className={CELL}>
-                  <Badge kind="verdict" value={check.verdict} />
-                </td>
-                <td className={`${CELL} text-text-secondary`}>{check.sourceRef ?? '—'}</td>
-                <td className={CELL}>
-                  {artifactIds.has(check.artifactId) ? (
-                    <Link
-                      to={evidenceHref(view.run.id, check.artifactId)}
-                      className={`${EVIDENCE_LINK_BASE} text-accent hover:text-accent-hover`}
-                    >
-                      View evidence
-                    </Link>
-                  ) : (
-                    <span
-                      aria-disabled="true"
-                      className={`${EVIDENCE_LINK_BASE} cursor-not-allowed text-text-secondary opacity-50`}
-                    >
-                      View evidence
-                    </span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
+          {view.checks.map((check) => (
+            <tr key={check.id} className="border-b border-border">
+              <td className={CELL}>
+                <span className="font-mono text-text-primary">{check.requirementId}</span>
+                <p className="mt-0.5 text-text-secondary">{check.description}</p>
+              </td>
+              <td className={`${CELL} font-mono text-text-primary`}>
+                {formatExpected(check.expected, check.actual.unit)}
+              </td>
+              <td className={`${CELL} font-mono text-text-primary`}>{formatActual(check.actual)}</td>
+              <td className={CELL}>
+                <Badge kind="verdict" value={check.verdict} />
+              </td>
+              <td className={`${CELL} text-text-secondary`}>{check.sourceRef ?? '—'}</td>
+              <td className={CELL}>
+                {artifactIds.has(check.artifactId) ? (
+                  <Link
+                    to={evidenceHref(view.run.id, check.artifactId)}
+                    className={`${EVIDENCE_LINK_BASE} text-accent hover:text-accent-hover`}
+                  >
+                    View evidence
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className={`${EVIDENCE_LINK_BASE} cursor-not-allowed text-text-secondary opacity-50`}
+                  >
+                    View evidence
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

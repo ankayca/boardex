@@ -53,15 +53,19 @@ export function latestOfKind(artifacts: readonly Artifact[], kind: ArtifactKind)
 export interface DeepLinkTarget {
   /** Tab to activate. */
   tab: EvidenceTabId;
-  /** The resolved artifact to open/highlight, or null when none applies. */
+  /**
+   * The resolved artifact to open/highlight. Non-null exactly when `tab` is that
+   * artifact's own tab — an unresolved link always lands on Checks with no artifact.
+   */
   artifact: Artifact | null;
   /** Fail-closed explanation when the link couldn't land on its natural surface. */
   notice: string | null;
 }
 
-// Resolve ?artifact=<id> against RunView.artifacts. Every kind has a live tab as
-// of T3.2, so a known id routes straight to its viewer; the only fail-closed
-// branch left is an id that isn't part of this run's evidence.
+// Resolve ?artifact=<id> against RunView.artifacts. Every kind has a live tab, so a
+// known id routes straight to its viewer; the only fail-closed branch is an id that
+// isn't (yet) part of this run's evidence — a hand-typed id, or a link opened before
+// the artifact.created event streamed in.
 export function resolveDeepLink(
   artifacts: readonly Artifact[],
   artifactParam: string | null,

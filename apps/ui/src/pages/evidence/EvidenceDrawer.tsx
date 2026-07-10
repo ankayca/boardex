@@ -44,10 +44,13 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
   const activeTab = tabState.tab;
 
   // Each content tab's subject: the deep-linked artifact when it belongs to that
-  // tab, else the most recent artifact of the tab's kind (opened by hand).
+  // tab, else the most recent artifact of the tab's kind (opened by hand). Only the
+  // Checks tab is ever the target of a null artifact, so a non-null return here
+  // means "a deep link landed on this tab, pointing at this artifact".
   const targetFor = (tab: EvidenceTabId): Artifact | null =>
     target.tab === tab ? target.artifact : null;
-  const decodeArtifact = targetFor('decode') ?? latestOfKind(view.artifacts, 'protocol_decode');
+  const decodeTarget = targetFor('decode');
+  const decodeArtifact = decodeTarget ?? latestOfKind(view.artifacts, 'protocol_decode');
   const diffArtifact = targetFor('diff') ?? latestOfKind(view.artifacts, 'code_diff');
 
   return (
@@ -89,10 +92,7 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
       >
         {activeTab === 'checks' && <ChecksTab view={view} />}
         {activeTab === 'decode' && (
-          <DecodeTab
-            artifact={decodeArtifact}
-            scrollToFailure={target.tab === 'decode' && target.artifact !== null}
-          />
+          <DecodeTab artifact={decodeArtifact} scrollToFailure={decodeTarget !== null} />
         )}
         {activeTab === 'logs' && <LogsTab view={view} targetArtifact={targetFor('logs')} />}
         {activeTab === 'diff' && <DiffTab view={view} artifact={diffArtifact} />}

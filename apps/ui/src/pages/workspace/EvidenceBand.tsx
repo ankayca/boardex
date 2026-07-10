@@ -1,8 +1,8 @@
 // Bottom — Evidence Summary band (BIBLE §6.3/§7.3): the 88px collapsed strip. One
 // chip per MeasurementCheck (verdict badge + short name, e.g. "I2C clock · PASS"),
 // live from check.evaluated and in the reducer's evaluation order; plus Open Logs /
-// Open Diff / Open Report, each deep-linking a real artifact on the Sprint-3 evidence
-// route. A chip deep-links that check's own artifact — but only when that artifact
+// Open Diff / Open Report, each deep-linking a real artifact on the Evidence Detail
+// route (§7.4). A chip deep-links that check's own artifact — but only when that artifact
 // actually exists in RunView.artifacts: an evidence-law downgrade (unresolvable
 // artifactId) renders the chip inert, never a dead link. The strip holds its 88px:
 // chips overflow horizontally in their own scroll container instead of wrapping the

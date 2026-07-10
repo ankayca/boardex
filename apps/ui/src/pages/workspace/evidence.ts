@@ -17,9 +17,10 @@ export function checkLabel(requirementId: string): string {
   return humanized.charAt(0).toUpperCase() + humanized.slice(1);
 }
 
-// The Sprint-3 evidence surface, keyed by a real artifact id from RunView. Kept
-// byte-identical to the Diagnosis Card's existing stub links (§7.3, T2.2) so both
-// deep-link the same route — Sprint 3 (T3.3) renders it.
+// The Evidence Detail surface (§7.4), keyed by a real artifact id from RunView.
+// The single source of every evidence deep link — the band's chips and actions, the
+// Checks table, the Diagnosis Card's failed checks, and the Approval Card's Review
+// Diff all route through here, and the drawer resolves the id to its kind's tab.
 export function evidenceHref(runId: string, artifactId: string): string {
   return `/runs/${runId}/evidence?artifact=${artifactId}`;
 }
