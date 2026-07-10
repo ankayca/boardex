@@ -13,7 +13,6 @@ import { FormSection, TextField, ToggleField } from './Field';
 import { InstrumentField } from './InstrumentField';
 import { ValidationPanel } from './ValidationPanel';
 import { matchInstruments, type InstrumentMatch } from './benchMatch';
-import { saveErrorMessage } from './saveError';
 import {
   draftInstruments,
   validateDraft,
@@ -235,9 +234,12 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
         </p>
       )}
 
+      {/* One message for every failed save. §5.3 gives 409 a meaning only for commands
+          invalid against a RUN's state; no runner implements optimistic concurrency on
+          board profiles, so nothing here may claim a stale-edit conflict (review F3). */}
       {save.isError && (
         <p role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3 text-body text-warn">
-          {saveErrorMessage(save.error)}
+          Could not save the profile — check that the runner is online, then try again.
         </p>
       )}
 

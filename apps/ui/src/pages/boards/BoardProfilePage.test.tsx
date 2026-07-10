@@ -2,7 +2,8 @@
 // point of this file: a builder that cannot load its profile must show the blocked
 // pattern, never an editable form that would POST blanks over a real profile.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BoardProfileSchema, type BenchStatus, type BoardProfile } from '@boardex/contract';
@@ -32,15 +33,15 @@ const PROFILE: BoardProfile = BoardProfileSchema.parse({
   resetCommand: 'pyocd reset --target stm32f303retx',
   serial: { port: '/dev/ttyACM0', baud: 115200 },
   instruments: {
-    debugProbe: 'ST-Link/V2-1 (on-board, via pyOCD)',
-    logicAnalyzer: 'Kingst LA2016 (sigrok)',
+    debugProbe: 'pyocd:stlink:066EFF383733554157254923',
+    logicAnalyzer: 'sigrok:kingst-la2016:conn=3.12',
   },
   safety: { maxIterations: 3, flashRequiresApproval: true, powerNote: '3V3 confirmed.' },
   connectionChecklist: [{ label: 'SCL — PB8', detail: 'PB8 to BME280 SCL' }],
   knownQuirks: [],
 });
 
-function renderAt(path: string) {
+function renderAt(path: string): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -53,6 +54,7 @@ function renderAt(path: string) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 afterEach(() => {
@@ -101,6 +103,34 @@ describe('/boards/:id — fail-closed on load failure', () => {
     expect(screen.getByLabelText('Baud')).toHaveValue('115200');
     expect(screen.getByRole('button', { name: 'Save Profile' })).toBeInTheDocument();
   });
+
+  // Review F1: the fail-closed guard keys on "no profile in hand", not "the last fetch
+  // failed". Once a profile is loaded, a failed refetch must not unmount the form and
+  // take the user's unsaved edits with it.
+  it('keeps the form and its unsaved edits when a refetch fails after a successful load', async () => {
+    const user = userEvent.setup();
+    listBoardProfiles.mockResolvedValueOnce([PROFILE]);
+    getBench.mockRejectedValue(new TypeError('no bench'));
+    const client = renderAt('/boards/bp_nucleo_f303re');
+
+    const name = await screen.findByLabelText('Name');
+    await user.clear(name);
+    await user.type(name, 'Nucleo-F303RE (bench 2)');
+
+    // A background refetch — the runner has gone away since the first load.
+    listBoardProfiles.mockRejectedValue(new TypeError('Failed to fetch'));
+    await client.refetchQueries({ queryKey: ['board-profiles'] });
+
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /Couldn’t refresh from the runner — you’re editing the last loaded copy/,
+      ),
+    );
+    // Form intact, edit intact, no blocked card.
+    expect(screen.getByLabelText('Name')).toHaveValue('Nucleo-F303RE (bench 2)');
+    expect(screen.getByRole('button', { name: 'Save Profile' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });
 
 describe('/boards/new', () => {
@@ -128,7 +158,9 @@ describe('/boards — the profile list', () => {
     const list = await screen.findByRole('list', { name: 'Board profiles' });
     expect(list).toHaveTextContent('Nucleo-F303RE');
     expect(list).toHaveTextContent('STM32F303RE (Cortex-M4)');
-    expect(list).toHaveTextContent('ST-Link/V2-1 (on-board, via pyOCD) · Kingst LA2016 (sigrok)');
+    expect(list).toHaveTextContent(
+      'pyocd:stlink:066EFF383733554157254923 · sigrok:kingst-la2016:conn=3.12',
+    );
     expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute(
       'href',
       '/boards/bp_nucleo_f303re',

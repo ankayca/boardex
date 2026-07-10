@@ -1,7 +1,12 @@
 // Validate Profile results (BIBLE §7.5 states: validated, device-missing warnings).
 // Advisory by design: a bench changes between sessions, so a missing device warns and
-// never blocks the save. Colors per D14 — green only where a device is genuinely there
-// and online, amber for every warning; nothing here is a failure.
+// never blocks the save.
+//
+// Colors per D14. The panel frame and every derived warning — missing, degraded — are
+// amber, because they are warnings about this profile. The StatusDot inside a matched
+// row reports the DEVICE's own state, not the profile's, and keeps StatusDot's
+// semantics: green online, amber offline, red error. A device the bench reports in
+// error is a genuine failure of that device, so it shows red deliberately.
 import { StatusDot } from '../../design';
 import { hasBenchWarnings, type InstrumentMatch } from './benchMatch';
 

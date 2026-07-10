@@ -166,15 +166,16 @@ describe('connection checklist rows (D12)', () => {
     await user.click(within(rows()[1] as HTMLElement).getByRole('button', { name: 'Remove' }));
     expect(rowLabels()).toEqual(['GND', 'SDA — PB9']);
 
+    // Full equality, not objectContaining: reordering rows must change the checklist
+    // and nothing else — no dropped knownQuirks, no rewritten commands (review F5).
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
-    expect(saveBoardProfile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionChecklist: [
-          { label: 'GND', detail: 'GND to GND' },
-          { label: 'SDA — PB9', detail: 'PB9 to BME280 SDA' },
-        ],
-      }),
-    );
+    expect(saveBoardProfile).toHaveBeenCalledWith({
+      ...PROFILE,
+      connectionChecklist: [
+        { label: 'GND', detail: 'GND to GND' },
+        { label: 'SDA — PB9', detail: 'PB9 to BME280 SDA' },
+      ],
+    });
   });
 
   it('cannot move the first row up or the last row down', () => {

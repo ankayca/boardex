@@ -67,12 +67,22 @@ describe('matchInstruments', () => {
     expect(matchInstruments({ debugProbe: PROBE_ID, logicAnalyzer: '  ' }, bench())).toHaveLength(1);
   });
 
-  it('the canned profile’s free-text instrument names do not resolve — they are not ids or device names', () => {
+  // Free-text prose describing a device is neither its id nor its name, so it stays
+  // missing. This is why the mock runner's canned profile now stores device ids (F2) —
+  // and why the hand-typed path still needs covering.
+  it('prose that describes a device but is neither its id nor its name does not resolve', () => {
     const matches = matchInstruments(
       { debugProbe: 'ST-Link/V2-1 (on-board, via pyOCD)', logicAnalyzer: 'Kingst LA2016 (sigrok)' },
       bench(),
     );
     expect(matches.map((match) => match.status)).toEqual(['missing', 'missing']);
+  });
+
+  // F2: the canned profile's stored references resolve against a healthy bench.
+  it('the mock runner’s canned profile validates found/found on a healthy bench', () => {
+    const matches = matchInstruments({ debugProbe: PROBE_ID, logicAnalyzer: LA_ID }, bench());
+    expect(matches.map((match) => match.status)).toEqual(['found', 'found']);
+    expect(hasBenchWarnings(matches)).toBe(false);
   });
 });
 

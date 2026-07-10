@@ -19,6 +19,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { WebSocket } from 'ws';
 import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
+import { ListBoardProfilesResponseSchema, type BoardProfile } from '@boardex/contract';
 import type { ComponentType } from 'react';
 
 const PROBE_ID = 'pyocd:stlink:066EFF383733554157254923';
@@ -61,6 +62,15 @@ async function fill(label: string, value: string) {
 
 const connectionRows = () => screen.getAllByRole('listitem', { name: /^Connection \d+$/ });
 
+/** Read a profile straight from the runner, bypassing the UI's caches entirely. */
+async function fetchProfile(id: string): Promise<BoardProfile> {
+  const response = await fetch(`${runner.url}/board-profiles`);
+  const profiles = ListBoardProfilesResponseSchema.parse(await response.json());
+  const profile = profiles.find((candidate) => candidate.id === id);
+  if (!profile) throw new Error(`the runner has no profile "${id}"`);
+  return profile;
+}
+
 describe('board profile builder → composer (integration)', () => {
   it('creates a profile, then gates the plan on the checklist authored in the builder', async () => {
     // --- act 1: create a profile through the form, POST /board-profiles ----------
@@ -98,13 +108,16 @@ describe('board profile builder → composer (integration)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create Profile' }));
 
-    // Saved: the runner echoed it back and /boards lists it.
+    // Saved: the runner echoed it back and /boards lists it — including the picked
+    // probe's stable device id, which survived the POST round-trip (review F5).
     const list = await screen.findByRole('list', { name: 'Board profiles' });
     expect(list).toHaveTextContent('Blue Pill F103');
     expect(list).toHaveTextContent('STM32F103C8 (Cortex-M3)');
+    expect(list).toHaveTextContent(PROBE_ID);
     cleanup();
 
     // --- act 2: edit the profile the fixture's run references --------------------
+    const before = await fetchProfile('bp_nucleo_f303re');
     renderApp('/boards/bp_nucleo_f303re');
     expect(await screen.findByLabelText('Name')).toHaveValue('Nucleo-F303RE');
 
@@ -121,6 +134,26 @@ describe('board profile builder → composer (integration)', () => {
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
     await screen.findByRole('list', { name: 'Board profiles' });
     cleanup();
+
+    // What the runner now holds, read back over HTTP: the checklist we authored, and
+    // every other field byte-identical — the form edits one section, not the profile
+    // (review F5). knownQuirks has no §7.5 section at all and must survive untouched.
+    const after = await fetchProfile('bp_nucleo_f303re');
+    expect(after).toEqual({
+      ...before,
+      connectionChecklist: [{ label: 'SDO — GND (verify strap)', detail: before.connectionChecklist[0]?.detail }],
+    });
+    expect(after.knownQuirks).toEqual(before.knownQuirks);
+    expect(after.knownQuirks.length).toBeGreaterThan(0);
+    expect(after.instruments).toEqual(before.instruments);
+    expect(after.safety).toEqual(before.safety);
+    expect(after.serial).toEqual(before.serial);
+    expect(after.buildCommand).toBe(before.buildCommand);
+    expect(after.flashCommand).toBe(before.flashCommand);
+    expect(after.resetCommand).toBe(before.resetCommand);
+    expect(after.repoPath).toBe(before.repoPath);
+    expect(after.name).toBe(before.name);
+    expect(after.mcu).toBe(before.mcu);
 
     // --- act 3: drive the composer with it --------------------------------------
     renderApp('/runs/new');
