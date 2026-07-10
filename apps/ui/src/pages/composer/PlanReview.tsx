@@ -1,13 +1,17 @@
 // Plan review (BIBLE §7.2): the plan rendered in place — numbered plain-language
 // steps with per-step risk badge and hardware-action marker, the risk summary line,
-// the degraded-bench warning repeated at approval, and the D12 connection checklist
-// as a confirm-each-line list gating Approve Plan. Approve is primary; Edit task is
+// the bench warning repeated at approval, and the D12 connection checklist as a
+// confirm-each-line list gating Approve Plan. Approve is primary; Edit task is
 // secondary and returns to the composer.
+//
+// The bench warning sits immediately above the checklist, not off with the plan: the
+// operator confirms wiring with the bench state in view, so "SDA — PB9, confirmed"
+// and "the analyzer is offline" are read in one glance rather than one scroll apart.
 import { useId, useState } from 'react';
 import type { PlanStep } from '@boardex/contract';
 import { Badge, Button } from '../../design';
-import { DegradedBenchWarning } from './BenchReadiness';
-import type { OfflineDevice } from './benchDevices';
+import type { BenchIssue } from '../../lib/benchReadiness';
+import { BenchWarning } from './BenchReadiness';
 
 export interface PlanReviewProps {
   plan: readonly PlanStep[];
@@ -21,8 +25,8 @@ export interface PlanReviewProps {
    * caller renders this component without resolving the profile first.
    */
   profileResolved: boolean;
-  /** Offline/error bench devices — the degraded warning repeats here (§7.2). */
-  degradedDevices: readonly OfflineDevice[];
+  /** Degraded devices and unmatched profile references — the warning repeats here (§7.2). */
+  issues: readonly BenchIssue[];
   approving: boolean;
   approveError?: string | null;
   onApprove: () => void;
@@ -34,7 +38,7 @@ export function PlanReview({
   riskSummary,
   checklist,
   profileResolved,
-  degradedDevices,
+  issues,
   approving,
   approveError,
   onApprove,
@@ -90,9 +94,9 @@ export function PlanReview({
         </p>
       )}
 
-      {degradedDevices.length > 0 && (
+      {issues.length > 0 && (
         <div className="mt-4">
-          <DegradedBenchWarning devices={degradedDevices} />
+          <BenchWarning issues={issues} />
         </div>
       )}
 

@@ -4,11 +4,13 @@
 // runner is down). Live updates ride the global WS: a run created or advanced in another
 // tab invalidates the list here and reappears without a manual refresh.
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState } from '../../design';
 import { api } from '../../lib/api';
+import { benchAttentionCount, benchAttentionLabel } from '../../lib/benchReadiness';
 import { useGlobalEvents } from '../../lib/globalStream';
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { RunRow } from './RunRow';
 import { sortRunSummaries } from './nextAction';
 
@@ -40,6 +42,24 @@ function RunnerOfflineBanner({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+// Bench attention (T4.2 item 4). Placement: directly under the runner-offline banner
+// slot, above the run list — the top bar's runner pill is the shell's (§7.1 gives it
+// no bench detail), and Home's banner region is already where "something is wrong out
+// there" lives. Advisory only: it never gates New Run, and it stays a single line so
+// it cannot compete with the runs it sits above.
+function BenchAttentionLine({ count }: { count: number }) {
+  return (
+    <p role="status" className="mb-6 text-meta">
+      <Link
+        to="/boards"
+        className="text-warn underline underline-offset-2 hover:no-underline"
+      >
+        {benchAttentionLabel(count)}
+      </Link>
+    </p>
+  );
+}
+
 export default function HomePage() {
   const queryClient = useQueryClient();
 
@@ -65,6 +85,12 @@ export default function HomePage() {
 
   const online = health.isSuccess && health.data.ok;
 
+  // Suppressed while the runner is down: the snapshot is then stale by definition, and
+  // the offline banner above already says the bench cannot be seen. Two contradictory
+  // amber lines would be worse than one true one.
+  const bench = useBenchStatus();
+  const attention = online ? benchAttentionCount(bench) : 0;
+
   const boardNames = useMemo(
     () => new Map((profilesQuery.data ?? []).map((p) => [p.id, p.name] as const)),
     [profilesQuery.data],
@@ -88,6 +114,7 @@ export default function HomePage() {
       </div>
 
       {!online && <RunnerOfflineBanner onRetry={retry} />}
+      {attention > 0 && <BenchAttentionLine count={attention} />}
 
       {runs.length > 0 ? (
         <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-bg-panel">

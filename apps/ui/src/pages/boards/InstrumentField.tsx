@@ -5,7 +5,7 @@
 import type { BenchStatus } from '@boardex/contract';
 import { StatusDot } from '../../design';
 import { TextField } from './Field';
-import type { InstrumentKind } from './benchMatch';
+import type { InstrumentKind } from '../../lib/benchReadiness';
 
 export interface InstrumentFieldProps {
   label: string;

@@ -212,7 +212,7 @@ describe('Validate Profile against the bench (§7.5)', () => {
 
     const panel = await screen.findByRole('status', { name: 'Bench validation' });
     expect(panel).toHaveTextContent('Validated with warnings');
-    expect(panel).toHaveTextContent('no bench device matches “J-Link EDU”');
+    expect(panel).toHaveTextContent('J-Link EDU was not found on the bench');
 
     // Advisory, not blocking: benches change (§7.5).
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
@@ -221,10 +221,12 @@ describe('Validate Profile against the bench (§7.5)', () => {
     );
   });
 
+  // The T4.2 seam: "on the bench but offline" (unplug it, plug it back in) must never
+  // read like "was not found on the bench" (fix the reference in this form).
   it.each([
-    ['offline', /detected but offline/],
-    ['error', /detected but in error/],
-  ] as const)('marks a matched but %s device degraded', async (state, text) => {
+    ['offline', 'Kingst LA2016 is on the bench but offline'],
+    ['error', 'Kingst LA2016 is on the bench but in error'],
+  ] as const)('marks a matched but %s device degraded, distinctly from missing', async (state, text) => {
     const user = userEvent.setup();
     getBench.mockResolvedValue(bench(state));
     renderForm();
@@ -234,6 +236,7 @@ describe('Validate Profile against the bench (§7.5)', () => {
     const panel = await screen.findByRole('status', { name: 'Bench validation' });
     expect(panel).toHaveTextContent('Validated with warnings');
     expect(panel).toHaveTextContent(text);
+    expect(panel).not.toHaveTextContent('was not found on the bench');
     expect(within(panel).getByText(LA_ID)).toBeInTheDocument();
   });
 

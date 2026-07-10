@@ -8,11 +8,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BoardProfile } from '@boardex/contract';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
+import { matchInstruments, type InstrumentMatch } from '../../lib/benchReadiness';
 import { ChecklistEditor } from './ChecklistEditor';
 import { FormSection, TextField, ToggleField } from './Field';
 import { InstrumentField } from './InstrumentField';
 import { ValidationPanel } from './ValidationPanel';
-import { matchInstruments, type InstrumentMatch } from './benchMatch';
 import {
   draftInstruments,
   validateDraft,

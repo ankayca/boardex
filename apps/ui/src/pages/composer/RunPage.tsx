@@ -14,11 +14,11 @@ import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
 import { EvidenceDrawer } from '../evidence/EvidenceDrawer';
 import { WorkspacePage } from '../workspace/WorkspacePage';
+import { benchIssues } from '../../lib/benchReadiness';
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { BenchReadiness } from './BenchReadiness';
-import { offlineDevices } from './benchDevices';
 import { ContextChips } from './ContextChips';
 import { PlanReview } from './PlanReview';
-import { useBenchStatus } from './useBenchStatus';
 
 const COMPOSER_STATUSES: ReadonlySet<Run['status']> = new Set(['draft', 'planning', 'plan_ready']);
 
@@ -119,7 +119,7 @@ export default function RunPage() {
           )}
         </div>
 
-        <BenchReadiness bench={bench} />
+        <BenchReadiness bench={bench} instruments={profile?.instruments ?? null} />
 
         {planReady && run.plan ? (
           profile ? (
@@ -128,7 +128,7 @@ export default function RunPage() {
               riskSummary={view.riskSummary ?? null}
               checklist={profile.connectionChecklist}
               profileResolved
-              degradedDevices={offlineDevices(bench)}
+              issues={benchIssues(bench, profile.instruments)}
               approving={approve.isPending}
               approveError={
                 approve.isError && !(approve.error instanceof StateConflict)

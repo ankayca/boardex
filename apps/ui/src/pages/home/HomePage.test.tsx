@@ -2,25 +2,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { BoardProfile, HealthResponse, RunSummary } from '@boardex/contract';
+import type { BenchStatus, BoardProfile, HealthResponse, RunSummary } from '@boardex/contract';
 
 // Mock the HTTP client: HomePage's job is to turn these responses into the right
 // screen state (loading / empty / populated / offline), which is what we assert.
 const getHealth = vi.fn<() => Promise<HealthResponse>>();
 const listRuns = vi.fn<() => Promise<RunSummary[]>>();
 const listBoardProfiles = vi.fn<() => Promise<BoardProfile[]>>();
+const getBench = vi.fn<() => Promise<BenchStatus>>();
 
 vi.mock('../../lib/api', () => ({
   api: {
     getHealth: () => getHealth(),
     listRuns: () => listRuns(),
     listBoardProfiles: () => listBoardProfiles(),
+    getBench: () => getBench(),
   },
 }));
 
+import { useBenchStore } from '../../lib/benchStore';
 import HomePage from './HomePage';
 
 const online: HealthResponse = { ok: true, contractVersion: 'boardex-contract/0.1', runnerKind: 'mock' };
+
+function bench(...states: ('online' | 'offline' | 'error')[]): BenchStatus {
+  return {
+    runnerOnline: true,
+    contractVersion: 'boardex-contract/0.1',
+    devices: states.map((state, index) => ({
+      id: `dev_${index}`,
+      kind: 'logic_analyzer' as const,
+      name: `Device ${index}`,
+      state,
+    })),
+  };
+}
 
 function summary(over: Partial<RunSummary> & Pick<RunSummary, 'id' | 'status'>): RunSummary {
   return {
@@ -45,6 +61,8 @@ function renderHome() {
 beforeEach(() => {
   getHealth.mockResolvedValue(online);
   listBoardProfiles.mockResolvedValue([]);
+  getBench.mockResolvedValue(bench('online'));
+  useBenchStore.getState().clear();
 });
 
 afterEach(() => {
@@ -97,5 +115,49 @@ describe('HomePage (BIBLE §7.1)', () => {
     expect(await screen.findByText('Run r1')).toBeInTheDocument();
     // ...beneath the offline banner.
     expect(screen.getByText('Runner offline')).toBeInTheDocument();
+  });
+});
+
+// Advisory bench indicator (T4.2): a compact line under the banner slot, linking to
+// /boards. It never gates anything on this screen.
+describe('HomePage bench indicator', () => {
+  beforeEach(() => {
+    listRuns.mockResolvedValue([summary({ id: 'r1', status: 'running' })]);
+  });
+
+  it('stays silent when every device is online', async () => {
+    renderHome();
+    expect(await screen.findByText('Run r1')).toBeInTheDocument();
+    expect(screen.queryByText(/needs attention|need attention/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [['offline'] as const, '1 instrument needs attention'],
+    [['error'] as const, '1 instrument needs attention'],
+    [['offline', 'error'] as const, '2 instruments need attention'],
+  ])('counts non-online devices and links to /boards', async (states, label) => {
+    getBench.mockResolvedValue(bench(...states));
+    renderHome();
+
+    const link = await screen.findByRole('link', { name: label });
+    expect(link).toHaveAttribute('href', '/boards');
+  });
+
+  it('prefers the live runner.status snapshot over the GET /bench fallback', async () => {
+    getBench.mockResolvedValue(bench('online'));
+    useBenchStore.getState().setBench(bench('offline'));
+    renderHome();
+    expect(await screen.findByRole('link', { name: '1 instrument needs attention' })).toBeInTheDocument();
+  });
+
+  // A snapshot from a runner we cannot reach is stale by definition, and the offline
+  // banner already says the bench cannot be seen.
+  it('is suppressed while the runner is offline — the banner speaks instead', async () => {
+    getHealth.mockResolvedValue({ ...online, ok: false });
+    useBenchStore.getState().setBench(bench('offline'));
+    renderHome();
+
+    expect(await screen.findByText('Runner offline')).toBeInTheDocument();
+    expect(screen.queryByText('1 instrument needs attention')).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,11 @@
-// Bench readiness for the composer (BIBLE §7.2): primarily the live runner.status
-// snapshot mirrored into the bench store from the global WS; GET /bench fills the
-// gap before the first snapshot lands (fresh page load racing the socket).
+// The live bench snapshot for every readiness surface (BIBLE §7.1/§7.2): primarily
+// the runner.status snapshot mirrored into the bench store from the global WS; GET
+// /bench fills the gap before the first snapshot lands (fresh page load racing the
+// socket).
 import { useQuery } from '@tanstack/react-query';
 import type { BenchStatus } from '@boardex/contract';
-import { api } from '../../lib/api';
-import { useBenchStore } from '../../lib/benchStore';
+import { api } from './api';
+import { useBenchStore } from './benchStore';
 
 export function useBenchStatus(): BenchStatus | null {
   const live = useBenchStore((state) => state.bench);
