@@ -2,17 +2,54 @@
 // basename, the instrument list with StatusDots from the live bench snapshot, the
 // safety line, and "View details" opening a drawer with the full profile including
 // the D12 connection checklist.
+//
+// The instrument rows resolve by REFERENCE, through lib/benchReadiness — the same
+// three states the composer and the Board Profile Builder report (T4.2, Kerem's
+// ruling). The rail is the surface an operator watches during a run, so an analyzer
+// that is merely unplugged must not read the same as a profile naming an analyzer
+// the bench has never heard of.
 import { useState } from 'react';
 import type { BenchDeviceKind, BenchDeviceState, BenchStatus, BoardProfile } from '@boardex/contract';
 import { Button, Drawer, KeyValue, StatusDot } from '../../design';
+import {
+  matchInstruments,
+  missingText,
+  type InstrumentKind,
+  type InstrumentMatch,
+} from '../../lib/benchReadiness';
 import { repoBasename } from '../../lib/repoBasename';
 
-// A profile instrument reads through the bench device of its kind; with no snapshot
-// or no device of that kind, it reads offline (degraded, amber per §7.2 — never an
-// assumed online).
+// Serial is not an instrument reference (§4: it is a port + baud, not a device the
+// profile names), so it still reads through the bench device of its kind. With no
+// snapshot or no device of that kind it reads offline — never an assumed online.
 function deviceState(bench: BenchStatus | null, kind: BenchDeviceKind): BenchDeviceState {
   const device = bench?.devices.find((d) => d.kind === kind);
   return device?.state ?? 'offline';
+}
+
+/** A dot row (found or degraded) or a missing row, which has no device to have a state. */
+type InstrumentRow =
+  | { key: string; missing: false; state: BenchDeviceState; label: string }
+  | { key: string; missing: true; reference: string };
+
+// With no bench snapshot nothing can be resolved, so every referenced instrument reads
+// offline against its own reference — the pre-T4.2 fallback, and still never an
+// assumed online, nor a false "not found" against a bench we simply cannot see.
+function instrumentRow(
+  key: string,
+  kind: InstrumentKind,
+  reference: string,
+  matches: InstrumentMatch[] | null,
+): InstrumentRow {
+  const match = matches?.find((candidate) => candidate.kind === kind);
+  if (!match) return { key, missing: false, state: 'offline', label: reference };
+  if (match.status === 'missing') return { key, missing: true, reference: match.reference };
+  return {
+    key,
+    missing: false,
+    state: match.deviceState ?? 'offline',
+    label: match.deviceId ?? reference,
+  };
 }
 
 function safetyLine(profile: BoardProfile): string {
@@ -115,12 +152,17 @@ export function BoardContextRail({
     );
   }
 
-  const instruments: { key: string; name: string; kind: BenchDeviceKind }[] = [
-    { key: 'probe', name: profile.instruments.debugProbe, kind: 'debug_probe' },
-    { key: 'serial', name: `${profile.serial.port} @ ${profile.serial.baud}`, kind: 'serial' },
-    ...(profile.instruments.logicAnalyzer
-      ? [{ key: 'la', name: profile.instruments.logicAnalyzer, kind: 'logic_analyzer' as const }]
-      : []),
+  const matches = bench ? matchInstruments(profile.instruments, bench) : null;
+  const logicAnalyzer = profile.instruments.logicAnalyzer?.trim();
+  const instruments: InstrumentRow[] = [
+    instrumentRow('probe', 'debug_probe', profile.instruments.debugProbe, matches),
+    {
+      key: 'serial',
+      missing: false,
+      state: deviceState(bench, 'serial'),
+      label: `${profile.serial.port} @ ${profile.serial.baud}`,
+    },
+    ...(logicAnalyzer ? [instrumentRow('la', 'logic_analyzer', logicAnalyzer, matches)] : []),
   ];
 
   return (
@@ -134,7 +176,13 @@ export function BoardContextRail({
         <ul aria-label="Instruments" className="mt-3 space-y-1.5 border-t border-border pt-3">
           {instruments.map((instrument) => (
             <li key={instrument.key}>
-              <StatusDot state={deviceState(bench, instrument.kind)} label={instrument.name} />
+              {instrument.missing ? (
+                // No dot: there is no device whose state it could report. Amber per
+                // D14, and the same sentence the other three surfaces render.
+                <span className="text-meta text-warn">{missingText(instrument.reference)}</span>
+              ) : (
+                <StatusDot state={instrument.state} label={instrument.label} />
+              )}
             </li>
           ))}
         </ul>
