@@ -1,9 +1,9 @@
 // Raw-artifacts helpers (§7.4): kind-derived download filenames, humanized
 // sizes, and the download path carrying the artifact's own MIME type.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Artifact, ArtifactKind } from '@boardex/contract';
 import { artifactOf } from '../workspace/test-events';
-import { downloadArtifact, downloadFilename, humanizeSize } from './raw';
+import { downloadArtifact, downloadFilename, humanizeSize, saveBlobViaAnchor } from './raw';
 
 describe('downloadFilename', () => {
   it('derives id + kind extension for every artifact kind', () => {
@@ -54,5 +54,46 @@ describe('downloadArtifact', () => {
     const save = vi.fn();
     await expect(downloadArtifact(artifact, getBlob, save)).rejects.toThrow('down');
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveBlobViaAnchor', () => {
+  // jsdom's URL implements neither object-URL method; stub both and clean up.
+  const urlWithObjectUrls = URL as unknown as {
+    createObjectURL?: (blob: Blob) => string;
+    revokeObjectURL?: (url: string) => void;
+  };
+
+  afterEach(() => {
+    delete urlWithObjectUrls.createObjectURL;
+    delete urlWithObjectUrls.revokeObjectURL;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('clicks an anchor attached to the document and defers the object-URL revoke (Safari)', () => {
+    vi.useFakeTimers();
+    const createSpy = vi.fn(() => 'blob:mock');
+    const revokeSpy = vi.fn();
+    urlWithObjectUrls.createObjectURL = createSpy;
+    urlWithObjectUrls.revokeObjectURL = revokeSpy;
+    let clickedWhileAttached = false;
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clickedWhileAttached = this.isConnected;
+      });
+
+    saveBlobViaAnchor(new Blob(['raw']), 'art_capture.sr');
+
+    expect(createSpy).toHaveBeenCalledOnce();
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(clickedWhileAttached).toBe(true);
+    // The anchor is cleaned up, but the URL outlives the click…
+    expect(document.querySelector('a[download]')).toBeNull();
+    expect(revokeSpy).not.toHaveBeenCalled();
+    // …until the deferred revoke runs.
+    vi.runAllTimers();
+    expect(revokeSpy).toHaveBeenCalledWith('blob:mock');
   });
 });

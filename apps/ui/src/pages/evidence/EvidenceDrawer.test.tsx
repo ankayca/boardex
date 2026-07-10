@@ -91,13 +91,16 @@ function renderDrawer(search: string, view: RunView = buildView()) {
       : Promise.reject(new Error(`no stub for ${id}`));
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const ui = (v: RunView) => (
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence${search}`]}>
-        <EvidenceDrawer view={view} onClose={() => {}} />
+        <EvidenceDrawer view={v} onClose={() => {}} />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const result = render(ui(view));
+  // Feed the drawer an updated RunView, as the live event stream does.
+  return { ...result, rerenderView: (v: RunView) => result.rerender(ui(v)) };
 }
 
 // jsdom reports zero offset sizes, so the LogViewer's virtualizer would render
@@ -203,9 +206,64 @@ describe('EvidenceDrawer deep links (?artifact=…)', () => {
       `Artifact "art_ghost" isn't part of this run's evidence.`,
     );
   });
+
+  it('routes to the artifact’s tab when a deep-linked artifact arrives after mount', async () => {
+    // The link references iteration 2's diff before its artifact.created has
+    // streamed in: fail closed on Checks with the notice…
+    const before = buildView();
+    const { rerenderView } = renderDrawer('?artifact=art_diff_2', before);
+    expect(tab('Checks')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Artifact "art_diff_2" isn't part of this run's evidence.`,
+    );
+
+    // …then the artifact.created lands and the same link resolves to its tab.
+    CONTENT_BY_ID['art_diff_2'] = DIFF_JSON;
+    try {
+      rerenderView(
+        buildView([
+          envelope(11, 'artifact.created', {
+            artifact: { ...artifactOf('art_diff_2', 'code_diff'), label: 'Code diff — retry' },
+          }),
+        ]),
+      );
+      expect(tab('Code Diff')).toHaveAttribute('aria-selected', 'true');
+      expect(
+        screen.queryByText(/isn't part of this run's evidence/),
+      ).not.toBeInTheDocument();
+      expect(await screen.findByText('main.c')).toBeInTheDocument();
+    } finally {
+      delete CONTENT_BY_ID['art_diff_2'];
+    }
+  });
 });
 
 describe('EvidenceDrawer fail-closed content states', () => {
+  it('renders an error state for unparseable decode content, not a crash', async () => {
+    CONTENT_BY_ID['art_decode'] = 'not json at all';
+    try {
+      renderDrawer('?artifact=art_decode');
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Decode artifact unreadable');
+      expect(alert).toHaveTextContent('not valid JSON');
+      expect(screen.queryByRole('table', { name: 'Decoded transactions' })).not.toBeInTheDocument();
+    } finally {
+      CONTENT_BY_ID['art_decode'] = DECODE_JSON;
+    }
+  });
+
+  it('renders a retryable error state when the decode artifact fetch fails', async () => {
+    delete CONTENT_BY_ID['art_decode'];
+    try {
+      renderDrawer('?artifact=art_decode');
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Couldn’t load the decode artifact');
+      expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    } finally {
+      CONTENT_BY_ID['art_decode'] = DECODE_JSON;
+    }
+  });
+
   it('renders an error state for a malformed code_diff artifact, not a crash', async () => {
     CONTENT_BY_ID['art_diff'] = '{"files": "nope"}';
     try {
@@ -251,8 +309,15 @@ describe('EvidenceDrawer rollback affordance (§7.4)', () => {
     renderDrawer('?artifact=art_diff');
     const rollback = await screen.findByRole('button', { name: 'Rollback' });
     expect(rollback).toBeEnabled();
+
+    // MVP surfaces the affordance only: the click fires zero network requests —
+    // nothing through fetch, nothing through the api layer.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const apiCallsBefore = vi.mocked(api.getArtifactText).mock.calls.length;
     await user.click(rollback);
     expect(screen.getByRole('status')).toHaveTextContent(/performed by the runner/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(api.getArtifactText).mock.calls.length).toBe(apiCallsBefore);
   });
 
   it('is disabled with an explanatory tooltip once the run is terminal', async () => {

@@ -1,13 +1,12 @@
 // Logs tab (BIBLE §7.4): serial / build / flash logs via the LogViewer
 // primitive, one sub-tab per log-kind artifact in RunView.artifacts, labeled by
 // kind + iteration (logs.ts) so iteration 1 vs 2 of one kind are both reachable.
-// Content is fetched by reference (text/plain, D4); fetch failures and
-// non-text content land in explicit error states per the T3.1 pattern.
+// Content plumbing (fetch by reference, D4; loading / fetch-error / unreadable
+// gates) is the shared ArtifactContent pattern.
 import { useMemo, useState } from 'react';
-import { skipToken, useQuery } from '@tanstack/react-query';
 import type { Artifact, RunView } from '@boardex/contract';
-import { Button, LogViewer } from '../../design';
-import { api } from '../../lib/api';
+import { LogViewer } from '../../design';
+import { ArtifactContentGate, useArtifactContent } from './ArtifactContent';
 import { logSubTabs, parseLogText } from './logs';
 
 export interface LogsTabProps {
@@ -31,16 +30,9 @@ export function LogsTab({ view, targetArtifact }: LogsTabProps) {
     setSelection({ target: targetId, id: targetId });
   }
 
-  const selected =
-    subTabs.find((tab) => tab.artifact.id === selection.id) ?? subTabs[0] ?? null;
-  const artifactId = selected?.artifact.id;
+  const selected = subTabs.find((tab) => tab.artifact.id === selection.id) ?? subTabs[0] ?? null;
 
-  const content = useQuery({
-    queryKey: ['artifact-content', artifactId],
-    queryFn: artifactId ? () => api.getArtifactText(artifactId) : skipToken,
-    staleTime: Infinity, // artifacts are immutable once created (§4)
-  });
-
+  const content = useArtifactContent(selected?.artifact.id);
   const parsed = useMemo(
     () => (content.data !== undefined ? parseLogText(content.data) : null),
     [content.data],
@@ -79,30 +71,18 @@ export function LogsTab({ view, targetArtifact }: LogsTabProps) {
       </div>
 
       <div className="mt-3">
-        {selected && <p className="mb-2 text-meta text-text-secondary">{selected.artifact.label}</p>}
-        {content.isPending ? (
-          <p role="status" className="text-body text-text-secondary">
-            Loading {selected?.artifact.label}…
-          </p>
-        ) : content.isError ? (
-          <div role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3">
-            <p className="text-body font-medium text-warn">Couldn’t load the log artifact</p>
-            <p className="mt-1 text-meta text-text-secondary">
-              {selected?.artifact.label} could not be fetched from the runner.
-            </p>
-            <Button variant="secondary" className="mt-3" onClick={() => void content.refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : !parsed || !parsed.ok ? (
-          <div role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3">
-            <p className="text-body font-medium text-warn">Log artifact unreadable</p>
-            <p className="mt-1 text-meta text-text-secondary">
-              {selected?.artifact.label}: {parsed?.error ?? 'no content.'}
-            </p>
-          </div>
-        ) : (
-          <LogViewer lines={parsed.lines} label={selected?.artifact.label ?? 'Log output'} />
+        {selected && (
+          <>
+            <p className="mb-2 text-meta text-text-secondary">{selected.artifact.label}</p>
+            <ArtifactContentGate
+              artifact={selected.artifact}
+              noun="log"
+              content={content}
+              parsed={parsed}
+            >
+              {parsed?.ok && <LogViewer lines={parsed.lines} label={selected.artifact.label} />}
+            </ArtifactContentGate>
+          </>
         )}
       </div>
     </div>

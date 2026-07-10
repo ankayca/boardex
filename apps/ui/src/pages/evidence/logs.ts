@@ -65,14 +65,36 @@ export function logSubTabs(view: RunView): LogSubTab[] {
 
 export type LogParseResult = { ok: true; lines: string[] } | { ok: false; error: string };
 
+// ANSI CSI sequences (ESC [ params final-byte) — colored/cursor output from
+// real firmware serial consoles. Legitimate text, but noise in the LogViewer
+// and no evidence of binary content, so they are stripped before the gate.
+// eslint-disable-next-line no-control-regex
+const ANSI_CSI_RE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+
+// Binary detection threshold: the proportion of control characters (excluding
+// \n, \r, \t) above which content is treated as a mislabeled binary artifact.
+// A stray control byte in a genuine log stays far below it; NUL-free binary
+// (e.g. a raw capture served under a log id) sits far above it.
+const MAX_CONTROL_PROPORTION = 0.05;
+
+const NOT_TEXT = { ok: false, error: 'Artifact content is not renderable text.' } as const;
+
 // Logs are text/plain (§4). Binary content (a mislabeled artifact) fails closed
-// instead of rendering mojibake; CRLF is normalized and one trailing newline
-// doesn't produce a phantom empty line.
+// instead of rendering mojibake: any NUL, or a control-character proportion
+// above MAX_CONTROL_PROPORTION after ANSI stripping, rejects the content. CRLF
+// is normalized and one trailing newline doesn't produce a phantom empty line.
 export function parseLogText(text: string): LogParseResult {
-  if (text.includes('\u0000')) {
-    return { ok: false, error: 'Artifact content is not renderable text.' };
+  if (text.includes('\u0000')) return NOT_TEXT;
+  const stripped = text.replace(ANSI_CSI_RE, '');
+  let controls = 0;
+  for (const char of stripped) {
+    const code = char.codePointAt(0) as number;
+    if ((code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) || code === 0x7f) {
+      controls++;
+    }
   }
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  if (stripped.length > 0 && controls / stripped.length > MAX_CONTROL_PROPORTION) return NOT_TEXT;
+  const lines = stripped.replace(/\r\n/g, '\n').split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
   return { ok: true, lines };
 }

@@ -117,4 +117,30 @@ describe('parseLogText', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/not renderable text/);
   });
+
+  it('fails closed on NUL-free binary content (control-character dense)', () => {
+    // A binary blob with no NUL bytes at all — e.g. a raw capture mislabeled
+    // as a log: control characters make up far more than the threshold.
+    const blob = Array.from({ length: 256 }, (_, i) => String.fromCharCode(1 + (i % 31))).join('');
+    const result = parseLogText(blob);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/not renderable text/);
+  });
+
+  it('strips ANSI escape sequences and renders the remaining text', () => {
+    const colored = '\u001b[31mI2C1 ERROR:\u001b[0m timeout\n\u001b[1;32mOK\u001b[0m done\n';
+    expect(parseLogText(colored)).toEqual({
+      ok: true,
+      lines: ['I2C1 ERROR: timeout', 'OK done'],
+    });
+  });
+
+  it('renders clean text with a single stray control character', () => {
+    // One BEL among ~60 characters of real log text sits under the threshold.
+    const result = parseLogText('BME280: probing at 0x76\u0007\nI2C1: bus ready at 100 kHz\n');
+    expect(result).toEqual({
+      ok: true,
+      lines: ['BME280: probing at 0x76\u0007', 'I2C1: bus ready at 100 kHz'],
+    });
+  });
 });

@@ -26,14 +26,20 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
   const target = resolveDeepLink(view.artifacts, artifactParam);
 
   // The deep link picks the tab; the user can still switch tabs freely afterwards.
-  // Derived-state reset (same pattern as useRunStream): when the ?artifact param
-  // changes — a check row or band chip was clicked — re-derive before painting.
-  const [tabState, setTabState] = useState<{ param: string | null; tab: EvidenceTabId }>({
-    param: artifactParam,
-    tab: target.tab,
-  });
-  if (tabState.param !== artifactParam) {
-    setTabState({ param: artifactParam, tab: target.tab });
+  // Derived-state reset (same pattern as useRunStream): re-derive before painting
+  // when the ?artifact param changes — a check row or band chip was clicked — OR
+  // when the param's resolution changes: a link can reference an artifact whose
+  // artifact.created hasn't streamed in yet, in which case the drawer shows the
+  // fail-closed notice on Checks and must route to the artifact's own tab the
+  // moment it lands in RunView.artifacts.
+  const resolvedId = target.artifact?.id ?? null;
+  const [tabState, setTabState] = useState<{
+    param: string | null;
+    resolvedId: string | null;
+    tab: EvidenceTabId;
+  }>({ param: artifactParam, resolvedId, tab: target.tab });
+  if (tabState.param !== artifactParam || tabState.resolvedId !== resolvedId) {
+    setTabState({ param: artifactParam, resolvedId, tab: target.tab });
   }
   const activeTab = tabState.tab;
 
@@ -62,7 +68,7 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
               role="tab"
               aria-selected={selected}
               aria-controls={`evidence-panel-${tab.id}`}
-              onClick={() => setTabState({ param: artifactParam, tab: tab.id })}
+              onClick={() => setTabState({ param: artifactParam, resolvedId, tab: tab.id })}
               className={`-mb-px rounded-t-button border-b-2 px-4 py-2 text-body font-medium transition-colors ${
                 selected
                   ? 'border-accent text-accent'

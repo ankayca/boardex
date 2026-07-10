@@ -5,10 +5,23 @@
 // revert exists, and the contract (§5.3) carries no rollback route yet.
 import type { RunStatus } from '@boardex/contract';
 
-const TERMINAL: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'stopped']);
+// Exhaustive over RunStatus (same pattern as the Home list's nextAction): a
+// status added to the contract fails the typecheck here instead of silently
+// defaulting to enabled or disabled.
+const ROLLBACK_ENABLED: Record<RunStatus, boolean> = {
+  draft: true,
+  planning: true,
+  plan_ready: true,
+  running: true,
+  awaiting_approval: true,
+  diagnosing: true,
+  completed: false,
+  failed: false,
+  stopped: false,
+};
 
 export function rollbackEnabled(status: RunStatus): boolean {
-  return !TERMINAL.has(status);
+  return ROLLBACK_ENABLED[status];
 }
 
 // The disabled tooltip names why (§7.4: "disabled with tooltip").

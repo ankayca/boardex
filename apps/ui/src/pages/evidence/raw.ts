@@ -33,13 +33,19 @@ export function humanizeSize(sizeBytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-function saveBlobViaAnchor(blob: Blob, filename: string): void {
+// Exported for tests; downloadArtifact wires it in as the default `save`.
+export function saveBlobViaAnchor(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
+  // Safari ignores clicks on anchors that aren't in the document, and revoking
+  // the object URL synchronously can cancel the download it just started (the
+  // fetch of a blob: URL is asynchronous) — attach first, defer the revoke.
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // Fetch-then-save. The blob carries artifact.mimeType (the §4 meta is the MIME

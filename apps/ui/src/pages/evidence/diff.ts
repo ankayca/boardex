@@ -57,21 +57,37 @@ export interface DiffHunk {
 
 export type UnifiedDiffResult = { ok: true; hunks: DiffHunk[] } | { ok: false; error: string };
 
-const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+// A ---/+++ file-header line. Del/add code lines carry their own prefix, so a
+// header is "---"/"+++" alone or followed by a space (--- a/main.c).
+const FILE_HEADER_RE = /^(---|\+\+\+)( |$)/;
 
 // Parse one file's unified diff text into hunks of typed lines with running
-// old/new line numbers. Strict where it matters: text with no hunk headers, or a
-// line inside a hunk with an unknown prefix, is malformed — fail closed rather
-// than mislabel code. Lines before the first hunk (---/+++/index headers) are
-// tolerated and skipped; "\ No newline at end of file" markers are skipped; a
-// bare empty line inside a hunk is read as empty context (some emitters strip
-// the trailing space).
+// old/new line numbers. The @@ header's declared line counts are tracked so the
+// parse fails closed instead of mislabeling code:
+// - a line whose kind would overrun the counts is malformed, not silently kept;
+// - a ---/+++ header at a hunk boundary (counts exhausted) terminates that
+//   file's parse and begins the next file section — it is never consumed as a
+//   del/add code line — while a stray header mid-hunk fails closed;
+// - a bare empty line (some emitters strip the context space) is empty context
+//   when the hunk still expects lines, and only a trailing-newline artifact
+//   when it is the final line of an already-complete hunk.
+// Lines before the first hunk (---/+++/index headers) are tolerated and
+// skipped; "\ No newline at end of file" markers are skipped; a hunk truncated
+// before its declared counts are met is tolerated (nothing was mislabeled).
 export function parseUnifiedDiff(text: string): UnifiedDiffResult {
   const rawLines = text.split('\n');
   const hunks: DiffHunk[] = [];
   let current: DiffHunk | null = null;
   let oldNo = 0;
   let newNo = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
+
+  const fail = (i: number, why: string): UnifiedDiffResult => ({
+    ok: false,
+    error: `${why} at line ${i + 1}: "${(rawLines[i] as string).slice(0, 40)}"`,
+  });
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i] as string;
@@ -80,22 +96,39 @@ export function parseUnifiedDiff(text: string): UnifiedDiffResult {
       current = { header: line, lines: [] };
       hunks.push(current);
       oldNo = Number(hunkMatch[1]);
-      newNo = Number(hunkMatch[2]);
+      newNo = Number(hunkMatch[3]);
+      oldLeft = hunkMatch[2] !== undefined ? Number(hunkMatch[2]) : 1;
+      newLeft = hunkMatch[4] !== undefined ? Number(hunkMatch[4]) : 1;
       continue;
     }
-    if (!current) continue; // file header region before the first hunk
-    if (line === '' && i === rawLines.length - 1) continue; // trailing newline
+    if (!current) continue; // file header region before (or between) hunks
+    const exhausted = oldLeft === 0 && newLeft === 0;
+    if (FILE_HEADER_RE.test(line)) {
+      if (!exhausted) return fail(i, 'File header inside a hunk');
+      current = null; // this file's hunks are done; the next file's headers follow
+      continue;
+    }
+    if (line === '' && i === rawLines.length - 1 && exhausted) continue; // trailing newline
     const prefix = line === '' ? ' ' : (line[0] as string);
     const text_ = line.slice(1);
-    if (prefix === '\\') continue;
+    if (prefix === '\\') continue; // "\ No newline at end of file"
     if (prefix === '+') {
+      if (newLeft === 0) return fail(i, "Added line past the hunk's declared counts");
+      newLeft--;
       current.lines.push({ kind: 'add', text: text_, oldNo: null, newNo: newNo++ });
     } else if (prefix === '-') {
+      if (oldLeft === 0) return fail(i, "Removed line past the hunk's declared counts");
+      oldLeft--;
       current.lines.push({ kind: 'del', text: text_, oldNo: oldNo++, newNo: null });
     } else if (prefix === ' ') {
+      if (oldLeft === 0 || newLeft === 0) {
+        return fail(i, "Context line past the hunk's declared counts");
+      }
+      oldLeft--;
+      newLeft--;
       current.lines.push({ kind: 'context', text: text_, oldNo: oldNo++, newNo: newNo++ });
     } else {
-      return { ok: false, error: `Unreadable diff line ${i + 1}: "${line.slice(0, 40)}"` };
+      return fail(i, 'Unreadable line prefix');
     }
   }
 

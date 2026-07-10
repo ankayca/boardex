@@ -9,10 +9,9 @@
 // no contract route yet). Malformed JSON fails the tab closed; a malformed
 // per-file diff fails that file closed — same pattern as the decode tab.
 import { useMemo, useState } from 'react';
-import { skipToken, useQuery } from '@tanstack/react-query';
 import type { Artifact, RunView } from '@boardex/contract';
 import { Button } from '../../design';
-import { api } from '../../lib/api';
+import { ArtifactContentGate, useArtifactContent } from './ArtifactContent';
 import { parseCodeDiff, parseUnifiedDiff, type DiffFile, type DiffLine } from './diff';
 import { tokenizeC, type TokenKind } from './highlight';
 import { ROLLBACK_MVP_NOTICE, rollbackEnabled, rollbackTooltip } from './rollback';
@@ -118,12 +117,7 @@ export interface DiffTabProps {
 
 export function DiffTab({ view, artifact }: DiffTabProps) {
   const [rollbackNotice, setRollbackNotice] = useState(false);
-  const artifactId = artifact?.id;
-  const content = useQuery({
-    queryKey: ['artifact-content', artifactId],
-    queryFn: artifactId ? () => api.getArtifactText(artifactId) : skipToken,
-    staleTime: Infinity, // artifacts are immutable once created (§4)
-  });
+  const content = useArtifactContent(artifact?.id);
 
   const parsed = useMemo(
     () => (content.data !== undefined ? parseCodeDiff(content.data) : null),
@@ -154,40 +148,25 @@ export function DiffTab({ view, artifact }: DiffTabProps) {
         </Button>
       </div>
       {rollbackNotice && (
-        <p role="status" className="mt-2 rounded-card border border-border bg-bg-app px-4 py-2 text-meta text-text-secondary">
+        <p
+          role="status"
+          className="mt-2 rounded-card border border-border bg-bg-app px-4 py-2 text-meta text-text-secondary"
+        >
           {ROLLBACK_MVP_NOTICE}
         </p>
       )}
 
       <div className="mt-3">
-        {content.isPending ? (
-          <p role="status" className="text-body text-text-secondary">
-            Loading {artifact.label}…
-          </p>
-        ) : content.isError ? (
-          <div role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3">
-            <p className="text-body font-medium text-warn">Couldn’t load the diff artifact</p>
-            <p className="mt-1 text-meta text-text-secondary">
-              {artifact.label} could not be fetched from the runner.
-            </p>
-            <Button variant="secondary" className="mt-3" onClick={() => void content.refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : !parsed || !parsed.ok ? (
-          <div role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3">
-            <p className="text-body font-medium text-warn">Diff artifact unreadable</p>
-            <p className="mt-1 text-meta text-text-secondary">
-              {artifact.label}: {parsed?.error ?? 'no content.'}
-            </p>
-          </div>
-        ) : parsed.diff.files.length === 0 ? (
-          <p role="status" className="text-body text-text-secondary">
-            The diff artifact contains no file changes.
-          </p>
-        ) : (
-          parsed.diff.files.map((file) => <FileDiff key={file.path} file={file} />)
-        )}
+        <ArtifactContentGate artifact={artifact} noun="diff" content={content} parsed={parsed}>
+          {parsed?.ok &&
+            (parsed.diff.files.length === 0 ? (
+              <p role="status" className="text-body text-text-secondary">
+                The diff artifact contains no file changes.
+              </p>
+            ) : (
+              parsed.diff.files.map((file) => <FileDiff key={file.path} file={file} />)
+            ))}
+        </ArtifactContentGate>
       </div>
     </div>
   );
