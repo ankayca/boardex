@@ -2,18 +2,47 @@
 // reason, risk badge, files changed (count, expandable list), hardware actions, and
 // Approve & Continue / Review Diff / Reject. Fail-closed (decisions.md 2026-07-07):
 // a blocked gate renders an explicit blocked card with no Approve control in the DOM.
-// Review Diff opens the Drawer with a placeholder — diff rendering arrives in T3.2.
+// Review Diff deep-links the Evidence Detail drawer's Code Diff tab (§7.4) at the
+// run's latest code_diff artifact — and fail-closed the same way the evidence band's
+// Open Diff is: a run with no diff artifact yet gets an inert control with a tooltip
+// saying why, never a link into an empty tab.
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Approval } from '@boardex/contract';
-import { Badge, Button, Drawer } from '../../design';
+import { Badge, Button } from '../../design';
 import type { ApprovalGate } from './approvalGate';
 
 export interface ApprovalCardProps {
   gate: ApprovalGate;
+  /** Deep link to the latest code_diff artifact, or null when the run has none yet. */
+  diffHref: string | null;
   /** Resolve command in flight, or accepted and awaiting the approval.resolved event. */
   resolving: boolean;
   resolveError: string | null;
   onResolve: (approval: Approval, status: 'approved' | 'rejected') => void;
+}
+
+// Secondary-button styling (mirrors design/Button's secondary variant) applied to a
+// Link, so Review Diff is a real anchor carrying an href — same treatment as the
+// evidence band's actions.
+const REVIEW_DIFF_BASE =
+  'flex-1 inline-flex items-center justify-center rounded-button border border-border bg-bg-panel px-4 py-2 text-body font-medium text-text-primary transition-colors';
+
+const NO_DIFF_TOOLTIP = 'No code diff has been produced for this run yet.';
+
+function ReviewDiff({ diffHref }: { diffHref: string | null }) {
+  if (diffHref === null) {
+    return (
+      <span aria-disabled="true" title={NO_DIFF_TOOLTIP} className={`${REVIEW_DIFF_BASE} cursor-not-allowed opacity-50`}>
+        Review Diff
+      </span>
+    );
+  }
+  return (
+    <Link to={diffHref} className={`${REVIEW_DIFF_BASE} hover:bg-bg-app`}>
+      Review Diff
+    </Link>
+  );
 }
 
 function FilesChanged({ files }: { files: readonly string[] }) {
@@ -44,9 +73,13 @@ function FilesChanged({ files }: { files: readonly string[] }) {
   );
 }
 
-export function ApprovalCard({ gate, resolving, resolveError, onResolve }: ApprovalCardProps) {
-  const [diffOpen, setDiffOpen] = useState(false);
-
+export function ApprovalCard({
+  gate,
+  diffHref,
+  resolving,
+  resolveError,
+  onResolve,
+}: ApprovalCardProps) {
   if (gate.kind === 'blocked') {
     return (
       <section
@@ -110,9 +143,7 @@ export function ApprovalCard({ gate, resolving, resolveError, onResolve }: Appro
           {resolving ? 'Resolving…' : 'Approve & Continue'}
         </Button>
         <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={() => setDiffOpen(true)}>
-            Review Diff
-          </Button>
+          <ReviewDiff diffHref={diffHref} />
           <Button
             variant="secondary"
             className="flex-1"
@@ -123,19 +154,6 @@ export function ApprovalCard({ gate, resolving, resolveError, onResolve }: Appro
           </Button>
         </div>
       </div>
-
-      <Drawer open={diffOpen} title="Proposed changes" onClose={() => setDiffOpen(false)}>
-        <p className="text-body text-text-secondary">
-          Diff rendering arrives with T3.2. This proposal touches:
-        </p>
-        <ul className="mt-3 space-y-1">
-          {proposal.filesChanged.map((file) => (
-            <li key={file} className="font-mono text-meta text-text-primary">
-              {file}
-            </li>
-          ))}
-        </ul>
-      </Drawer>
     </section>
   );
 }

@@ -8,10 +8,14 @@ import { api, StateConflict } from '../../lib/api';
 import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
+import { evidenceHref, evidenceTargets } from './evidence';
 import { StatusCard } from './StatusCard';
 
 export function StatusApprovalRail({ view }: { view: RunView }) {
   const { run } = view;
+  // Review Diff targets the run's latest code_diff artifact, exactly as the evidence
+  // band's Open Diff does; null when the run has produced none yet.
+  const diffTarget = evidenceTargets(view).diff;
 
   const stop = useMutation({
     mutationFn: () => api.stopRun(run.id),
@@ -68,6 +72,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       {gate && fixApproval === null && (
         <ApprovalCard
           gate={gate}
+          diffHref={diffTarget && evidenceHref(run.id, diffTarget)}
           resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
           resolveError={commandError(
             resolve.error,
@@ -80,6 +85,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
         <DiagnosisCard
           diagnosis={view.diagnosis}
           checks={view.checks}
+          artifacts={view.artifacts}
           runId={run.id}
           fixApproval={fixApproval}
           resolving={fixApproval !== null && resolvingFor(fixApproval)}
