@@ -9,7 +9,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { Event, RunStatus, RunView } from '@boardex/contract';
+import type { BenchStatus, Event, RunStatus, RunView } from '@boardex/contract';
 
 const stopRun = vi.fn<() => Promise<void>>();
 const resolveApproval = vi.fn<() => Promise<void>>();
@@ -28,6 +28,13 @@ vi.mock('../../lib/api', () => ({
       this.currentStatus = currentStatus;
     }
   },
+}));
+
+// The bench snapshot behind the §7.2 warning's repeat at hardware-action approvals
+// (T5.0 adjudication); null (no snapshot) by default so unrelated tests see nothing.
+let benchSnapshot: BenchStatus | null = null;
+vi.mock('../../lib/useBenchStatus', () => ({
+  useBenchStatus: () => benchSnapshot,
 }));
 
 import { StatusApprovalRail } from './StatusApprovalRail';
@@ -95,7 +102,32 @@ function renderRail(view: RunView) {
 afterEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
+  benchSnapshot = null;
 });
+
+const degradedBench: BenchStatus = {
+  runnerOnline: true,
+  contractVersion: 'boardex-contract/0.1',
+  devices: [
+    { id: 'pyocd:stlink:1', kind: 'debug_probe', name: 'ST-Link/V2-1', state: 'online' },
+    {
+      id: 'sigrok:kingst-la2016:conn=3.12',
+      kind: 'logic_analyzer',
+      name: 'Kingst LA2016',
+      state: 'offline',
+      detail: 'Not detected by sigrok',
+    },
+  ],
+};
+
+const healthyBench: BenchStatus = {
+  ...degradedBench,
+  devices: degradedBench.devices.map((device) => ({
+    ...device,
+    state: 'online' as const,
+    detail: undefined,
+  })),
+};
 
 describe('stop with confirm + 409', () => {
   it('stops only after the ConfirmDialog confirms, then holds the button disabled', async () => {
@@ -296,5 +328,51 @@ describe('elapsed timer', () => {
     );
     expect(screen.getByText('1:05')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /stop run/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('bench-degraded warning repeats at hardware-action approvals (T5.0 adjudication)', () => {
+  it('renders the §7.2 warning when the pending approval proposes hardware actions', () => {
+    benchSnapshot = degradedBench;
+    renderRail(awaitingView());
+    expect(screen.getByText('Bench degraded')).toBeInTheDocument();
+    expect(
+      screen.getByText('Kingst LA2016 is on the bench but offline (Not detected by sigrok)'),
+    ).toBeInTheDocument();
+    // Advisory, never gating: the approve control stays live.
+    expect(screen.getByRole('button', { name: /approve & continue/i })).toBeEnabled();
+  });
+
+  it('repeats at the fix gate too — re-flash is a hardware action', () => {
+    benchSnapshot = degradedBench;
+    renderRail(fixGateView());
+    expect(screen.getByText('Bench degraded')).toBeInTheDocument();
+    // And the Diagnosis Card remains the single approve surface.
+    expect(screen.getByRole('button', { name: /approve fix plan/i })).toBeEnabled();
+  });
+
+  it('stays silent for an approval with no hardware actions', () => {
+    benchSnapshot = degradedBench;
+    renderRail(
+      viewFrom([
+        envelope(1, 'run.created', { run }),
+        envelope(2, 'run.status_changed', { status: 'awaiting_approval' }),
+        envelope(3, 'approval.requested', {
+          approval: approval('apr_sw_only', { hardwareActions: [] }),
+        }),
+      ]),
+    );
+    expect(screen.queryByText('Bench degraded')).not.toBeInTheDocument();
+  });
+
+  it('stays silent on a healthy bench, and with no bench snapshot at all', () => {
+    benchSnapshot = healthyBench;
+    const { unmount } = renderRail(awaitingView());
+    expect(screen.queryByText('Bench degraded')).not.toBeInTheDocument();
+    unmount();
+
+    benchSnapshot = null; // no snapshot: no claim to warn about (never an assumed anything)
+    renderRail(awaitingView());
+    expect(screen.queryByText('Bench degraded')).not.toBeInTheDocument();
   });
 });

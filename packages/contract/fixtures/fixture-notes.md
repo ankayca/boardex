@@ -7,14 +7,18 @@ changes the contract.
 
 ## Verified against this repo
 
-- **Protocol decode shape**: `transactions` in both `art_i2c_decode_iter*.json` were
-  verified by running the annotations through the real
-  `servers/boardex-logic/boardex_logic/decode/i2c.py::parse_transactions` — output is
-  byte-identical to the stored arrays. Annotation `text` carries the **8-bit wire byte**
-  (e.g. `ADDRESS WRITE: 76`), and `addr_7bit` is that byte `>> 1`, exactly as the house
-  parser computes it. The wrapper fields (`bus_state`, `annotations`, `transactions`,
-  `sample_rate_hz`, …) mirror what `decode_bus` documents in
-  `servers/boardex-logic/boardex_logic/server.py`.
+- **Protocol decode shape** (reconciled in T5.0): `annotations` in both
+  `art_i2c_decode_iter*.json` are now literally `parse.py::parse_annotations` output —
+  `{ raw, start, end, decoder, text }`, where `raw` is the sigrok `-A` line the parser
+  would have consumed — verified by feeding each artifact's `raw` lines back through
+  the real parser and asserting byte-identical dicts. `transactions` remain verified
+  byte-identical against `decode/i2c.py::parse_transactions` over those annotations.
+  Annotation `text` carries the **8-bit wire byte** (e.g. `ADDRESS WRITE: 76`), and
+  `addr_7bit` is that byte `>> 1`, exactly as the house parser computes it. The wrapper
+  fields (`bus_state`, `annotations`, `transactions`, `sample_rate_hz`, …) mirror what
+  `decode_bus` documents in `servers/boardex-logic/boardex_logic/server.py`, and the
+  whole body validates against the contract's `ProtocolDecodeContent` schema
+  (`packages/contract/src/artifacts.ts`, asserted by the fixture test).
 - **The bug and the fix compile**: all three firmware states (baseline, iteration 1
   with the unshifted `SADD`, iteration 2 with `BME280_SADD`) pass
   `gcc -fsyntax-only -std=c11 -Wall -Wextra -ffreestanding`; the diffs were generated
@@ -51,11 +55,13 @@ changes the contract.
 
 - **code_diff artifacts are structured JSON** (`{ files: [{ path, reason, diff }] }`)
   because §4 says decode/diff/timing kinds return structured JSON and §7.4 wants a
-  per-file reason line. The exact Zod schema for this JSON is defined in T3.x; treat
-  this file's shape as the working proposal.
-- **`annotations[].start_sample` / `end_sample`** are included for the §7.4 decode
-  table's time column (the house parser only reads `text`). Sample indices are coarse
-  reconstructions (~360 samples per byte at 4 MHz).
+  per-file reason line. Since T5.0 this shape is contract-owned
+  (`CodeDiffContent` in `packages/contract/src/artifacts.ts`), no longer a proposal.
+- **`annotations[].start` / `end`** give the §7.4 decode table its time column (the
+  transaction folder only reads `text`). Sample indices are coarse reconstructions
+  (~360 samples per byte at 4 MHz). They are `parse_annotations`' own fields, present
+  when the sigrok `-A` line carries a sample-range prefix — the previously invented
+  `start_sample`/`end_sample` keys are gone (T5.0/F2).
 - Artifact files are named `<artifactId>.<ext>` so the mock runner (T0.4) can map ids
   to files without a manifest.
 - `sizeBytes` in every `artifact.created` equals the real on-disk file size (asserted

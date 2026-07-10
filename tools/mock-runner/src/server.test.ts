@@ -3,7 +3,7 @@
 // gap/duplicate, a mid-run stop, an approval reject, and the degraded bench.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { EventSchema, reduceRun, type Event } from '@boardex/contract';
+import { EventSchema, ListRunsResponseSchema, reduceRun, type Event } from '@boardex/contract';
 import { createMockRunner, type MockRunner } from './server';
 
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
@@ -268,6 +268,53 @@ describe('mock runner', () => {
     const rejected = view.approvals.find((a) => a.id === pendingId);
     expect(rejected?.status).toBe('rejected');
     expect(events[events.length - 1]?.type).toBe('run.stopped');
+  });
+
+  it('sends the dedicated terminal events on the global stream (§5.3 v2.0)', async () => {
+    const global = await connect('global=1');
+    // The snapshot arrives first (runner.status on connect).
+    await global.waitFor((e) => e.type === 'runner.status');
+
+    // Completed terminal: drive a run to its natural end.
+    const completedRunId = await createRun();
+    void driveToCompletion(completedRunId);
+    const completed = await global.waitFor(
+      (e) => e.type === 'run.completed' && e.runId === completedRunId,
+    );
+    expect(completed.type).toBe('run.completed');
+
+    // Stopped terminal: stop a second run mid-flight; the dashboard hears it.
+    const stoppedRunId = await createRun();
+    await waitForView(stoppedRunId, (v) => v.run.status === 'plan_ready', 'plan_ready');
+    expect((await post(`/runs/${stoppedRunId}/stop`)).status).toBe(204);
+    await global.waitFor((e) => e.type === 'run.stopped' && e.runId === stoppedRunId);
+
+    global.close();
+  });
+
+  it('serves a schema-valid RunSummary in the window before run.created replays (T5.0/F7)', async () => {
+    // SPEED=1 keeps the fixture's 600 ms pre-run.created delay real, so the GET
+    // lands inside the window the audit caught.
+    const slow = await createMockRunner({ port: 0, speed: 1 });
+    try {
+      const res = await fetch(`${slow.url}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskPrompt: 'x', boardProfileId: 'bp_nucleo_f303re' }),
+      });
+      const { runId } = (await res.json()) as { runId: string };
+
+      const list = (await (await fetch(`${slow.url}/runs`)).json()) as unknown[];
+      const summaries = ListRunsResponseSchema.parse(list);
+      const summary = summaries.find((s) => s.id === runId);
+      expect(summary).toBeDefined();
+      expect(summary?.status).toBe('draft');
+      expect(summary?.title.length).toBeGreaterThan(0);
+      expect(summary?.boardProfileId).toBe('bp_nucleo_f303re');
+      expect(Number.isNaN(Date.parse(summary?.updatedAt ?? ''))).toBe(false);
+    } finally {
+      await slow.close();
+    }
   });
 
   it('marks the logic analyzer offline under --degraded', async () => {

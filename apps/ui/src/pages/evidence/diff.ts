@@ -1,24 +1,15 @@
-// Code-diff parsing (BIBLE §7.4). The code_diff artifact is structured JSON —
-// { files: [{ path, reason, diff }] } — where each diff is a per-file unified
-// diff string. Both layers fail closed per the T3.1 decode pattern: malformed
-// JSON / wrong shape resolves to { ok: false } for the whole artifact, and a
-// file whose diff text isn't a readable unified diff resolves to a per-file
-// error — never a crash, never a silently empty rendering.
-import { z } from 'zod';
+// Code-diff parsing (BIBLE §7.4). The code_diff artifact is the contract's
+// CodeDiffContent (promoted in T5.0) — { files: [{ path, reason, diff }] } —
+// where each diff is a per-file unified diff string. Both layers fail closed per
+// the T3.1 decode pattern: malformed JSON / wrong shape resolves to { ok: false }
+// for the whole artifact, and a file whose diff text isn't a readable unified
+// diff resolves to a per-file error — never a crash, never a silently empty
+// rendering.
+import { CodeDiffContentSchema, type CodeDiffContent, type DiffFile } from '@boardex/contract';
 
-const DiffFileSchema = z.object({
-  path: z.string(),
-  reason: z.string(),
-  diff: z.string(),
-});
-export type DiffFile = z.infer<typeof DiffFileSchema>;
-
-// Unknown extra wrapper fields pass through Zod's default stripping — the schema
-// is a reader of the fields the tab consumes, same stance as the decode reader.
-export const CodeDiffSchema = z.object({
-  files: z.array(DiffFileSchema),
-});
-export type CodeDiff = z.infer<typeof CodeDiffSchema>;
+export type { DiffFile };
+export type CodeDiff = CodeDiffContent;
+export const CodeDiffSchema = CodeDiffContentSchema;
 
 export type CodeDiffParseResult = { ok: true; diff: CodeDiff } | { ok: false; error: string };
 

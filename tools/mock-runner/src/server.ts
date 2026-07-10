@@ -70,13 +70,24 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
   }
 
   // Fan out a session event: per-run subscribers get everything; the global
-  // dashboard gets run.created + run.status_changed (§5.3).
+  // dashboard gets the run-lifecycle events — run.created, run.status_changed,
+  // and the dedicated terminals run.completed/run.failed/run.stopped (§5.3 v2.0:
+  // a run that ends via its terminal event must reach the dashboard without a
+  // redundant run.status_changed riding along).
+  const GLOBAL_EVENT_TYPES = new Set([
+    'run.created',
+    'run.status_changed',
+    'run.completed',
+    'run.failed',
+    'run.stopped',
+  ]);
+
   function dispatch(session: RunSession, event: Event): void {
     if (event.type === 'artifact.created') {
       artifactMeta.set(event.payload.artifact.id, event.payload.artifact);
     }
     broadcast(runClients.get(session.id), event);
-    if (event.type === 'run.created' || event.type === 'run.status_changed') {
+    if (GLOBAL_EVENT_TYPES.has(event.type)) {
       broadcast(globalClients, event);
     }
   }

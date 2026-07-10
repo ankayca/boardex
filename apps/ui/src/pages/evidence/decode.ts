@@ -1,45 +1,28 @@
 // Protocol-decode parsing + row derivation (BIBLE §7.4, fixture-notes.md).
 //
-// The artifact is sigrok-shaped JSON verified byte-identical to the house parser's
-// output (servers/boardex-logic/.../decode/i2c.py::parse_transactions). Two rules
-// from fixture-notes.md are binding here:
+// The artifact shape is the contract's ProtocolDecodeContent (promoted in T5.0 —
+// annotations are parse.py's own output, transactions are decode/i2c.py's). Two
+// rules from fixture-notes.md are binding here:
 //   1. A transaction FAILED — fail bg tint — ONLY when nack_at === "address"
 //      ("device did not answer"). The final-byte NACK on a master read is normal
 //      I2C protocol: `nack_at: "data"` renders as an ordinary row, no red.
-//   2. annotations[].start_sample exists specifically to give the table its time
-//      column; transactions themselves carry no sample indices, so annotations are
-//      folded into per-transaction segments with the house parser's boundary rules
-//      and aligned to transactions[] by index.
+//   2. annotations[].start gives the table its time column; transactions carry no
+//      sample indices, so annotations are folded into per-transaction segments
+//      with the house parser's boundary rules and aligned to transactions[] by
+//      index. `start` is optional on the wire (a sigrok -A line without a sample
+//      prefix has none), so a segment without one degrades to an em dash.
 // Malformed or unparseable content resolves to { ok: false } — the tab renders a
 // fail-closed error state, never a crash, never a silently empty table.
-import { z } from 'zod';
+import {
+  ProtocolDecodeContentSchema,
+  type DecodeAnnotation,
+  type I2cTransaction,
+  type ProtocolDecodeContent,
+} from '@boardex/contract';
 
-const AnnotationSchema = z.object({
-  start_sample: z.number().int().nonnegative(),
-  end_sample: z.number().int().nonnegative(),
-  text: z.string(),
-});
-export type DecodeAnnotation = z.infer<typeof AnnotationSchema>;
-
-const TransactionSchema = z.object({
-  addr_7bit: z.number().int().nonnegative().nullable(),
-  rw: z.enum(['r', 'w']).nullable(),
-  write: z.array(z.number().int().nonnegative()),
-  read: z.array(z.number().int().nonnegative()),
-  nack_at: z.enum(['address', 'data']).nullable(),
-});
-export type DecodeTransaction = z.infer<typeof TransactionSchema>;
-
-// The wrapper fields the table consumes, matching the fixture / decode_bus shape.
-// Unknown extra fields (device_id, channel_map, bus_state, …) pass through Zod's
-// default stripping — the schema is a reader, not a validator of the full wrapper.
-export const ProtocolDecodeSchema = z.object({
-  protocol: z.string(),
-  sample_rate_hz: z.number().positive(),
-  annotations: z.array(AnnotationSchema),
-  transactions: z.array(TransactionSchema),
-});
-export type ProtocolDecode = z.infer<typeof ProtocolDecodeSchema>;
+export type { DecodeAnnotation };
+export type DecodeTransaction = I2cTransaction;
+export type ProtocolDecode = ProtocolDecodeContent;
 
 export type DecodeParseResult =
   | { ok: true; decode: ProtocolDecode }
@@ -52,7 +35,7 @@ export function parseProtocolDecode(text: string): DecodeParseResult {
   } catch {
     return { ok: false, error: 'Artifact content is not valid JSON.' };
   }
-  const parsed = ProtocolDecodeSchema.safeParse(json);
+  const parsed = ProtocolDecodeContentSchema.safeParse(json);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const where = issue && issue.path.length > 0 ? ` (at ${issue.path.join('.')})` : '';
@@ -70,7 +53,8 @@ export function isTransactionFailed(tx: Pick<DecodeTransaction, 'nack_at'>): boo
 }
 
 interface AnnotationSegment {
-  startSample: number;
+  /** Sample index of the segment's opening annotation; absent when the wire had none. */
+  startSample: number | undefined;
   texts: string[];
 }
 
@@ -102,7 +86,7 @@ export function foldAnnotationSegments(
 
     if (upper === 'START' || START_VARIANTS.has(upper)) {
       if (upper !== 'START') finalize();
-      current = { startSample: annotation.start_sample, texts: [text], populated: false };
+      current = { startSample: annotation.start, texts: [text], populated: false };
       continue;
     }
     if (upper === 'STOP') {
@@ -113,7 +97,7 @@ export function foldAnnotationSegments(
       continue;
     }
     if (!current) {
-      current = { startSample: annotation.start_sample, texts: [], populated: false };
+      current = { startSample: annotation.start, texts: [], populated: false };
     }
     current.texts.push(text);
     if (ADDR_RE.test(text) || DATA_RE.test(text)) current.populated = true;
@@ -154,7 +138,10 @@ export function decodeRows(decode: ProtocolDecode): DecodeRow[] {
     const segment = aligned ? segments[index] : undefined;
     const bytes = [...tx.write, ...tx.read];
     return {
-      time: segment ? formatSampleTime(segment.startSample, decode.sample_rate_hz) : '—',
+      time:
+        segment && segment.startSample !== undefined
+          ? formatSampleTime(segment.startSample, decode.sample_rate_hz)
+          : '—',
       address: tx.addr_7bit !== null ? `0x${hexByte(tx.addr_7bit)}` : '—',
       rw: tx.rw !== null ? tx.rw.toUpperCase() : '—',
       ack:

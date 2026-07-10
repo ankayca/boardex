@@ -18,9 +18,15 @@ const DECODE_JSON = JSON.stringify({
   protocol: 'i2c',
   sample_rate_hz: 4_000_000,
   annotations: [
-    { start_sample: 812000, end_sample: 812010, text: 'START' },
-    { start_sample: 812010, end_sample: 812370, text: 'ADDRESS WRITE: 76 NACK' },
-    { start_sample: 812370, end_sample: 812380, text: 'STOP' },
+    { raw: '812000-812010 i2c-1: START', start: 812000, end: 812010, decoder: 'i2c-1', text: 'START' },
+    {
+      raw: '812010-812370 i2c-1: ADDRESS WRITE: 76 NACK',
+      start: 812010,
+      end: 812370,
+      decoder: 'i2c-1',
+      text: 'ADDRESS WRITE: 76 NACK',
+    },
+    { raw: '812370-812380 i2c-1: STOP', start: 812370, end: 812380, decoder: 'i2c-1', text: 'STOP' },
   ],
   transactions: [{ addr_7bit: 59, rw: 'w', write: [], read: [], nack_at: 'address' }],
 });

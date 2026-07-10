@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EventEnvelopeSchema, EventSchema, type Event } from './events';
+import {
+  EventEnvelopeSchema,
+  EventSchema,
+  isKnownEvent,
+  KNOWN_EVENT_TYPES,
+  parseWireEvent,
+  type Event,
+} from './events';
 import {
   envelope,
   sampleApproval,
@@ -116,5 +123,77 @@ describe('EventSchema envelope rules', () => {
     delete checkWithoutArtifact.artifactId;
     const bad = { ...catalog['check.evaluated'], payload: { check: checkWithoutArtifact } };
     expect(() => EventSchema.parse(bad)).toThrow();
+  });
+
+  it('accepts a naive (zoneless) ISO ts — §4 says ISO 8601, not ISO 8601 with zone', () => {
+    const naive = { ...catalog['run.created'], ts: '2026-07-07T14:02:03.412' };
+    expect(EventSchema.parse(naive).ts).toBe('2026-07-07T14:02:03.412');
+  });
+});
+
+describe('parseWireEvent — envelope-first (§5.1, T5.0/F1)', () => {
+  it('returns every catalog event strictly parsed and known', () => {
+    for (const event of Object.values(catalog)) {
+      const wire = parseWireEvent(JSON.parse(JSON.stringify(event)));
+      expect(wire).toEqual(event);
+      expect(wire && isKnownEvent(wire)).toBe(true);
+    }
+  });
+
+  it('keeps an unknown-typed, well-formed envelope, tagged ignored', () => {
+    const unknown = { seq: 42, runId: 'run_01', ts: TS, type: 'run.paused', payload: { x: 1 } };
+    const wire = parseWireEvent(unknown);
+    expect(wire).not.toBeNull();
+    if (!wire) return;
+    expect(isKnownEvent(wire)).toBe(false);
+    // Seq survives — the whole point: the envelope still counts toward continuity.
+    expect(wire.seq).toBe(42);
+  });
+
+  it('keeps a known-typed envelope whose payload fails the catalog parse, tagged ignored', () => {
+    // A malformed payload must not become a typed event (the reducer would read
+    // fields that are not there) — but dropping it would fabricate a seq gap.
+    const malformed = { seq: 7, runId: 'run_01', ts: TS, type: 'run.created', payload: {} };
+    const wire = parseWireEvent(malformed);
+    expect(wire).not.toBeNull();
+    if (!wire) return;
+    expect(isKnownEvent(wire)).toBe(false);
+    expect(wire.seq).toBe(7);
+  });
+
+  it('returns null for frames that are not well-formed envelopes at all', () => {
+    expect(parseWireEvent('not json-shaped')).toBeNull();
+    expect(parseWireEvent({ type: 'run.created' })).toBeNull();
+    expect(parseWireEvent({ seq: 0, runId: 'r', ts: TS, type: 'x', payload: {} })).toBeNull();
+  });
+
+  it('no wire object can smuggle the ignored tag onto a catalog event', () => {
+    const event = { ...catalog['run.stopped'], ignored: true };
+    const wire = parseWireEvent(JSON.parse(JSON.stringify(event)));
+    expect(wire && isKnownEvent(wire)).toBe(true);
+  });
+
+  it('KNOWN_EVENT_TYPES matches the §5.2 catalog', () => {
+    expect([...KNOWN_EVENT_TYPES].sort()).toEqual(
+      [
+        'run.created',
+        'run.plan_generated',
+        'run.status_changed',
+        'step.started',
+        'step.log',
+        'step.completed',
+        'step.failed',
+        'artifact.created',
+        'check.evaluated',
+        'diagnosis.created',
+        'approval.requested',
+        'approval.resolved',
+        'run.iteration_started',
+        'run.completed',
+        'run.failed',
+        'run.stopped',
+        'runner.status',
+      ].sort(),
+    );
   });
 });

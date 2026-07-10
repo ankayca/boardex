@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Event, Run, RunStep } from '@boardex/contract';
+import { isKnownEvent, type Event, type Run, type RunStep, type WireEvent } from '@boardex/contract';
 import { WsClient, type WebSocketCtor, type WebSocketLike } from './ws';
 import { createRunStore } from './runStore';
 
@@ -80,8 +80,8 @@ const runnerStatusEvent: Event = {
 };
 
 describe('WsClient', () => {
-  it('ignores unknown event types and malformed frames (§5.1 forward compatibility)', () => {
-    const seen: Event[] = [];
+  it('parses envelope-first: unknown types arrive tagged ignored, non-envelopes drop (§5.1, T5.0/F1)', () => {
+    const seen: WireEvent[] = [];
     const client = new WsClient({
       wsBase: 'ws://runner',
       target: { kind: 'global' },
@@ -92,19 +92,25 @@ describe('WsClient', () => {
     client.connect();
     lastSocket().fireOpen();
 
-    // (a) a well-formed envelope carrying a type outside the MVP catalog
+    // (a) a well-formed envelope carrying a type outside the MVP catalog is
+    // DELIVERED as an ignored envelope — its seq must reach the store, or the
+    // gapless prefix parks forever (the F1 failure).
     lastSocket().fireMessage(
       JSON.stringify({ seq: 1, runId: '_global', ts: at(0), type: 'run.teleported', payload: {} }),
     );
-    // (b) a malformed (non-JSON) frame
-    lastSocket().fireMessage('{ not valid json');
-    // Neither is dispatched, and neither throws.
-    expect(seen).toHaveLength(0);
-
-    // A subsequent valid frame still dispatches normally.
-    lastSocket().fireMessage(JSON.stringify(runnerStatusEvent));
     expect(seen).toHaveLength(1);
-    expect(seen[0]?.type).toBe('runner.status');
+    expect(seen[0] && isKnownEvent(seen[0])).toBe(false);
+    expect(seen[0]?.seq).toBe(1);
+
+    // (b) a malformed (non-JSON) frame has no envelope and no seq: dropped, no throw.
+    lastSocket().fireMessage('{ not valid json');
+    expect(seen).toHaveLength(1);
+
+    // A subsequent valid frame still dispatches normally, strictly typed.
+    lastSocket().fireMessage(JSON.stringify(runnerStatusEvent));
+    expect(seen).toHaveLength(2);
+    expect(seen[1]?.type).toBe('runner.status');
+    expect(seen[1] && isKnownEvent(seen[1])).toBe(true);
 
     client.close();
   });

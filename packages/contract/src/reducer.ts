@@ -10,7 +10,7 @@ import type {
   RunStatus,
   RunStep,
 } from './entities';
-import type { Event, StepLogStream } from './events';
+import { isKnownEvent, type Event, type StepLogStream, type WireEvent } from './events';
 
 // RunView's diagnosis carries the reducer-derived link to its fix approval: the id
 // of the first approval.requested whose seq follows the diagnosis.created (§5.4
@@ -87,7 +87,7 @@ function upsertById<T extends { id: string }>(items: T[], item: T): void {
   }
 }
 
-export function reduceRun(events: readonly Event[]): RunView {
+export function reduceRun(events: readonly WireEvent[]): RunView {
   let run: Run | undefined;
   let diagnosis: DiagnosisView | undefined;
   let riskSummary: string | undefined;
@@ -116,21 +116,29 @@ export function reduceRun(events: readonly Event[]): RunView {
     return run;
   };
 
-  for (const event of events) {
+  for (const wire of events) {
     // Idempotent by seq: a duplicate or lower seq is a no-op (§5.4).
-    if (event.seq <= lastSeq) {
+    if (wire.seq <= lastSeq) {
       continue;
     }
     // seq is monotonic per run, starts at 1, no gaps — a gap is a protocol error
     // and the caller re-fetches via HTTP replay (§5.1).
-    if (event.seq !== lastSeq + 1) {
+    if (wire.seq !== lastSeq + 1) {
       throw new ProtocolError(
         'seq_gap',
-        `seq gap: expected ${lastSeq + 1}, got ${event.seq} (${event.type})`,
-        { seq: event.seq, expectedSeq: lastSeq + 1 },
+        `seq gap: expected ${lastSeq + 1}, got ${wire.seq} (${wire.type})`,
+        { seq: wire.seq, expectedSeq: lastSeq + 1 },
       );
     }
-    lastSeq = event.seq;
+    lastSeq = wire.seq;
+
+    // An ignored envelope (unknown type, or a payload the catalog parse rejected)
+    // has now done its one job — advancing seq continuity — and carries no state
+    // (§5.1 forward compatibility, T5.0/F1).
+    if (!isKnownEvent(wire)) {
+      continue;
+    }
+    const event = wire;
 
     switch (event.type) {
       case 'run.created': {
@@ -278,10 +286,6 @@ export function reduceRun(events: readonly Event[]): RunView {
       }
       case 'runner.status': {
         // Bench-level event (runId "_global"); carries no per-run state.
-        break;
-      }
-      default: {
-        // Unknown event types must be ignored (§5.1 forward compatibility).
         break;
       }
     }

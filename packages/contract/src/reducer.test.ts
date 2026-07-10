@@ -450,3 +450,53 @@ describe('reduceRun — evidence-linking law', () => {
     expect(view.diagnosis).toEqual(sampleDiagnosis);
   });
 });
+
+describe('reduceRun — ignored envelopes count toward continuity (§5.1, T5.0/F1)', () => {
+  const unknownAt = (seq: number) =>
+    ({
+      seq,
+      runId: 'run_01',
+      ts: TS,
+      type: 'run.paused',
+      payload: { anything: true },
+      ignored: true,
+    }) as const;
+
+  it('an unknown-typed envelope mid-stream advances lastSeq and carries no state', () => {
+    const view = reduceRun([
+      envelope(1, 'run.created', { run: sampleRun }),
+      unknownAt(2),
+      envelope(3, 'run.status_changed', { status: 'running' }),
+    ]);
+    expect(view.lastSeq).toBe(3);
+    expect(view.run.status).toBe('running');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('without the envelope, the same stream is a seq gap — the failure F1 fixes', () => {
+    expect(() =>
+      reduceRun([
+        envelope(1, 'run.created', { run: sampleRun }),
+        envelope(3, 'run.status_changed', { status: 'running' }),
+      ]),
+    ).toThrow(ProtocolError);
+  });
+
+  it('a known-typed envelope with a non-conforming payload is equally inert', () => {
+    // parseWireEvent tags these ignored rather than letting the reducer read
+    // fields that are not there; the reducer must treat them as seq-only.
+    const malformed = {
+      seq: 2,
+      runId: 'run_01',
+      ts: TS,
+      type: 'run.completed',
+      payload: {},
+      ignored: true,
+    } as const;
+    const view = reduceRun([envelope(1, 'run.created', { run: sampleRun }), malformed]);
+    expect(view.lastSeq).toBe(2);
+    // Crucially it did NOT complete the run.
+    expect(view.run.status).toBe(sampleRun.status);
+    expect(view.endedAt).toBeUndefined();
+  });
+});

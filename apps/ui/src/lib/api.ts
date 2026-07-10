@@ -18,10 +18,10 @@ import {
   type BoardProfile,
   type CreateRunRequest,
   type CreateRunResponse,
-  type Event,
   type HealthResponse,
   type RunStatus,
   type RunSummary,
+  type WireEvent,
 } from '@boardex/contract';
 import { RUNNER_HTTP_BASE } from './config';
 
@@ -66,7 +66,9 @@ export interface ApiClient {
     status: 'approved' | 'rejected',
   ): Promise<void>;
   stopRun(runId: string): Promise<void>;
-  getRunEvents(runId: string, afterSeq?: number): Promise<Event[]>;
+  // WireEvent, not Event: replay is parsed envelope-first (§5.1/T5.0) so an
+  // unknown-typed event in the log cannot fail the whole response.
+  getRunEvents(runId: string, afterSeq?: number): Promise<WireEvent[]>;
   getArtifactMeta(artifactId: string): Promise<Artifact>;
   /** URL of an artifact's raw content (GET /artifacts/{id}); fetched by reference (§D4). */
   artifactUrl(artifactId: string): string;
@@ -88,7 +90,9 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
 
   async function requestJson<T>(
     path: string,
-    schema: z.ZodType<T>,
+    // Input typed unknown, not T: transform schemas (GetRunEventsResponseSchema's
+    // envelope-first parse) have output ≠ input, and raw JSON is unknown anyway.
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     init?: JsonRequestInit,
   ): Promise<T> {
     const res = await fetch(base + path, {

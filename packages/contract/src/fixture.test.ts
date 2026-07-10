@@ -7,6 +7,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import {
+  CodeDiffContentSchema,
+  ProtocolDecodeContentSchema,
+  TimingMeasurementContentSchema,
+} from './artifacts';
 import { EventSchema, type Event } from './events';
 import { reduceRun } from './reducer';
 
@@ -105,6 +110,49 @@ describe('bme280_run_001 fixture', () => {
       const file = files.find((name) => name.replace(/\.[^.]+$/, '') === artifact.id);
       expect(file, `artifact file for ${artifact.id}`).toBeDefined();
       expect(statSync(join(artifactsDir, file as string)).size).toBe(artifact.sizeBytes);
+    }
+  });
+
+  it('every structured artifact file validates against its promoted content schema (T5.0/F2)', () => {
+    const view = reduceRun(events);
+    const schemaByKind = {
+      protocol_decode: ProtocolDecodeContentSchema,
+      code_diff: CodeDiffContentSchema,
+      timing_measurement: TimingMeasurementContentSchema,
+    } as const;
+
+    const structured = view.artifacts.filter(
+      (artifact): artifact is (typeof view.artifacts)[number] & { kind: keyof typeof schemaByKind } =>
+        artifact.kind in schemaByKind,
+    );
+    // The story ships 2 decodes, 2 diffs and 2 timing measurements.
+    expect(structured).toHaveLength(6);
+
+    for (const artifact of structured) {
+      const content: unknown = JSON.parse(
+        readFileSync(join(artifactsDir, `${artifact.id}.json`), 'utf8'),
+      );
+      const result = schemaByKind[artifact.kind].safeParse(content);
+      expect(
+        result.success,
+        `${artifact.id} (${artifact.kind}): ${result.success ? '' : result.error.message}`,
+      ).toBe(true);
+    }
+  });
+
+  it('decode annotations are the house parser shape — raw line plus parsed fields', () => {
+    // Reconciled in T5.0/F2 to parse.py::parse_annotations output; the invented
+    // start_sample/end_sample keys are gone.
+    for (const id of ['art_i2c_decode_iter1', 'art_i2c_decode_iter2']) {
+      const content = ProtocolDecodeContentSchema.parse(
+        JSON.parse(readFileSync(join(artifactsDir, `${id}.json`), 'utf8')),
+      );
+      expect(content.annotations.length).toBeGreaterThan(0);
+      for (const annotation of content.annotations) {
+        expect(annotation.raw).toBe(
+          `${annotation.start}-${annotation.end} ${annotation.decoder}: ${annotation.text}`,
+        );
+      }
     }
   });
 });

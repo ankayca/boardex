@@ -51,10 +51,10 @@ export class RunSession {
   private readonly onEvent: (event: Event) => void;
 
   private readonly log: Event[] = [];
-  private title = '';
-  private boardProfileId = '';
+  private title: string;
+  private boardProfileId: string;
   private currentStatus: RunStatus = 'draft';
-  private updatedAt = '';
+  private updatedAt: string;
   private nextSeq = 1;
 
   private terminated = false;
@@ -68,6 +68,16 @@ export class RunSession {
     this.speed = options.speed;
     this.validateOutbound = options.validateOutbound;
     this.onEvent = options.onEvent;
+    // Seed a schema-valid RunSummary at POST /runs time (T5.0/F7): the fixture's
+    // run.created replays only after its delayMs, and a GET /runs in that window
+    // used to serve empty strings — an updatedAt no IsoDateTime parse accepts.
+    // Until run.created lands the run is a valid 'draft' row with the story's
+    // identity fields, taken from the fixture itself.
+    const created = this.entries.find((entry) => entry.event.type === 'run.created')?.event;
+    const run = created?.type === 'run.created' ? created.payload.run : undefined;
+    this.title = run?.title ?? 'Run';
+    this.boardProfileId = run?.boardProfileId ?? 'bp_nucleo_f303re';
+    this.updatedAt = new Date().toISOString();
   }
 
   // Kick off replay. Fire-and-forget: the loop drives itself off timers and gates.

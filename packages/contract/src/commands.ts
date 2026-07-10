@@ -10,7 +10,7 @@ import {
   IsoDateTimeSchema,
   RunStatusSchema,
 } from './entities';
-import { EventSchema } from './events';
+import { WireEventSchema } from './events';
 
 // GET /health
 export const HealthResponseSchema = z.object({
@@ -68,7 +68,12 @@ export const GetRunEventsQuerySchema = z.object({
   afterSeq: z.coerce.number().int().min(0).optional(),
 });
 export type GetRunEventsQuery = z.infer<typeof GetRunEventsQuerySchema>;
-export const GetRunEventsResponseSchema = z.array(EventSchema);
+// Envelope-first, per event (§5.1, T5.0/F1): the replay path must tolerate exactly
+// what the live socket tolerates, or an unknown-typed event in the log turns every
+// reconnect into a parse failure and the reconnect into a loop. Producers still
+// emit only catalog events — the emitted JSON Schema keeps this response as
+// Event[]; the looseness here is the reader's side of the same rule.
+export const GetRunEventsResponseSchema = z.array(WireEventSchema);
 
 // GET /artifacts/{id}/meta
 export const GetArtifactMetaResponseSchema = ArtifactSchema;

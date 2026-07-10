@@ -11,7 +11,7 @@
     "IsoDateTime": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp"
+      "description": "ISO 8601 timestamp (offset, Z, or naive/local)"
     },
     "RunStatus": {
       "type": "string",
@@ -158,11 +158,11 @@
         },
         "startedAt": {
           "$ref": "#/definitions/IsoDateTime",
-          "description": "ISO 8601 timestamp"
+          "description": "ISO 8601 timestamp (offset, Z, or naive/local)"
         },
         "endedAt": {
           "$ref": "#/definitions/IsoDateTime",
-          "description": "ISO 8601 timestamp"
+          "description": "ISO 8601 timestamp (offset, Z, or naive/local)"
         },
         "summary": {
           "type": "string"
@@ -371,7 +371,7 @@
         },
         "resolvedAt": {
           "$ref": "#/definitions/IsoDateTime",
-          "description": "ISO 8601 timestamp"
+          "description": "ISO 8601 timestamp (offset, Z, or naive/local)"
         }
       },
       "required": [

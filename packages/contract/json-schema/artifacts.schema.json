@@ -1,0 +1,227 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Boardex structured artifact contents",
+  "description": "Structured JSON bodies for boardex-contract/0.1 artifacts fetched by reference (BIBLE §4/§5.3): kind protocol_decode -> ProtocolDecodeContent; kind code_diff -> CodeDiffContent; kind timing_measurement -> TimingMeasurementContent. Log kinds are text/plain and report_md is Markdown; neither has a JSON schema.",
+  "definitions": {
+    "DecodeAnnotation": {
+      "type": "object",
+      "properties": {
+        "raw": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decoder": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "I2cTransaction": {
+      "type": "object",
+      "properties": {
+        "addr_7bit": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rw": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "r",
+                "w"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "write": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "read": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "nack_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "address",
+                "data"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "addr_7bit",
+        "rw",
+        "write",
+        "read",
+        "nack_at"
+      ],
+      "additionalProperties": false
+    },
+    "BusState": {
+      "type": "string",
+      "enum": [
+        "idle_bus",
+        "activity_no_decode",
+        "decoded_ok"
+      ]
+    },
+    "ProtocolDecodeContent": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "string"
+        },
+        "device_id": {
+          "type": "string"
+        },
+        "channel_map": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "sample_rate_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "num_samples": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "duration_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "bus_state": {
+          "$ref": "#/definitions/BusState"
+        },
+        "trigger_channel": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trigger_edge": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DecodeAnnotation"
+          }
+        },
+        "transactions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/I2cTransaction"
+          }
+        }
+      },
+      "required": [
+        "protocol",
+        "sample_rate_hz",
+        "annotations",
+        "transactions"
+      ],
+      "additionalProperties": false
+    },
+    "DiffFile": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason",
+        "diff"
+      ],
+      "additionalProperties": false
+    },
+    "CodeDiffContent": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DiffFile"
+          }
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "additionalProperties": false
+    },
+    "TimingMeasurementContent": {
+      "type": "object",
+      "properties": {
+        "measurement": {
+          "type": "string"
+        },
+        "valueHz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "measurement",
+        "valueHz"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

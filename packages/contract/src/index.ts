@@ -6,4 +6,5 @@ export const CONTRACT_VERSION = 'boardex-contract/0.1' as const;
 export * from './entities';
 export * from './events';
 export * from './commands';
+export * from './artifacts';
 export * from './reducer';
