@@ -16,6 +16,9 @@ vi.mock('../../lib/api', () => ({
     getHealth: () => getHealth(),
     listRuns: () => listRuns(),
     listBoardProfiles: () => listBoardProfiles(),
+    // HomePage reads the bench snapshot for its advisory indicator; this test is about
+    // the ['runs'] invalidation, so the bench never resolves and the line never shows.
+    getBench: () => new Promise(() => undefined),
   },
 }));
 
@@ -24,6 +27,8 @@ vi.mock('../../lib/globalStream', () => ({
   useGlobalEvents: (handler: (event: Event) => void) => {
     capturedHandler = handler;
   },
+  // useBenchStatus watches the socket's status to know when its snapshot went stale.
+  subscribeGlobalStatus: () => () => undefined,
 }));
 
 import HomePage from './HomePage';

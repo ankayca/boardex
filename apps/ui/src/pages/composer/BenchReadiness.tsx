@@ -19,7 +19,7 @@ export function BenchWarning({ issues }: { issues: readonly BenchIssue[] }) {
       <ul className="mt-1 space-y-0.5">
         {issues.map((issue) => (
           <li key={issue.key}>
-            {issue.deviceState ? (
+            {issue.status === 'degraded' ? (
               <StatusDot state={issue.deviceState} label={issue.message} />
             ) : (
               <span className="text-meta text-warn">{issue.message}</span>

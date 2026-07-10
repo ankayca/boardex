@@ -85,11 +85,14 @@ export default function HomePage() {
 
   const online = health.isSuccess && health.data.ok;
 
-  // Suppressed while the runner is down: the snapshot is then stale by definition, and
-  // the offline banner above already says the bench cannot be seen. Two contradictory
-  // amber lines would be worse than one true one.
+  // Gated on holding a snapshot that postdates the current connection, not on /health
+  // (T4.2 review F1). useBenchStatus drops the snapshot when the global socket leaves
+  // 'open', so a bench we cannot currently see reports nothing at all — including the
+  // case /health alone would miss, where HTTP is fine and only the socket died. A
+  // downed runner therefore suppresses this line without a special case: no socket, no
+  // snapshot, and the offline banner above already says why.
   const bench = useBenchStatus();
-  const attention = online ? benchAttentionCount(bench) : 0;
+  const attention = benchAttentionCount(bench);
 
   const boardNames = useMemo(
     () => new Map((profilesQuery.data ?? []).map((p) => [p.id, p.name] as const)),

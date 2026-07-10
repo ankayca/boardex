@@ -6,12 +6,15 @@
 import { useEffect, useRef } from 'react';
 import type { Event } from '@boardex/contract';
 import { RUNNER_WS_BASE } from './config';
-import { WsClient } from './ws';
+import { WsClient, type WsConnectionStatus } from './ws';
 
 export type GlobalListener = (event: Event) => void;
+export type GlobalStatusListener = (status: WsConnectionStatus) => void;
 
 const listeners = new Set<GlobalListener>();
+const statusListeners = new Set<GlobalStatusListener>();
 let client: WsClient | null = null;
+let status: WsConnectionStatus = 'closed';
 
 function ensureClient(): void {
   if (client) return;
@@ -24,8 +27,25 @@ function ensureClient(): void {
     onEvent: (event) => {
       for (const listener of [...listeners]) listener(event);
     },
+    // The liveness signal behind everything derived from runner.status: a consumer
+    // that mirrors the stream into state needs to know when the stream stopped being
+    // one (benchStore, §7.1/§7.2).
+    onStatusChange: (next) => {
+      status = next;
+      for (const listener of [...statusListeners]) listener(next);
+    },
   });
   client.connect();
+}
+
+// The socket lives as long as anyone is listening to either channel: a surface that
+// only watches connection health still needs the connection it is watching.
+function releaseClient(): void {
+  if (listeners.size === 0 && statusListeners.size === 0 && client) {
+    client.close();
+    client = null;
+    status = 'closed';
+  }
 }
 
 export function subscribeGlobal(listener: GlobalListener): () => void {
@@ -33,11 +53,21 @@ export function subscribeGlobal(listener: GlobalListener): () => void {
   ensureClient();
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0 && client) {
-      client.close();
-      client = null;
-    }
+    releaseClient();
   };
+}
+
+export function subscribeGlobalStatus(listener: GlobalStatusListener): () => void {
+  statusListeners.add(listener);
+  ensureClient();
+  return () => {
+    statusListeners.delete(listener);
+    releaseClient();
+  };
+}
+
+export function globalStatus(): WsConnectionStatus {
+  return status;
 }
 
 // Subscribe a component to the global stream for its lifetime. The latest callback is

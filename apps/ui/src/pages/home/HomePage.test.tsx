@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { BenchStatus, BoardProfile, HealthResponse, RunSummary } from '@boardex/contract';
+import type { WsConnectionStatus } from '../../lib/ws';
 
 // Mock the HTTP client: HomePage's job is to turn these responses into the right
 // screen state (loading / empty / populated / offline), which is what we assert.
@@ -19,6 +20,25 @@ vi.mock('../../lib/api', () => ({
     getBench: () => getBench(),
   },
 }));
+
+// The global WS is the liveness signal behind the bench snapshot (F1). Drive its
+// status by hand so a socket drop can be separated from a /health failure.
+const statusListeners = new Set<(status: WsConnectionStatus) => void>();
+vi.mock('../../lib/globalStream', () => ({
+  useGlobalEvents: () => undefined,
+  subscribeGlobal: () => () => undefined,
+  subscribeGlobalStatus: (listener: (status: WsConnectionStatus) => void) => {
+    statusListeners.add(listener);
+    return () => statusListeners.delete(listener);
+  },
+  globalStatus: () => 'open' as WsConnectionStatus,
+}));
+
+function emitWsStatus(status: WsConnectionStatus) {
+  act(() => {
+    for (const listener of [...statusListeners]) listener(status);
+  });
+}
 
 import { useBenchStore } from '../../lib/benchStore';
 import HomePage from './HomePage';
@@ -62,7 +82,8 @@ beforeEach(() => {
   getHealth.mockResolvedValue(online);
   listBoardProfiles.mockResolvedValue([]);
   getBench.mockResolvedValue(bench('online'));
-  useBenchStore.getState().clear();
+  statusListeners.clear();
+  useBenchStore.setState({ bench: null, generation: 0 });
 });
 
 afterEach(() => {
@@ -150,14 +171,48 @@ describe('HomePage bench indicator', () => {
     expect(await screen.findByRole('link', { name: '1 instrument needs attention' })).toBeInTheDocument();
   });
 
-  // A snapshot from a runner we cannot reach is stale by definition, and the offline
-  // banner already says the bench cannot be seen.
-  it('is suppressed while the runner is offline — the banner speaks instead', async () => {
-    getHealth.mockResolvedValue({ ...online, ok: false });
+  // F1(ii): the socket is the liveness signal, not /health. HTTP can be perfectly
+  // healthy while the stream that would have told us the analyzer came back is dead.
+  it('drops the snapshot when the socket leaves open, even with /health green', async () => {
+    let resolveBench: ((value: BenchStatus) => void) | undefined;
+    getBench.mockReturnValue(new Promise<BenchStatus>((resolve) => (resolveBench = resolve)));
     useBenchStore.getState().setBench(bench('offline'));
     renderHome();
 
-    expect(await screen.findByText('Runner offline')).toBeInTheDocument();
-    expect(screen.queryByText('1 instrument needs attention')).not.toBeInTheDocument();
+    expect(await screen.findByText('1 instrument needs attention')).toBeInTheDocument();
+
+    emitWsStatus('reconnecting');
+    await waitFor(() =>
+      expect(screen.queryByText('1 instrument needs attention')).not.toBeInTheDocument(),
+    );
+    expect(getHealth).toHaveBeenCalled(); // /health never went red
+    expect(resolveBench).toBeDefined(); // the fallback re-fetches under a fresh generation
   });
+
+  // F1(i): a runner coming back on /health proves HTTP works, not that the bench is
+  // what we last saw. Only a snapshot that postdates the current connection does.
+  it('stays suppressed after health recovers until a fresh snapshot lands', async () => {
+    // The bench GET hangs, so nothing can re-fill the snapshot but a live runner.status.
+    getBench.mockReturnValue(new Promise<BenchStatus>(() => undefined));
+    getHealth.mockResolvedValue({ ...online, ok: false });
+    useBenchStore.getState().setBench(bench('offline')); // stale: from the old connection
+    renderHome();
+
+    emitWsStatus('reconnecting');
+    await waitFor(() =>
+      expect(screen.queryByText('1 instrument needs attention')).not.toBeInTheDocument(),
+    );
+
+    // /health flips green. On its own that must change nothing here.
+    getHealth.mockResolvedValue(online);
+    await waitFor(() => expect(screen.queryByText('Runner offline')).not.toBeInTheDocument(), {
+      timeout: 10000,
+    });
+    expect(screen.queryByText('1 instrument needs attention')).not.toBeInTheDocument();
+
+    // A fresh runner.status over the re-opened socket is what brings it back.
+    emitWsStatus('open');
+    act(() => useBenchStore.getState().setBench(bench('offline')));
+    expect(await screen.findByText('1 instrument needs attention')).toBeInTheDocument();
+  }, 15000);
 });

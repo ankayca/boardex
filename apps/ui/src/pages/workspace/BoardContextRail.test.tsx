@@ -4,11 +4,14 @@
 // profile names an analyzer that does not exist" must not render the same.
 import { describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { BenchStatus, BoardProfile } from '@boardex/contract';
 import { BoardContextRail } from './BoardContextRail';
 
 const PROBE_ID = 'pyocd:stlink:066EFF383733554157254923';
 const LA_ID = 'sigrok:kingst-la2016:conn=3.12';
+const PROBE_NAME = 'ST-Link/V2-1 (NUCLEO-F303RE)';
+const LA_NAME = 'Kingst LA2016';
 
 function bench(laState: 'online' | 'offline' | 'error' = 'online'): BenchStatus {
   return {
@@ -57,12 +60,12 @@ function rowState(row: HTMLElement): string | null {
 }
 
 describe('BoardContextRail instruments (§7.3, three states)', () => {
-  it('found: a resolved online instrument shows a green dot labelled with its device id', () => {
+  it('found: a resolved online instrument shows a green dot labelled with the device name', () => {
     const list = renderRail();
-    const probe = within(list).getByText(PROBE_ID).closest('li') as HTMLElement;
+    const probe = within(list).getByText(PROBE_NAME).closest('li') as HTMLElement;
     expect(probe.querySelector('.bg-pass')).not.toBeNull();
-    // The dot's label is the device's stable id, not the raw profile string.
-    expect(within(probe).getByText(PROBE_ID)).toBeInTheDocument();
+    // F4: the human name, not the registry id — that lives in the details drawer.
+    expect(within(list).queryByText(PROBE_ID)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -70,10 +73,20 @@ describe('BoardContextRail instruments (§7.3, three states)', () => {
     ['error', 'bg-fail'],
   ] as const)('degraded: a matched but %s device keeps its own StatusDot', (state, dotClass) => {
     const list = renderRail({ bench: bench(state) });
-    const la = within(list).getByText(LA_ID).closest('li') as HTMLElement;
+    const la = within(list).getByText(LA_NAME).closest('li') as HTMLElement;
     expect(la.querySelector(`.${dotClass}`)).not.toBeNull();
     expect(rowState(la)).toBeNull(); // labelled row: the dot's state is not spelled out
     expect(within(list).queryByText(/was not found on the bench/)).not.toBeInTheDocument();
+  });
+
+  it('the stable ids the rows resolved to live in the details drawer (F4)', async () => {
+    const user = userEvent.setup();
+    renderRail();
+    await user.click(screen.getByRole('button', { name: 'View details' }));
+
+    const ids = screen.getByRole('region', { name: 'Instrument ids' });
+    expect(within(ids).getByText(PROBE_ID)).toBeInTheDocument();
+    expect(within(ids).getByText(LA_ID)).toBeInTheDocument();
   });
 
   it('missing: a reference the bench does not answer to has no dot and reads amber', () => {
@@ -89,7 +102,7 @@ describe('BoardContextRail instruments (§7.3, three states)', () => {
   // The distinction this ruling exists for.
   it('an unplugged analyzer never renders like one the bench has never heard of', () => {
     const unplugged = renderRail({ bench: bench('offline') });
-    const unpluggedRow = within(unplugged).getByText(LA_ID).closest('li') as HTMLElement;
+    const unpluggedRow = within(unplugged).getByText(LA_NAME).closest('li') as HTMLElement;
     expect(unpluggedRow.querySelector('.bg-warn')).not.toBeNull();
     expect(unpluggedRow.textContent).not.toMatch(/not found on the bench/);
 
@@ -105,12 +118,26 @@ describe('BoardContextRail instruments (§7.3, three states)', () => {
     expect(serial.querySelector('.bg-pass')).not.toBeNull();
   });
 
-  it('with no bench snapshot every instrument reads offline against its own reference', () => {
-    // Never an assumed online, and never a false "not found" against a bench we cannot see.
+  // F5 supersedes "never an assumed online" with "never an assumed anything": an
+  // unreadable bench used to paint every instrument amber, reporting a healthy analyzer
+  // as unplugged whenever the socket blinked.
+  it('with no bench snapshot the instruments are unknown: no dots, plain names', () => {
     const list = renderRail({ bench: null });
-    const probe = within(list).getByText(PROBE_ID).closest('li') as HTMLElement;
-    expect(probe.querySelector('.bg-warn')).not.toBeNull();
+
+    expect(within(list).getByText(PROBE_ID)).toBeInTheDocument(); // the profile's own claim
+    expect(list.querySelector('.bg-pass, .bg-warn, .bg-fail')).toBeNull();
     expect(within(list).queryByText(/was not found on the bench/)).not.toBeInTheDocument();
+    expect(screen.getByText('Bench status unavailable.')).toBeInTheDocument();
+  });
+
+  it('a readable bench with no serial device says so rather than assuming offline', () => {
+    const noSerial = bench();
+    noSerial.devices = noSerial.devices.filter((d) => d.kind !== 'serial');
+    const list = renderRail({ bench: noSerial });
+    expect(
+      within(list).getByText('/dev/ttyACM0 @ 115200 was not found on the bench'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Bench status unavailable.')).not.toBeInTheDocument();
   });
 
   it('an unset logic analyzer is not claimed, so it gets no row at all', () => {

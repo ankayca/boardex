@@ -56,8 +56,13 @@ describe('BenchReadiness (§7.2)', () => {
       />,
     );
     expect(screen.getByText('Bench references not found')).toBeInTheDocument();
-    expect(screen.getByText('Saleae Logic 8 was not found on the bench')).toBeInTheDocument();
+    const row = screen.getByText('Saleae Logic 8 was not found on the bench');
     expect(screen.queryByText(/is on the bench but/)).not.toBeInTheDocument();
+
+    // F3: no dot of any state — a reference nothing answers to has no device whose
+    // health a dot could report. The union in benchReadiness makes the data impossible;
+    // this pins the rendering.
+    expect(row.closest('li')?.querySelector('.bg-pass, .bg-warn, .bg-fail')).toBeNull();
   });
 
   it('distinguishes the two in one list when both are true', () => {

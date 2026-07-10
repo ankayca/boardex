@@ -118,13 +118,14 @@ export function benchMatchText(match: InstrumentMatch): string | null {
 // The composer's / gate's warning list (§7.2).
 // ---------------------------------------------------------------------------
 
-export interface BenchIssue {
-  key: string;
-  status: 'degraded' | 'missing';
-  message: string;
-  /** The device's own state, for a StatusDot; absent when nothing was matched. */
-  deviceState?: BenchDeviceState;
-}
+/**
+ * Discriminated on `status`, so the impossible state is unrepresentable rather than
+ * merely absent: a missing reference has no device, so it cannot carry a device state
+ * for a dot to render (T4.2 review F2).
+ */
+export type BenchIssue =
+  | { key: string; status: 'degraded'; message: string; deviceState: BenchDeviceState }
+  | { key: string; status: 'missing'; message: string };
 
 /**
  * Everything about this bench that deserves the operator's attention, in fix-order:

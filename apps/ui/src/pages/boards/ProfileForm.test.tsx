@@ -213,6 +213,9 @@ describe('Validate Profile against the bench (§7.5)', () => {
     const panel = await screen.findByRole('status', { name: 'Bench validation' });
     expect(panel).toHaveTextContent('Validated with warnings');
     expect(panel).toHaveTextContent('J-Link EDU was not found on the bench');
+    // F3: the missing row carries no StatusDot — nothing there has a state to report.
+    const missingRow = within(panel).getByText('J-Link EDU was not found on the bench');
+    expect(missingRow.closest('li')?.querySelector('.bg-pass, .bg-warn, .bg-fail')).toBeNull();
 
     // Advisory, not blocking: benches change (§7.5).
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
