@@ -4,7 +4,8 @@ import Layout from './shell/Layout';
 import HomePage from './pages/home/HomePage';
 import NewRunPage from './pages/composer/NewRunPage';
 import RunPage from './pages/composer/RunPage';
-import { BoardDetailPage, BoardsPage } from './pages/placeholders';
+import BoardsPage from './pages/boards/BoardsPage';
+import BoardProfilePage from './pages/boards/BoardProfilePage';
 
 // Dev-only gallery route (BIBLE §8 T0.5). Gate the lazy construction itself, not just
 // the route: in a prod build `import.meta.env.DEV` is statically false, so the dynamic
@@ -24,7 +25,10 @@ export default function App() {
             the same RunPage renders, with RunPage opening the drawer on this path. */}
         <Route path="/runs/:id/evidence" element={<RunPage />} />
         <Route path="/boards" element={<BoardsPage />} />
-        <Route path="/boards/:id" element={<BoardDetailPage />} />
+        {/* Ordered: /boards/new is the Board Profile Builder's new-profile state
+            (§7.5), not a profile whose id happens to be "new". */}
+        <Route path="/boards/new" element={<BoardProfilePage />} />
+        <Route path="/boards/:id" element={<BoardProfilePage />} />
       </Route>
       {import.meta.env.DEV && DesignGalleryPage && (
         <Route

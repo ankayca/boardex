@@ -50,9 +50,16 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-bg-app font-sans text-text-primary">
       <header className="flex h-14 items-center justify-between border-b border-border bg-bg-panel px-6">
-        <Link to="/" className="text-section font-semibold text-text-primary">
-          Boardex
-        </Link>
+        <div className="flex items-baseline gap-6">
+          <Link to="/" className="text-section font-semibold text-text-primary">
+            Boardex
+          </Link>
+          {/* The Board Profile Builder (§7.5) is a screen of its own; the top bar is
+              the only place it can be reached from. */}
+          <Link to="/boards" className="text-meta text-text-secondary hover:text-text-primary">
+            Boards
+          </Link>
+        </div>
         <RunnerPill />
       </header>
       <Outlet />
