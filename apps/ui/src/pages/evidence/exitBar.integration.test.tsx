@@ -107,11 +107,18 @@ describe('§7.3 Review Diff at the flash approval gate', () => {
     const { unmount } = renderApp(`/runs/${runId}`);
 
     // The fixture's flash gate opens after the iteration-1 diff artifact lands, so
-    // the deep link exists at the moment the card renders.
+    // the deep link exists at the moment the card renders. Both halves of that
+    // ordering are asserted here — the gate is pending AND the diff exists — so
+    // the claim stands on its own rather than on the runner's pause semantics.
     const atGate = await currentView(runId);
+    expect(pendingApproval(atGate!)).toBeDefined();
     expect(atGate?.artifacts.some((artifact) => artifact.kind === 'code_diff')).toBe(true);
 
-    const card = await screen.findByRole('region', { name: 'Approval required' }, { timeout: 20000 });
+    const card = await screen.findByRole(
+      'region',
+      { name: 'Approval required' },
+      { timeout: 20000 },
+    );
     const reviewDiff = within(card).getByRole('link', { name: 'Review Diff' });
     expect(reviewDiff).toHaveAttribute('href', `/runs/${runId}/evidence?artifact=art_diff_iter1`);
 
@@ -159,7 +166,9 @@ const EXPECTED: Record<string, EvidenceExpectation> = {
     tab: 'Protocol Decode',
     assertEvidence: (dialog) => {
       expect(within(dialog).getByText('I2C protocol decode (iteration 2)')).toBeInTheDocument();
-      expect(within(dialog).getByRole('table', { name: 'Decoded transactions' })).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole('table', { name: 'Decoded transactions' }),
+      ).toBeInTheDocument();
     },
   },
   serial_output: {
@@ -202,8 +211,10 @@ describe('§7.4 exit bar: every verdict traceable to its artifact in ≤2 clicks
       const user = userEvent.setup();
       const { unmount } = renderApp(`/runs/${runId}`);
 
-      // Every click on the path from workspace to evidence is counted, so a future
-      // refactor that inserts a step fails the exit bar instead of quietly widening it.
+      // What enforces the bar: the walk routes its single click through this
+      // counter (asserted toBe(1) below), and findByRole('dialog') plus the tab
+      // and content assertions prove that one click alone put the exact artifact
+      // on screen — no uncounted interaction exists between chip and evidence.
       let clicks = 0;
       const click = async (element: Element): Promise<void> => {
         clicks += 1;
@@ -211,7 +222,9 @@ describe('§7.4 exit bar: every verdict traceable to its artifact in ≤2 clicks
       };
 
       const band = await screen.findByRole('list', { name: 'Evidence checks' }, { timeout: 20000 });
-      const chip = within(band).getByRole('link', { name: new RegExp(checkLabel(check.requirementId)) });
+      const chip = within(band).getByRole('link', {
+        name: new RegExp(checkLabel(check.requirementId)),
+      });
       expect(chip).toHaveAttribute('href', `/runs/${runId}/evidence?artifact=${check.artifactId}`);
 
       await click(chip);
@@ -223,7 +236,7 @@ describe('§7.4 exit bar: every verdict traceable to its artifact in ≤2 clicks
       );
       // Content arrives over a real artifact fetch + parse.
       await waitFor(() => expectation.assertEvidence(dialog), { timeout: 15000 });
-      expect(clicks).toBeLessThanOrEqual(2);
+      expect(clicks).toBe(1);
       unmount();
     }
   }, 120000);

@@ -9,7 +9,17 @@ import { MemoryRouter } from 'react-router-dom';
 import type { Diagnosis } from '@boardex/contract';
 import { DiagnosisCard, type DiagnosisCardProps } from './DiagnosisCard';
 import { rankHypotheses } from './hypotheses';
-import { approval, artifactOf, diagnosis, failedCheck, RUN_ID } from './test-events';
+import {
+  approval,
+  artifactOf,
+  checkOf,
+  diagnosis,
+  envelope,
+  failedCheck,
+  run,
+  RUN_ID,
+  viewFrom,
+} from './test-events';
 
 // Deliberately shuffled: ranked render order must be high, moderate, low.
 const HYPOTHESES: Diagnosis['hypotheses'] = [
@@ -92,16 +102,44 @@ describe('DiagnosisCard', () => {
     ]);
   });
 
-  it('fail-closed: a cited artifact absent from RunView renders inert, never a dead link', () => {
-    renderCard({ artifacts: [artifactOf('art_decode', 'protocol_decode')] });
+  it('fail-closed: a cited artifact absent from RunView renders inert with the reducer’s needs_review downgrade, never a dead link', () => {
+    // The checks travel through the real reduceRun with the same data shape as
+    // EvidenceBand.test and ChecksTab.test: an artifactId with no
+    // artifact.created is downgraded to needs_review by the evidence law, so
+    // all three surfaces are proven against the same downgraded check.
+    const view = viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'artifact.created', { artifact: artifactOf('art_ack', 'protocol_decode') }),
+      envelope(3, 'check.evaluated', {
+        check: checkOf('chk_ack', 'device_ack', 'art_ack', 'fail'),
+      }),
+      envelope(4, 'check.evaluated', {
+        check: checkOf('chk_serial', 'serial_output', 'art_serial_x', 'fail'),
+      }),
+    ]);
+    renderCard({
+      diagnosis: diagnosis(HYPOTHESES, ['chk_ack', 'chk_serial']),
+      checks: view.checks,
+      artifacts: view.artifacts,
+    });
+
     const failed = within(screen.getByRole('list', { name: 'Failed checks' }));
     const links = failed.getAllByRole('link', { name: 'View evidence' });
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      `/runs/${RUN_ID}/evidence?artifact=art_decode`,
+      `/runs/${RUN_ID}/evidence?artifact=art_ack`,
     ]);
     const inert = failed.getAllByText('View evidence').filter((el) => el.tagName === 'SPAN');
     expect(inert).toHaveLength(1);
     expect(inert[0]).toHaveAttribute('aria-disabled', 'true');
+
+    // The downgrade shows through the card exactly as it does on the band chip
+    // and the checks row: needs_review badge on the orphaned check, fail on the
+    // resolvable one.
+    const [ackItem, serialItem] = failed.getAllByRole('listitem');
+    expect(ackItem!.querySelector('[data-kind="verdict"][data-value="fail"]')).not.toBeNull();
+    expect(
+      serialItem!.querySelector('[data-kind="verdict"][data-value="needs_review"]'),
+    ).not.toBeNull();
   });
 
   it('renders the proposed fix summary, risk badge, and files', () => {
@@ -111,7 +149,9 @@ describe('DiagnosisCard', () => {
     ).toBeInTheDocument();
     const card = screen.getByRole('region', { name: 'Diagnosis' });
     expect(card.querySelector('[data-kind="risk"][data-value="medium"]')).not.toBeNull();
-    expect(within(screen.getByRole('list', { name: 'Fix files changed' })).getByText('main.c')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Fix files changed' })).getByText('main.c'),
+    ).toBeInTheDocument();
   });
 
   it('fail-closed: no Approve Fix Plan in the DOM until the fix approval is pending', () => {
@@ -134,7 +174,10 @@ describe('DiagnosisCard', () => {
   });
 
   it('surfaces a non-conflict resolve error as an alert', () => {
-    renderCard({ fixApproval: approval('apr_fix'), resolveError: 'Could not resolve the approval.' });
+    renderCard({
+      fixApproval: approval('apr_fix'),
+      resolveError: 'Could not resolve the approval.',
+    });
     expect(screen.getByRole('alert')).toHaveTextContent('Could not resolve the approval.');
   });
 

@@ -27,6 +27,8 @@ source of truth and encodes the non-negotiable rules for working in this repo.
    conventionally-named commits. **If the task or review brief names a behavior to
    verify, ship the test proving it in the same commit — untested-but-correct is
    FIX_FIRST by default.**
+6. **Reviews always end with the §9.2 merge report block:** Verdict / Findings /
+   Checks line — regardless of what format the workflow tooling emits.
 
 ## Color semantics (BIBLE §6.1 / D14) — reserved, never decorative
 
