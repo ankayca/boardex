@@ -11,413 +11,577 @@
   "bus_state": "decoded_ok",
   "annotations": [
     {
-      "start_sample": 60000,
-      "end_sample": 60010,
+      "raw": "60000-60010 i2c-1: START",
+      "start": 60000,
+      "end": 60010,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 60010,
-      "end_sample": 60370,
+      "raw": "60010-60370 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 60010,
+      "end": 60370,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 60370,
-      "end_sample": 60730,
+      "raw": "60370-60730 i2c-1: DATA WRITE: D0 ACK",
+      "start": 60370,
+      "end": 60730,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: D0 ACK"
     },
     {
-      "start_sample": 60730,
-      "end_sample": 60740,
+      "raw": "60730-60740 i2c-1: START REPEAT",
+      "start": 60730,
+      "end": 60740,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 60740,
-      "end_sample": 61100,
+      "raw": "60740-61100 i2c-1: ADDRESS READ: ED ACK",
+      "start": 60740,
+      "end": 61100,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 61100,
-      "end_sample": 61460,
+      "raw": "61100-61460 i2c-1: DATA READ: 60 NACK",
+      "start": 61100,
+      "end": 61460,
+      "decoder": "i2c-1",
       "text": "DATA READ: 60 NACK"
     },
     {
-      "start_sample": 61460,
-      "end_sample": 61470,
+      "raw": "61460-61470 i2c-1: STOP",
+      "start": 61460,
+      "end": 61470,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 63870,
-      "end_sample": 63880,
+      "raw": "63870-63880 i2c-1: START",
+      "start": 63870,
+      "end": 63880,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 63880,
-      "end_sample": 64240,
+      "raw": "63880-64240 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 63880,
+      "end": 64240,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 64240,
-      "end_sample": 64600,
+      "raw": "64240-64600 i2c-1: DATA WRITE: 88 ACK",
+      "start": 64240,
+      "end": 64600,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: 88 ACK"
     },
     {
-      "start_sample": 64600,
-      "end_sample": 64610,
+      "raw": "64600-64610 i2c-1: START REPEAT",
+      "start": 64600,
+      "end": 64610,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 64610,
-      "end_sample": 64970,
+      "raw": "64610-64970 i2c-1: ADDRESS READ: ED ACK",
+      "start": 64610,
+      "end": 64970,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 64970,
-      "end_sample": 65330,
+      "raw": "64970-65330 i2c-1: DATA READ: 5C ACK",
+      "start": 64970,
+      "end": 65330,
+      "decoder": "i2c-1",
       "text": "DATA READ: 5C ACK"
     },
     {
-      "start_sample": 65330,
-      "end_sample": 65690,
+      "raw": "65330-65690 i2c-1: DATA READ: 6D ACK",
+      "start": 65330,
+      "end": 65690,
+      "decoder": "i2c-1",
       "text": "DATA READ: 6D ACK"
     },
     {
-      "start_sample": 65690,
-      "end_sample": 66050,
+      "raw": "65690-66050 i2c-1: DATA READ: 98 ACK",
+      "start": 65690,
+      "end": 66050,
+      "decoder": "i2c-1",
       "text": "DATA READ: 98 ACK"
     },
     {
-      "start_sample": 66050,
-      "end_sample": 66410,
+      "raw": "66050-66410 i2c-1: DATA READ: 66 ACK",
+      "start": 66050,
+      "end": 66410,
+      "decoder": "i2c-1",
       "text": "DATA READ: 66 ACK"
     },
     {
-      "start_sample": 66410,
-      "end_sample": 66770,
+      "raw": "66410-66770 i2c-1: DATA READ: 32 ACK",
+      "start": 66410,
+      "end": 66770,
+      "decoder": "i2c-1",
       "text": "DATA READ: 32 ACK"
     },
     {
-      "start_sample": 66770,
-      "end_sample": 67130,
+      "raw": "66770-67130 i2c-1: DATA READ: 00 NACK",
+      "start": 66770,
+      "end": 67130,
+      "decoder": "i2c-1",
       "text": "DATA READ: 00 NACK"
     },
     {
-      "start_sample": 67130,
-      "end_sample": 67140,
+      "raw": "67130-67140 i2c-1: STOP",
+      "start": 67130,
+      "end": 67140,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 69540,
-      "end_sample": 69550,
+      "raw": "69540-69550 i2c-1: START",
+      "start": 69540,
+      "end": 69550,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 69550,
-      "end_sample": 69910,
+      "raw": "69550-69910 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 69550,
+      "end": 69910,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 69910,
-      "end_sample": 70270,
+      "raw": "69910-70270 i2c-1: DATA WRITE: A1 ACK",
+      "start": 69910,
+      "end": 70270,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: A1 ACK"
     },
     {
-      "start_sample": 70270,
-      "end_sample": 70280,
+      "raw": "70270-70280 i2c-1: START REPEAT",
+      "start": 70270,
+      "end": 70280,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 70280,
-      "end_sample": 70640,
+      "raw": "70280-70640 i2c-1: ADDRESS READ: ED ACK",
+      "start": 70280,
+      "end": 70640,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 70640,
-      "end_sample": 71000,
+      "raw": "70640-71000 i2c-1: DATA READ: 4B NACK",
+      "start": 70640,
+      "end": 71000,
+      "decoder": "i2c-1",
       "text": "DATA READ: 4B NACK"
     },
     {
-      "start_sample": 71000,
-      "end_sample": 71010,
+      "raw": "71000-71010 i2c-1: STOP",
+      "start": 71000,
+      "end": 71010,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 73410,
-      "end_sample": 73420,
+      "raw": "73410-73420 i2c-1: START",
+      "start": 73410,
+      "end": 73420,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 73420,
-      "end_sample": 73780,
+      "raw": "73420-73780 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 73420,
+      "end": 73780,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 73780,
-      "end_sample": 74140,
+      "raw": "73780-74140 i2c-1: DATA WRITE: E1 ACK",
+      "start": 73780,
+      "end": 74140,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: E1 ACK"
     },
     {
-      "start_sample": 74140,
-      "end_sample": 74150,
+      "raw": "74140-74150 i2c-1: START REPEAT",
+      "start": 74140,
+      "end": 74150,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 74150,
-      "end_sample": 74510,
+      "raw": "74150-74510 i2c-1: ADDRESS READ: ED ACK",
+      "start": 74150,
+      "end": 74510,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 74510,
-      "end_sample": 74870,
+      "raw": "74510-74870 i2c-1: DATA READ: 69 ACK",
+      "start": 74510,
+      "end": 74870,
+      "decoder": "i2c-1",
       "text": "DATA READ: 69 ACK"
     },
     {
-      "start_sample": 74870,
-      "end_sample": 75230,
+      "raw": "74870-75230 i2c-1: DATA READ: 01 ACK",
+      "start": 74870,
+      "end": 75230,
+      "decoder": "i2c-1",
       "text": "DATA READ: 01 ACK"
     },
     {
-      "start_sample": 75230,
-      "end_sample": 75590,
+      "raw": "75230-75590 i2c-1: DATA READ: 00 ACK",
+      "start": 75230,
+      "end": 75590,
+      "decoder": "i2c-1",
       "text": "DATA READ: 00 ACK"
     },
     {
-      "start_sample": 75590,
-      "end_sample": 75950,
+      "raw": "75590-75950 i2c-1: DATA READ: 14 ACK",
+      "start": 75590,
+      "end": 75950,
+      "decoder": "i2c-1",
       "text": "DATA READ: 14 ACK"
     },
     {
-      "start_sample": 75950,
-      "end_sample": 76310,
+      "raw": "75950-76310 i2c-1: DATA READ: 2A ACK",
+      "start": 75950,
+      "end": 76310,
+      "decoder": "i2c-1",
       "text": "DATA READ: 2A ACK"
     },
     {
-      "start_sample": 76310,
-      "end_sample": 76670,
+      "raw": "76310-76670 i2c-1: DATA READ: 03 ACK",
+      "start": 76310,
+      "end": 76670,
+      "decoder": "i2c-1",
       "text": "DATA READ: 03 ACK"
     },
     {
-      "start_sample": 76670,
-      "end_sample": 77030,
+      "raw": "76670-77030 i2c-1: DATA READ: 1E NACK",
+      "start": 76670,
+      "end": 77030,
+      "decoder": "i2c-1",
       "text": "DATA READ: 1E NACK"
     },
     {
-      "start_sample": 77030,
-      "end_sample": 77040,
+      "raw": "77030-77040 i2c-1: STOP",
+      "start": 77030,
+      "end": 77040,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 79440,
-      "end_sample": 79450,
+      "raw": "79440-79450 i2c-1: START",
+      "start": 79440,
+      "end": 79450,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 79450,
-      "end_sample": 79810,
+      "raw": "79450-79810 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 79450,
+      "end": 79810,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 79810,
-      "end_sample": 80170,
+      "raw": "79810-80170 i2c-1: DATA WRITE: F2 ACK",
+      "start": 79810,
+      "end": 80170,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: F2 ACK"
     },
     {
-      "start_sample": 80170,
-      "end_sample": 80530,
+      "raw": "80170-80530 i2c-1: DATA WRITE: 01 ACK",
+      "start": 80170,
+      "end": 80530,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: 01 ACK"
     },
     {
-      "start_sample": 80530,
-      "end_sample": 80540,
+      "raw": "80530-80540 i2c-1: STOP",
+      "start": 80530,
+      "end": 80540,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 82940,
-      "end_sample": 82950,
+      "raw": "82940-82950 i2c-1: START",
+      "start": 82940,
+      "end": 82950,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 82950,
-      "end_sample": 83310,
+      "raw": "82950-83310 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 82950,
+      "end": 83310,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 83310,
-      "end_sample": 83670,
+      "raw": "83310-83670 i2c-1: DATA WRITE: F4 ACK",
+      "start": 83310,
+      "end": 83670,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: F4 ACK"
     },
     {
-      "start_sample": 83670,
-      "end_sample": 84030,
+      "raw": "83670-84030 i2c-1: DATA WRITE: 27 ACK",
+      "start": 83670,
+      "end": 84030,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: 27 ACK"
     },
     {
-      "start_sample": 84030,
-      "end_sample": 84040,
+      "raw": "84030-84040 i2c-1: STOP",
+      "start": 84030,
+      "end": 84040,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 86440,
-      "end_sample": 86450,
+      "raw": "86440-86450 i2c-1: START",
+      "start": 86440,
+      "end": 86450,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 86450,
-      "end_sample": 86810,
+      "raw": "86450-86810 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 86450,
+      "end": 86810,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 86810,
-      "end_sample": 87170,
+      "raw": "86810-87170 i2c-1: DATA WRITE: F5 ACK",
+      "start": 86810,
+      "end": 87170,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: F5 ACK"
     },
     {
-      "start_sample": 87170,
-      "end_sample": 87530,
+      "raw": "87170-87530 i2c-1: DATA WRITE: A0 ACK",
+      "start": 87170,
+      "end": 87530,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: A0 ACK"
     },
     {
-      "start_sample": 87530,
-      "end_sample": 87540,
+      "raw": "87530-87540 i2c-1: STOP",
+      "start": 87530,
+      "end": 87540,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 89940,
-      "end_sample": 89950,
+      "raw": "89940-89950 i2c-1: START",
+      "start": 89940,
+      "end": 89950,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 89950,
-      "end_sample": 90310,
+      "raw": "89950-90310 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 89950,
+      "end": 90310,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 90310,
-      "end_sample": 90670,
+      "raw": "90310-90670 i2c-1: DATA WRITE: F7 ACK",
+      "start": 90310,
+      "end": 90670,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: F7 ACK"
     },
     {
-      "start_sample": 90670,
-      "end_sample": 90680,
+      "raw": "90670-90680 i2c-1: START REPEAT",
+      "start": 90670,
+      "end": 90680,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 90680,
-      "end_sample": 91040,
+      "raw": "90680-91040 i2c-1: ADDRESS READ: ED ACK",
+      "start": 90680,
+      "end": 91040,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 91040,
-      "end_sample": 91400,
+      "raw": "91040-91400 i2c-1: DATA READ: 54 ACK",
+      "start": 91040,
+      "end": 91400,
+      "decoder": "i2c-1",
       "text": "DATA READ: 54 ACK"
     },
     {
-      "start_sample": 91400,
-      "end_sample": 91760,
+      "raw": "91400-91760 i2c-1: DATA READ: 5B ACK",
+      "start": 91400,
+      "end": 91760,
+      "decoder": "i2c-1",
       "text": "DATA READ: 5B ACK"
     },
     {
-      "start_sample": 91760,
-      "end_sample": 92120,
+      "raw": "91760-92120 i2c-1: DATA READ: C0 ACK",
+      "start": 91760,
+      "end": 92120,
+      "decoder": "i2c-1",
       "text": "DATA READ: C0 ACK"
     },
     {
-      "start_sample": 92120,
-      "end_sample": 92480,
+      "raw": "92120-92480 i2c-1: DATA READ: 83 ACK",
+      "start": 92120,
+      "end": 92480,
+      "decoder": "i2c-1",
       "text": "DATA READ: 83 ACK"
     },
     {
-      "start_sample": 92480,
-      "end_sample": 92840,
+      "raw": "92480-92840 i2c-1: DATA READ: E6 ACK",
+      "start": 92480,
+      "end": 92840,
+      "decoder": "i2c-1",
       "text": "DATA READ: E6 ACK"
     },
     {
-      "start_sample": 92840,
-      "end_sample": 93200,
+      "raw": "92840-93200 i2c-1: DATA READ: 00 ACK",
+      "start": 92840,
+      "end": 93200,
+      "decoder": "i2c-1",
       "text": "DATA READ: 00 ACK"
     },
     {
-      "start_sample": 93200,
-      "end_sample": 93560,
+      "raw": "93200-93560 i2c-1: DATA READ: 66 ACK",
+      "start": 93200,
+      "end": 93560,
+      "decoder": "i2c-1",
       "text": "DATA READ: 66 ACK"
     },
     {
-      "start_sample": 93560,
-      "end_sample": 93920,
+      "raw": "93560-93920 i2c-1: DATA READ: 8A NACK",
+      "start": 93560,
+      "end": 93920,
+      "decoder": "i2c-1",
       "text": "DATA READ: 8A NACK"
     },
     {
-      "start_sample": 93920,
-      "end_sample": 93930,
+      "raw": "93920-93930 i2c-1: STOP",
+      "start": 93920,
+      "end": 93930,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 3280000,
-      "end_sample": 3280010,
+      "raw": "3280000-3280010 i2c-1: START",
+      "start": 3280000,
+      "end": 3280010,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 3280010,
-      "end_sample": 3280370,
+      "raw": "3280010-3280370 i2c-1: ADDRESS WRITE: EC ACK",
+      "start": 3280010,
+      "end": 3280370,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: EC ACK"
     },
     {
-      "start_sample": 3280370,
-      "end_sample": 3280730,
+      "raw": "3280370-3280730 i2c-1: DATA WRITE: F7 ACK",
+      "start": 3280370,
+      "end": 3280730,
+      "decoder": "i2c-1",
       "text": "DATA WRITE: F7 ACK"
     },
     {
-      "start_sample": 3280730,
-      "end_sample": 3280740,
+      "raw": "3280730-3280740 i2c-1: START REPEAT",
+      "start": 3280730,
+      "end": 3280740,
+      "decoder": "i2c-1",
       "text": "START REPEAT"
     },
     {
-      "start_sample": 3280740,
-      "end_sample": 3281100,
+      "raw": "3280740-3281100 i2c-1: ADDRESS READ: ED ACK",
+      "start": 3280740,
+      "end": 3281100,
+      "decoder": "i2c-1",
       "text": "ADDRESS READ: ED ACK"
     },
     {
-      "start_sample": 3281100,
-      "end_sample": 3281460,
+      "raw": "3281100-3281460 i2c-1: DATA READ: 54 ACK",
+      "start": 3281100,
+      "end": 3281460,
+      "decoder": "i2c-1",
       "text": "DATA READ: 54 ACK"
     },
     {
-      "start_sample": 3281460,
-      "end_sample": 3281820,
+      "raw": "3281460-3281820 i2c-1: DATA READ: 5B ACK",
+      "start": 3281460,
+      "end": 3281820,
+      "decoder": "i2c-1",
       "text": "DATA READ: 5B ACK"
     },
     {
-      "start_sample": 3281820,
-      "end_sample": 3282180,
+      "raw": "3281820-3282180 i2c-1: DATA READ: B0 ACK",
+      "start": 3281820,
+      "end": 3282180,
+      "decoder": "i2c-1",
       "text": "DATA READ: B0 ACK"
     },
     {
-      "start_sample": 3282180,
-      "end_sample": 3282540,
+      "raw": "3282180-3282540 i2c-1: DATA READ: 83 ACK",
+      "start": 3282180,
+      "end": 3282540,
+      "decoder": "i2c-1",
       "text": "DATA READ: 83 ACK"
     },
     {
-      "start_sample": 3282540,
-      "end_sample": 3282900,
+      "raw": "3282540-3282900 i2c-1: DATA READ: E7 ACK",
+      "start": 3282540,
+      "end": 3282900,
+      "decoder": "i2c-1",
       "text": "DATA READ: E7 ACK"
     },
     {
-      "start_sample": 3282900,
-      "end_sample": 3283260,
+      "raw": "3282900-3283260 i2c-1: DATA READ: 00 ACK",
+      "start": 3282900,
+      "end": 3283260,
+      "decoder": "i2c-1",
       "text": "DATA READ: 00 ACK"
     },
     {
-      "start_sample": 3283260,
-      "end_sample": 3283620,
+      "raw": "3283260-3283620 i2c-1: DATA READ: 66 ACK",
+      "start": 3283260,
+      "end": 3283620,
+      "decoder": "i2c-1",
       "text": "DATA READ: 66 ACK"
     },
     {
-      "start_sample": 3283620,
-      "end_sample": 3283980,
+      "raw": "3283620-3283980 i2c-1: DATA READ: 86 NACK",
+      "start": 3283620,
+      "end": 3283980,
+      "decoder": "i2c-1",
       "text": "DATA READ: 86 NACK"
     },
     {
-      "start_sample": 3283980,
-      "end_sample": 3283990,
+      "raw": "3283980-3283990 i2c-1: STOP",
+      "start": 3283980,
+      "end": 3283990,
+      "decoder": "i2c-1",
       "text": "STOP"
     }
   ],

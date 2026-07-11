@@ -1,18 +1,24 @@
 // Right rail — Diagnosis Card (BIBLE §7.3): failed checks summarized, ranked
-// hypotheses with confidence labels, proposed fix + risk, Approve Fix Plan. Evidence
-// links are Sprint-3 stubs routing to /runs/:id/evidence?artifact=... (T3.3 wires the
-// surface); no evidence rendering here. Approve Fix Plan approves the pending fix
-// approval — fail-closed, the button exists in the DOM only once that approval is
-// actually pending in view.
+// hypotheses with confidence labels, proposed fix + risk, Approve Fix Plan. Each
+// failed check deep-links its own artifact on the Evidence Detail surface (§7.4),
+// which routes the link to that artifact kind's tab. The link is law-gated exactly
+// like the band's chips and the Checks table: an artifactId with no artifact.created
+// in RunView renders inert, never a dead link. Approve Fix Plan approves the pending
+// fix approval — fail-closed, the button exists in the DOM only once that approval
+// is actually pending in view.
 import { Link } from 'react-router-dom';
 import type {
   Approval,
+  Artifact,
   Diagnosis,
   HypothesisConfidence,
   MeasurementCheck,
 } from '@boardex/contract';
 import { Badge, Button } from '../../design';
+import { evidenceHref } from './evidence';
 import { rankHypotheses } from './hypotheses';
+
+const EVIDENCE_LINK_BASE = 'text-meta font-medium';
 
 const CONFIDENCE_LABELS: Record<HypothesisConfidence, string> = {
   high: 'High confidence',
@@ -23,6 +29,8 @@ const CONFIDENCE_LABELS: Record<HypothesisConfidence, string> = {
 export interface DiagnosisCardProps {
   diagnosis: Diagnosis;
   checks: readonly MeasurementCheck[];
+  /** RunView's artifacts — an evidence link renders only for an artifact that exists. */
+  artifacts: readonly Artifact[];
   runId: string;
   /**
    * The pending fix approval once the run reaches its approval gate; null while
@@ -38,6 +46,7 @@ export interface DiagnosisCardProps {
 export function DiagnosisCard({
   diagnosis,
   checks,
+  artifacts,
   runId,
   fixApproval,
   resolving,
@@ -45,6 +54,7 @@ export function DiagnosisCard({
   onApproveFix,
 }: DiagnosisCardProps) {
   const checksById = new Map(checks.map((check) => [check.id, check]));
+  const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
   // Every cited id renders: resolvable ones as check rows, the rest as an explicit
   // neutral "unavailable" line (T2.2 review F5) — never silently dropped. The
   // reducer records the matching contract-violation warning.
@@ -67,12 +77,21 @@ export function DiagnosisCard({
               <li key={id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <Badge kind="verdict" value={check.verdict} />
                 <span className="min-w-0 flex-1 text-meta text-text-primary">{check.description}</span>
-                <Link
-                  to={`/runs/${runId}/evidence?artifact=${check.artifactId}`}
-                  className="text-meta font-medium text-accent hover:text-accent-hover"
-                >
-                  View evidence
-                </Link>
+                {artifactIds.has(check.artifactId) ? (
+                  <Link
+                    to={evidenceHref(runId, check.artifactId)}
+                    className={`${EVIDENCE_LINK_BASE} text-accent hover:text-accent-hover`}
+                  >
+                    View evidence
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className={`${EVIDENCE_LINK_BASE} cursor-not-allowed text-text-secondary opacity-50`}
+                  >
+                    View evidence
+                  </span>
+                )}
               </li>
             ) : (
               <li key={id} className="text-meta text-text-secondary">

@@ -4,14 +4,17 @@
 // whole app rides one global connection no matter how many surfaces listen — the top
 // bar's runner pill (bench snapshot) and the Home list's live run updates both do.
 import { useEffect, useRef } from 'react';
-import type { Event } from '@boardex/contract';
+import { isKnownEvent, type Event } from '@boardex/contract';
 import { RUNNER_WS_BASE } from './config';
-import { WsClient } from './ws';
+import { WsClient, type WsConnectionStatus } from './ws';
 
 export type GlobalListener = (event: Event) => void;
+export type GlobalStatusListener = (status: WsConnectionStatus) => void;
 
 const listeners = new Set<GlobalListener>();
+const statusListeners = new Set<GlobalStatusListener>();
 let client: WsClient | null = null;
+let status: WsConnectionStatus = 'closed';
 
 function ensureClient(): void {
   if (client) return;
@@ -19,13 +22,32 @@ function ensureClient(): void {
     wsBase: RUNNER_WS_BASE,
     target: { kind: 'global' },
     // Snapshot the set: a listener that unsubscribes mid-dispatch must not perturb the
-    // iteration (and the global stream is forward-compatible — unknown types dropped
-    // upstream in WsClient, §5.1).
+    // iteration. Forward compatibility (§5.1): the wire yields ignored envelopes for
+    // unknown types; the global stream has no seq continuity to preserve (no store, no
+    // replay), so they are simply not delivered — listeners see catalog events only.
     onEvent: (event) => {
+      if (!isKnownEvent(event)) return;
       for (const listener of [...listeners]) listener(event);
+    },
+    // The liveness signal behind everything derived from runner.status: a consumer
+    // that mirrors the stream into state needs to know when the stream stopped being
+    // one (benchStore, §7.1/§7.2).
+    onStatusChange: (next) => {
+      status = next;
+      for (const listener of [...statusListeners]) listener(next);
     },
   });
   client.connect();
+}
+
+// The socket lives as long as anyone is listening to either channel: a surface that
+// only watches connection health still needs the connection it is watching.
+function releaseClient(): void {
+  if (listeners.size === 0 && statusListeners.size === 0 && client) {
+    client.close();
+    client = null;
+    status = 'closed';
+  }
 }
 
 export function subscribeGlobal(listener: GlobalListener): () => void {
@@ -33,11 +55,21 @@ export function subscribeGlobal(listener: GlobalListener): () => void {
   ensureClient();
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0 && client) {
-      client.close();
-      client = null;
-    }
+    releaseClient();
   };
+}
+
+export function subscribeGlobalStatus(listener: GlobalStatusListener): () => void {
+  statusListeners.add(listener);
+  ensureClient();
+  return () => {
+    statusListeners.delete(listener);
+    releaseClient();
+  };
+}
+
+export function globalStatus(): WsConnectionStatus {
+  return status;
 }
 
 // Subscribe a component to the global stream for its lifetime. The latest callback is

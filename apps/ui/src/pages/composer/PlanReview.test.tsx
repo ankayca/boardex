@@ -38,7 +38,7 @@ function renderReview(over: Partial<PlanReviewProps> = {}) {
       riskSummary="One medium-risk hardware action."
       checklist={CHECKLIST}
       profileResolved
-      degradedDevices={[]}
+      issues={[]}
       approving={false}
       onApprove={onApprove}
       onEditTask={onEditTask}
@@ -123,14 +123,61 @@ describe('PlanReview checklist gate (D12)', () => {
     expect(screen.getByText('One medium-risk hardware action.')).toBeInTheDocument();
   });
 
-  it('repeats the degraded-bench warning at approval time', () => {
+  // §7.2/D12: the operator confirms wiring with the bench state in view, so the
+  // repeated warning must sit next to the gate — not scrolled away above the plan.
+  it('repeats the bench warning at approval time, adjacent to and above the gate', () => {
     renderReview({
-      degradedDevices: [
-        { id: 'sigrok:kingst-la2016:conn=3.12', name: 'Kingst LA2016', state: 'offline' },
+      issues: [
+        {
+          key: 'sigrok:kingst-la2016:conn=3.12',
+          status: 'degraded',
+          message: 'Kingst LA2016 is on the bench but offline (Not detected by sigrok)',
+          deviceState: 'offline',
+        },
       ],
     });
-    expect(screen.getByText('Bench degraded')).toBeInTheDocument();
-    expect(screen.getByText(/Kingst LA2016 — offline/)).toBeInTheDocument();
+    const warning = screen.getByText('Bench degraded');
+    expect(warning).toBeInTheDocument();
+    expect(
+      screen.getByText('Kingst LA2016 is on the bench but offline (Not detected by sigrok)'),
+    ).toBeInTheDocument();
+
+    const gate = screen.getByText('Confirm bench connections');
+    expect(warning.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('names an unmatched profile reference distinctly at the gate', () => {
+    renderReview({
+      issues: [
+        {
+          key: 'missing:logic_analyzer',
+          status: 'missing',
+          message: 'Saleae Logic 8 was not found on the bench',
+        },
+      ],
+    });
+    expect(screen.getByText('Bench references not found')).toBeInTheDocument();
+    expect(screen.getByText('Saleae Logic 8 was not found on the bench')).toBeInTheDocument();
+  });
+
+  it('shows no bench warning when nothing needs attention', () => {
+    renderReview();
+    expect(screen.queryByText('Bench degraded')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bench references not found')).not.toBeInTheDocument();
+  });
+
+  // D12: the checklist is a wiring instruction, not a list of labels — the detail text
+  // is the part that tells the operator which pin to touch.
+  it('renders each checklist line with its detail text, not just its label', () => {
+    renderReview();
+    const lines = screen
+      .getAllByRole('checkbox')
+      .map((box) => box.closest('label') as HTMLElement);
+    expect(lines).toHaveLength(CHECKLIST.length);
+    CHECKLIST.forEach((item, index) => {
+      expect(lines[index]).toHaveTextContent(item.label);
+      expect(lines[index]).toHaveTextContent(item.detail);
+    });
   });
 
   it('returns to the composer via Edit task', async () => {

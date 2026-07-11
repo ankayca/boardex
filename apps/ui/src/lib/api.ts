@@ -18,10 +18,10 @@ import {
   type BoardProfile,
   type CreateRunRequest,
   type CreateRunResponse,
-  type Event,
   type HealthResponse,
   type RunStatus,
   type RunSummary,
+  type WireEvent,
 } from '@boardex/contract';
 import { RUNNER_HTTP_BASE } from './config';
 
@@ -66,10 +66,23 @@ export interface ApiClient {
     status: 'approved' | 'rejected',
   ): Promise<void>;
   stopRun(runId: string): Promise<void>;
-  getRunEvents(runId: string, afterSeq?: number): Promise<Event[]>;
+  // WireEvent, not Event: replay is parsed envelope-first (§5.1/T5.0) so an
+  // unknown-typed event in the log cannot fail the whole response.
+  getRunEvents(runId: string, afterSeq?: number): Promise<WireEvent[]>;
   getArtifactMeta(artifactId: string): Promise<Artifact>;
   /** URL of an artifact's raw content (GET /artifacts/{id}); fetched by reference (§D4). */
   artifactUrl(artifactId: string): string;
+  /**
+   * Raw artifact content as text (GET /artifacts/{id}). No schema here: content is
+   * typed by artifact.mimeType (§5.3); structured kinds are parsed by their reader.
+   */
+  getArtifactText(artifactId: string): Promise<string>;
+  /**
+   * Raw artifact content as a Blob typed by the artifact's own mimeType (§4 meta
+   * is the MIME authority) — the download path for the Raw artifacts tab, binary-
+   * safe for logic captures.
+   */
+  getArtifactBlob(artifactId: string, mimeType: string): Promise<Blob>;
 }
 
 export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
@@ -77,7 +90,9 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
 
   async function requestJson<T>(
     path: string,
-    schema: z.ZodType<T>,
+    // Input typed unknown, not T: transform schemas (GetRunEventsResponseSchema's
+    // envelope-first parse) have output ≠ input, and raw JSON is unknown anyway.
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     init?: JsonRequestInit,
   ): Promise<T> {
     const res = await fetch(base + path, {
@@ -132,6 +147,20 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
     getArtifactMeta: (artifactId) =>
       requestJson(`/artifacts/${artifactId}/meta`, GetArtifactMetaResponseSchema),
     artifactUrl: (artifactId) => `${base}/artifacts/${artifactId}`,
+    getArtifactText: async (artifactId) => {
+      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      if (!res.ok) {
+        throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
+      }
+      return res.text();
+    },
+    getArtifactBlob: async (artifactId, mimeType) => {
+      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      if (!res.ok) {
+        throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
+      }
+      return new Blob([await res.arrayBuffer()], { type: mimeType });
+    },
   };
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Event, Run, RunStep } from '@boardex/contract';
+import type { Event, Run, RunStep, WireEvent } from '@boardex/contract';
 import { createRunStore, type RunStore } from './runStore';
 
 const RUN_ID = 'run_store_test';
@@ -103,5 +103,66 @@ describe('runStore', () => {
     // Same seq, different payload timestamp: still ignored (idempotent by seq).
     store.getState().ingest(RUN_ID, { ...(events[2] as Event), ts: at(9) });
     expect(store.getState().runs).toBe(before);
+  });
+
+  // §5.2 does not promise run.created is seq 1: an ignored envelope (unknown type,
+  // §5.1) can legally precede it (T5.0 FIX_FIRST F1).
+  describe('ignored envelopes before run.created (T5.0 FIX_FIRST F1)', () => {
+    const ignoredAt = (seq: number): WireEvent => ({
+      seq,
+      runId: RUN_ID,
+      ts: at(seq),
+      type: 'run.paused',
+      payload: {},
+      ignored: true,
+    });
+    const shift = (by: number): WireEvent[] =>
+      events.map((event) => ({ ...event, seq: event.seq + by }) as WireEvent);
+
+    it('live path: ingest of an ignored seq 1, then run.created at seq 2, materializes the view', () => {
+      for (const event of [ignoredAt(1), ...shift(1)]) store.getState().ingest(RUN_ID, event);
+      const entry = store.getState().runs[RUN_ID];
+      expect(entry?.view?.run.status).toBe('completed');
+      expect(entry?.view?.lastSeq).toBe(6);
+      expect(entry?.reduceError).toBeNull();
+    });
+
+    it('replay path: ingestMany over the same stream materializes the same view', () => {
+      store.getState().ingestMany(RUN_ID, [ignoredAt(1), ...shift(1)]);
+      const entry = store.getState().runs[RUN_ID];
+      expect(entry?.view?.run.status).toBe('completed');
+      expect(entry?.view?.lastSeq).toBe(6);
+      expect(entry?.reduceError).toBeNull();
+    });
+
+    it('a stream of only ignored envelopes is a null view, no throw — and no wedge', () => {
+      store.getState().ingest(RUN_ID, ignoredAt(1));
+      store.getState().ingest(RUN_ID, ignoredAt(2));
+      const parked = store.getState().runs[RUN_ID];
+      expect(parked?.view).toBeNull();
+      expect(parked?.reduceError).toBeNull();
+      // The prefix still advanced — the replay cursor is not stuck at 0.
+      expect(store.getState().lastContiguousSeq(RUN_ID)).toBe(2);
+
+      // The stream is not wedged: run.created arriving later materializes the view.
+      store.getState().ingestMany(RUN_ID, shift(2));
+      expect(store.getState().runs[RUN_ID]?.view?.run.status).toBe('completed');
+      expect(store.getState().lastContiguousSeq(RUN_ID)).toBe(7);
+    });
+
+    it('a KNOWN-typed stream that starts wrong is caught: recorded, view held stable, no throw', () => {
+      const wrongStart = { ...(events[1] as Event), seq: 1 }; // run.status_changed at seq 1
+      expect(() => store.getState().ingest(RUN_ID, wrongStart)).not.toThrow();
+      const entry = store.getState().runs[RUN_ID];
+      expect(entry?.view).toBeNull();
+      expect(entry?.reduceError).toContain('run.created');
+
+      // Later events keep ingesting without throwing; the view stays stable.
+      expect(() =>
+        store.getState().ingest(RUN_ID, { ...(events[2] as Event), seq: 2 }),
+      ).not.toThrow();
+      expect(store.getState().runs[RUN_ID]?.view).toBeNull();
+      expect(store.getState().lastContiguousSeq(RUN_ID)).toBe(2);
+    });
   });
 });

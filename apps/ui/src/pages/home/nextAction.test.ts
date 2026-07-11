@@ -22,8 +22,10 @@ const ALL_STATUSES: RunStatus[] = [
 describe('nextAction (BIBLE §7.1)', () => {
   it('maps the human-action states to the spec labels', () => {
     expect(nextAction('plan_ready', 'r1')).toEqual({ label: 'Approve plan', route: '/runs/r1' });
+    // "Review approval" since T5.0 (§7.1 v2.0): the row cannot know WHICH approval
+    // is pending, so the label names the user's action, not a guessed proposal.
     expect(nextAction('awaiting_approval', 'r1')).toEqual({
-      label: 'Approve flash',
+      label: 'Review approval',
       route: '/runs/r1',
     });
   });

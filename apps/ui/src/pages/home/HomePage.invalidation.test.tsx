@@ -16,6 +16,9 @@ vi.mock('../../lib/api', () => ({
     getHealth: () => getHealth(),
     listRuns: () => listRuns(),
     listBoardProfiles: () => listBoardProfiles(),
+    // HomePage reads the bench snapshot for its advisory indicator; this test is about
+    // the ['runs'] invalidation, so the bench never resolves and the line never shows.
+    getBench: () => new Promise(() => undefined),
   },
 }));
 
@@ -24,6 +27,8 @@ vi.mock('../../lib/globalStream', () => ({
   useGlobalEvents: (handler: (event: Event) => void) => {
     capturedHandler = handler;
   },
+  // useBenchStatus watches the socket's status to know when its snapshot went stale.
+  subscribeGlobalStatus: () => () => undefined,
 }));
 
 import HomePage from './HomePage';
@@ -60,6 +65,13 @@ const unrelated: Event = {
   type: 'step.log',
   payload: { stepId: 's1', stream: 'build', line: 'compiling…' },
 };
+// The dedicated terminals arrive on the global stream WITHOUT a redundant
+// run.status_changed (§5.3 v2.0), so each must invalidate on its own.
+const terminals: Event[] = [
+  { seq: 4, runId: 'r1', ts, type: 'run.completed', payload: { summary: 'done', reportArtifactId: 'art_report' } },
+  { seq: 5, runId: 'r1', ts, type: 'run.failed', payload: { summary: 'max iterations' } },
+  { seq: 6, runId: 'r1', ts, type: 'run.stopped', payload: { byUser: true } },
+];
 
 function renderHome() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -103,10 +115,19 @@ describe('HomePage global-stream invalidation (BIBLE §7.1)', () => {
     expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: ['runs'] });
     expect(invalidateSpy).toHaveBeenCalledTimes(2);
 
+    // Every dedicated terminal event invalidates (T5.0/F4).
+    for (const [i, terminal] of terminals.entries()) {
+      await act(async () => {
+        capturedHandler?.(terminal);
+      });
+      expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: ['runs'] });
+      expect(invalidateSpy).toHaveBeenCalledTimes(3 + i);
+    }
+
     // An unrelated event must not touch the runs query.
     await act(async () => {
       capturedHandler?.(unrelated);
     });
-    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenCalledTimes(5);
   });
 });

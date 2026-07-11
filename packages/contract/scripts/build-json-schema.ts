@@ -44,6 +44,15 @@ import {
   StepStartedEventSchema,
 } from '../src/events';
 import {
+  BusStateSchema,
+  CodeDiffContentSchema,
+  DecodeAnnotationSchema,
+  DiffFileSchema,
+  I2cTransactionSchema,
+  ProtocolDecodeContentSchema,
+  TimingMeasurementContentSchema,
+} from '../src/artifacts';
+import {
   ApprovePlanRequestSchema,
   ConflictErrorSchema,
   CreateRunRequestSchema,
@@ -51,7 +60,6 @@ import {
   GetArtifactMetaResponseSchema,
   GetBenchResponseSchema,
   GetRunEventsQuerySchema,
-  GetRunEventsResponseSchema,
   HealthResponseSchema,
   ListBoardProfilesResponseSchema,
   ListRunsResponseSchema,
@@ -121,7 +129,10 @@ const commandDefinitions = {
   ResolveApprovalRequest: ResolveApprovalRequestSchema,
   StopRunRequest: StopRunRequestSchema,
   GetRunEventsQuery: GetRunEventsQuerySchema,
-  GetRunEventsResponse: GetRunEventsResponseSchema,
+  // The producer's contract: the replay log holds catalog events only. (The TS
+  // GetRunEventsResponseSchema is the READER — envelope-first per §5.1/T5.0 — and
+  // deliberately looser; a transform cannot round-trip to JSON Schema anyway.)
+  GetRunEventsResponse: z.array(EventSchema),
   GetArtifactMetaResponse: GetArtifactMetaResponseSchema,
   ConflictError: ConflictErrorSchema,
 };
@@ -166,12 +177,36 @@ const commandsDocument = {
   definitions: buildDefinitions(commandDefinitions),
 };
 
+// Structured artifact content (BIBLE §4, promoted in T5.0): what a decode/diff/
+// timing artifact's GET /artifacts/{id} body must look like. The decode shape is
+// the boardex-logic pipeline's own output (parse.py annotations folded by
+// decode/i2c.py), so the runner can serve adapter output verbatim.
+const artifactsDocument = {
+  $schema: DRAFT,
+  title: 'Boardex structured artifact contents',
+  description:
+    `Structured JSON bodies for ${CONTRACT_VERSION} artifacts fetched by reference (BIBLE §4/§5.3): ` +
+    'kind protocol_decode -> ProtocolDecodeContent; kind code_diff -> CodeDiffContent; ' +
+    'kind timing_measurement -> TimingMeasurementContent. Log kinds are text/plain and ' +
+    'report_md is Markdown; neither has a JSON schema.',
+  definitions: buildDefinitions({
+    DecodeAnnotation: DecodeAnnotationSchema,
+    I2cTransaction: I2cTransactionSchema,
+    BusState: BusStateSchema,
+    ProtocolDecodeContent: ProtocolDecodeContentSchema,
+    DiffFile: DiffFileSchema,
+    CodeDiffContent: CodeDiffContentSchema,
+    TimingMeasurementContent: TimingMeasurementContentSchema,
+  }),
+};
+
 const outDir = fileURLToPath(new URL('../json-schema/', import.meta.url));
 mkdirSync(outDir, { recursive: true });
 
 for (const [file, document] of [
   ['events.schema.json', eventsDocument],
   ['commands.schema.json', commandsDocument],
+  ['artifacts.schema.json', artifactsDocument],
 ] as const) {
   writeFileSync(`${outDir}${file}`, `${JSON.stringify(document, null, 2)}\n`);
   console.log(`wrote json-schema/${file}`);

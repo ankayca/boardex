@@ -4,11 +4,13 @@
 // runner is down). Live updates ride the global WS: a run created or advanced in another
 // tab invalidates the list here and reappears without a manual refresh.
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState } from '../../design';
 import { api } from '../../lib/api';
+import { benchAttentionCount, benchAttentionLabel } from '../../lib/benchReadiness';
 import { useGlobalEvents } from '../../lib/globalStream';
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { RunRow } from './RunRow';
 import { sortRunSummaries } from './nextAction';
 
@@ -40,6 +42,24 @@ function RunnerOfflineBanner({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+// Bench attention (T4.2 item 4). Placement: directly under the runner-offline banner
+// slot, above the run list — the top bar's runner pill is the shell's (§7.1 gives it
+// no bench detail), and Home's banner region is already where "something is wrong out
+// there" lives. Advisory only: it never gates New Run, and it stays a single line so
+// it cannot compete with the runs it sits above.
+function BenchAttentionLine({ count }: { count: number }) {
+  return (
+    <p role="status" className="mb-6 text-meta">
+      <Link
+        to="/boards"
+        className="text-warn underline underline-offset-2 hover:no-underline"
+      >
+        {benchAttentionLabel(count)}
+      </Link>
+    </p>
+  );
+}
+
 export default function HomePage() {
   const queryClient = useQueryClient();
 
@@ -55,15 +75,35 @@ export default function HomePage() {
     queryFn: () => api.listBoardProfiles(),
   });
 
-  // Live: a run created or advanced anywhere refreshes the authoritative list. GET /runs
-  // is the source of truth, so invalidate rather than patch the cache by hand.
+  // Live: a run created, advanced, or ended anywhere refreshes the authoritative list.
+  // The dedicated terminals ride the global stream without a redundant
+  // run.status_changed (§5.3 v2.0), so they must invalidate too — or a run that ends
+  // via run.completed/failed/stopped keeps its stale row until a manual refresh.
+  // GET /runs is the source of truth, so invalidate rather than patch the cache.
   useGlobalEvents((event) => {
-    if (event.type === 'run.created' || event.type === 'run.status_changed') {
-      void queryClient.invalidateQueries({ queryKey: ['runs'] });
+    switch (event.type) {
+      case 'run.created':
+      case 'run.status_changed':
+      case 'run.completed':
+      case 'run.failed':
+      case 'run.stopped':
+        void queryClient.invalidateQueries({ queryKey: ['runs'] });
+        break;
+      default:
+        break;
     }
   });
 
   const online = health.isSuccess && health.data.ok;
+
+  // Gated on holding a snapshot that postdates the current connection, not on /health
+  // (T4.2 review F1). useBenchStatus drops the snapshot when the global socket leaves
+  // 'open', so a bench we cannot currently see reports nothing at all — including the
+  // case /health alone would miss, where HTTP is fine and only the socket died. A
+  // downed runner therefore suppresses this line without a special case: no socket, no
+  // snapshot, and the offline banner above already says why.
+  const bench = useBenchStatus();
+  const attention = benchAttentionCount(bench);
 
   const boardNames = useMemo(
     () => new Map((profilesQuery.data ?? []).map((p) => [p.id, p.name] as const)),
@@ -88,6 +128,7 @@ export default function HomePage() {
       </div>
 
       {!online && <RunnerOfflineBanner onRetry={retry} />}
+      {attention > 0 && <BenchAttentionLine count={attention} />}
 
       {runs.length > 0 ? (
         <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-bg-panel">

@@ -1,22 +1,29 @@
 // Approval Card (BIBLE §7.3): full proposal render, expandable files-changed list,
-// approve/reject wiring, the T3.2 diff-drawer placeholder, and the fail-closed
-// blocked card with no Approve control anywhere in the DOM.
+// approve/reject wiring, Review Diff as a deep link into the Evidence Detail Code
+// Diff tab (fail-closed and inert when the run has no diff artifact yet), and the
+// fail-closed blocked card with no Approve control anywhere in the DOM.
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { ApprovalCard, type ApprovalCardProps } from './ApprovalCard';
-import { approval } from './test-events';
+import { approval, RUN_ID } from './test-events';
+
+const DIFF_HREF = `/runs/${RUN_ID}/evidence?artifact=art_diff_iter1`;
 
 function renderCard(overrides: Partial<ApprovalCardProps> = {}) {
   const onResolve = vi.fn();
   render(
-    <ApprovalCard
-      gate={{ kind: 'ready', approval: approval('apr_flash') }}
-      resolving={false}
-      resolveError={null}
-      onResolve={onResolve}
-      {...overrides}
-    />,
+    <MemoryRouter>
+      <ApprovalCard
+        gate={{ kind: 'ready', approval: approval('apr_flash') }}
+        diffHref={DIFF_HREF}
+        resolving={false}
+        resolveError={null}
+        onResolve={onResolve}
+        {...overrides}
+      />
+    </MemoryRouter>,
   );
   return { onResolve };
 }
@@ -64,13 +71,18 @@ describe('ApprovalCard', () => {
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
   });
 
-  it('opens the diff drawer as a T3.2 placeholder — no diff rendering', async () => {
-    const user = userEvent.setup();
+  it('Review Diff deep-links the evidence drawer’s Code Diff tab at the latest diff artifact', () => {
     renderCard();
-    await user.click(screen.getByRole('button', { name: 'Review Diff' }));
-    const drawer = within(screen.getByRole('dialog', { name: 'Proposed changes' }));
-    expect(drawer.getByText(/Diff rendering arrives with T3\.2/)).toBeInTheDocument();
-    expect(drawer.getByText('main.c')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Review Diff' });
+    expect(link).toHaveAttribute('href', DIFF_HREF);
+  });
+
+  it('fail-closed: with no diff artifact yet, Review Diff is inert and says why', () => {
+    renderCard({ diffHref: null });
+    expect(screen.queryByRole('link', { name: 'Review Diff' })).not.toBeInTheDocument();
+    const inert = screen.getByText('Review Diff');
+    expect(inert).toHaveAttribute('aria-disabled', 'true');
+    expect(inert).toHaveAttribute('title', 'No code diff has been produced for this run yet.');
   });
 
   it('surfaces a non-conflict resolve error as an alert', () => {
@@ -80,16 +92,20 @@ describe('ApprovalCard', () => {
 
   it('fail-closed: a blocked gate renders the blocked card with no Approve control in the DOM', () => {
     render(
-      <ApprovalCard
-        gate={{ kind: 'blocked', reason: 'No pending approval has arrived in view.' }}
-        resolving={false}
-        resolveError={null}
-        onResolve={vi.fn()}
-      />,
+      <MemoryRouter>
+        <ApprovalCard
+          gate={{ kind: 'blocked', reason: 'No pending approval has arrived in view.' }}
+          diffHref={DIFF_HREF}
+          resolving={false}
+          resolveError={null}
+          onResolve={vi.fn()}
+        />
+      </MemoryRouter>,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Approval blocked');
     expect(screen.getByText('No pending approval has arrived in view.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Review Diff' })).not.toBeInTheDocument();
   });
 });

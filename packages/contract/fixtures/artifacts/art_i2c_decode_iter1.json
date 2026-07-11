@@ -11,48 +11,66 @@
   "bus_state": "decoded_ok",
   "annotations": [
     {
-      "start_sample": 812000,
-      "end_sample": 812010,
+      "raw": "812000-812010 i2c-1: START",
+      "start": 812000,
+      "end": 812010,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 812010,
-      "end_sample": 812370,
+      "raw": "812010-812370 i2c-1: ADDRESS WRITE: 76 NACK",
+      "start": 812010,
+      "end": 812370,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: 76 NACK"
     },
     {
-      "start_sample": 812370,
-      "end_sample": 812380,
+      "raw": "812370-812380 i2c-1: STOP",
+      "start": 812370,
+      "end": 812380,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 4030000,
-      "end_sample": 4030010,
+      "raw": "4030000-4030010 i2c-1: START",
+      "start": 4030000,
+      "end": 4030010,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 4030010,
-      "end_sample": 4030370,
+      "raw": "4030010-4030370 i2c-1: ADDRESS WRITE: 76 NACK",
+      "start": 4030010,
+      "end": 4030370,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: 76 NACK"
     },
     {
-      "start_sample": 4030370,
-      "end_sample": 4030380,
+      "raw": "4030370-4030380 i2c-1: STOP",
+      "start": 4030370,
+      "end": 4030380,
+      "decoder": "i2c-1",
       "text": "STOP"
     },
     {
-      "start_sample": 7250000,
-      "end_sample": 7250010,
+      "raw": "7250000-7250010 i2c-1: START",
+      "start": 7250000,
+      "end": 7250010,
+      "decoder": "i2c-1",
       "text": "START"
     },
     {
-      "start_sample": 7250010,
-      "end_sample": 7250370,
+      "raw": "7250010-7250370 i2c-1: ADDRESS WRITE: 76 NACK",
+      "start": 7250010,
+      "end": 7250370,
+      "decoder": "i2c-1",
       "text": "ADDRESS WRITE: 76 NACK"
     },
     {
-      "start_sample": 7250370,
-      "end_sample": 7250380,
+      "raw": "7250370-7250380 i2c-1: STOP",
+      "start": 7250370,
+      "end": 7250380,
+      "decoder": "i2c-1",
       "text": "STOP"
     }
   ],

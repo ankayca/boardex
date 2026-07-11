@@ -9,9 +9,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { BenchReadiness } from './BenchReadiness';
 import { ContextChips } from './ContextChips';
-import { useBenchStatus } from './useBenchStatus';
 
 // §7.2, verbatim placeholder.
 const PLACEHOLDER =
@@ -84,7 +84,7 @@ export default function NewRunPage() {
           {profile && <ContextChips profile={profile} />}
         </div>
 
-        <BenchReadiness bench={bench} />
+        <BenchReadiness bench={bench} instruments={profile?.instruments ?? null} />
 
         {create.isError && (
           <p role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3 text-body text-warn">

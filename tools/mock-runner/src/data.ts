@@ -22,9 +22,13 @@ export const NUCLEO_F303RE_PROFILE: BoardProfile = BoardProfileSchema.parse({
     'pyocd flash --target stm32f303retx --frequency 4000000 bme280-f303re.elf',
   resetCommand: 'pyocd reset --target stm32f303retx',
   serial: { port: '/dev/ttyACM0', baud: 115200 },
+  // Instruments reference the bench registry's stable device ids (§4
+  // BenchStatus.devices.id), exactly as the Board Profile Builder's detected-device
+  // picker writes them — so Validate Profile (§7.5) resolves both against a healthy
+  // bench instead of warning about a name it cannot match.
   instruments: {
-    debugProbe: 'ST-Link/V2-1 (on-board, via pyOCD)',
-    logicAnalyzer: 'Kingst LA2016 (sigrok)',
+    debugProbe: 'pyocd:stlink:066EFF383733554157254923',
+    logicAnalyzer: 'sigrok:kingst-la2016:conn=3.12',
   },
   safety: {
     maxIterations: 3,
