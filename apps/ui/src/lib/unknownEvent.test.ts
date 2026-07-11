@@ -149,7 +149,7 @@ describe('unknown event mid-stream (audit F1 mutation)', () => {
 
     const a = liveStore.getState().runs[RUN_ID]?.view;
     const b = reloadStore.getState().runs[RUN_ID]?.view;
-    expect(a).toBeDefined();
+    expect(a).not.toBeNull();
     expect(b?.lastSeq).toBe(a?.lastSeq);
     expect(b?.run).toEqual(a?.run);
   });

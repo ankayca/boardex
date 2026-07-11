@@ -23,8 +23,9 @@ export interface RunEntry {
   // The message of the last reduction failure (a KNOWN-typed stream that starts
   // wrong, i.e. a runner contract violation). A reduction error must never escape
   // the WS message handler (T5.0 FIX_FIRST F1): it is caught here, recorded, and
-  // the view holds stable at the last good reduction. Cleared when a later,
-  // longer prefix reduces cleanly.
+  // the view holds stable at the last good reduction. Once set it is permanent
+  // for the entry: missing_run is determined by the prefix head, so every longer
+  // prefix re-throws, and seq_gap cannot escape the store's gapless prefix.
   reduceError: string | null;
 }
 
@@ -68,7 +69,8 @@ function applyEvent(entry: RunEntry, event: WireEvent): RunEntry {
   } catch (error) {
     // A reduction failure is a runner contract violation, not a UI crash: hold the
     // view stable at the last good reduction and record what went wrong (F1). The
-    // prefix keeps growing, so a stream that recovers re-reduces cleanly.
+    // error is permanent for this entry — a longer prefix re-reduces from seq 1
+    // through the same bad head and throws again.
     return {
       bySeq,
       events,
