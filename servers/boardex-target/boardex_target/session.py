@@ -148,6 +148,11 @@ class ManagedSession:
         self._native = native
         self._rtt: _RttLogger | None = None
         self._run_epoch = 0
+        # Halt-mode debug bookkeeping (BIBLE-neutral: just what the agent set, so
+        # list_debug_resources can report it and close() forgets it). The
+        # authoritative hardware state lives in the backend; this mirrors intent.
+        self._breakpoints: dict[int, dict[str, Any]] = {}
+        self._watchpoints: dict[tuple[int, int, str], dict[str, Any]] = {}
 
     @property
     def run_epoch(self) -> int:
@@ -157,6 +162,32 @@ class ManagedSession:
     def run(self, operation: Callable[[Any], OperationResult]) -> OperationResult:
         """Execute an operation against this session's native backend session."""
         return self._native.run(operation)
+
+    # -- halt-mode debug bookkeeping ---------------------------------------
+
+    def record_breakpoint(self, address: int, *, location: str) -> None:
+        self._breakpoints[address] = {"address": address, "location": location}
+
+    def forget_breakpoint(self, address: int) -> None:
+        self._breakpoints.pop(address, None)
+
+    def record_watchpoint(self, address: int, *, size: int, access: str) -> None:
+        self._watchpoints[(address, size, access)] = {
+            "address": address,
+            "size": size,
+            "access": access,
+        }
+
+    def forget_watchpoint(self, address: int, *, size: int, access: str) -> None:
+        self._watchpoints.pop((address, size, access), None)
+
+    @property
+    def breakpoints(self) -> list[dict[str, Any]]:
+        return list(self._breakpoints.values())
+
+    @property
+    def watchpoints(self) -> list[dict[str, Any]]:
+        return list(self._watchpoints.values())
 
     # -- RTT streaming -----------------------------------------------------
 
@@ -316,6 +347,8 @@ class ManagedSession:
             "rtt_channel": self._rtt.channel_name if self._rtt else None,
             "rtt_buffered_bytes": self._rtt.buffered_bytes() if self._rtt else 0,
             "run_epoch": self._run_epoch,
+            "breakpoints": self.breakpoints,
+            "watchpoints": self.watchpoints,
         }
 
     def close(self) -> None:
@@ -323,6 +356,10 @@ class ManagedSession:
         if self._rtt is not None:
             self._rtt.stop()
             self._rtt = None
+        # Releasing the probe drops halt-mode debug state (a stopped core and its
+        # FPB/DWT slots do not outlive the connection); forget our mirror of it.
+        self._breakpoints.clear()
+        self._watchpoints.clear()
         if self._native is not None:
             try:
                 self._native.close()

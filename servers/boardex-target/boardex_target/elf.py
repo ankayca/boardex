@@ -77,6 +77,60 @@ class ElfInfo:
         """Address of a named symbol (e.g. ``_SEGGER_RTT``), or None."""
         return self._names.get(name)
 
+    def line_to_address(self, file: str, line: int) -> int | None:
+        """Address of the first machine instruction for ``file:line`` (inverse of
+        :meth:`resolve_address`'s line lookup).
+
+        Matches ``file`` against the tail of each DWARF filename (so ``i2c.c`` or
+        ``src/i2c.c`` both resolve). Prefers an exact line match; if the compiler
+        emitted no row for that exact line (dead/optimised code), falls back to the
+        first row at a line at or after it. Returns the lowest address among ties.
+        """
+        base = os.path.basename(file)
+        exact: list[int] = []
+        after: list[tuple[int, int]] = []  # (row_line, address) for row_line >= line
+        for addr, filename, row_line in self._lines:
+            fn = filename
+            if not (fn == file or fn.endswith("/" + base) or fn == base or fn.endswith(file)):
+                continue
+            if row_line == line:
+                exact.append(addr)
+            elif row_line > line:
+                after.append((row_line, addr))
+        if exact:
+            return min(exact)
+        if after:
+            # nearest line at/after the request, then lowest address for that line
+            nearest = min(row_line for row_line, _ in after)
+            return min(addr for row_line, addr in after if row_line == nearest)
+        return None
+
+    def address_for_location(self, location: str) -> int | None:
+        """Resolve a human ``location`` to a code address (best effort).
+
+        Accepts, in order: a raw address (``0x08000abc``, ``134218842``), a
+        ``file:line`` reference (``i2c.c:42``), or a symbol name (``i2c_write``).
+        Returns None if nothing resolves. This is what lets an agent set a
+        breakpoint on a name it can see in source instead of a raw PC.
+        """
+        text = location.strip()
+        if not text:
+            return None
+        # Raw address: 0x-prefixed hex, or a bare integer that is not a file:line.
+        if text.lower().startswith("0x"):
+            try:
+                return int(text, 16)
+            except ValueError:
+                return None
+        if ":" in text:
+            file_part, _, line_part = text.rpartition(":")
+            if file_part and line_part.isdigit():
+                return self.line_to_address(file_part, int(line_part))
+            return None
+        if text.isdigit():
+            return int(text)
+        return self.symbol_address(text)
+
     def resolve_address(self, address: int) -> dict[str, Any] | None:
         """Map a code address to ``{symbol, offset, file, line}`` (best effort).
 

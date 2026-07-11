@@ -292,6 +292,206 @@ class PyOcdAdapter(TargetController):
             resume_on_disconnect=False,
         )
 
+    # -- halt-mode (interactive) debugging --------------------------------
+    #
+    # These all require an *open* managed session: a stopped core and its
+    # breakpoints/watchpoints do not survive a fresh connect, so transient
+    # composition is refused (see docs/phase2 design + BIBLE §10.0).
+
+    def set_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        address = self._resolve_location(device_id, location, elf_path)
+        if address is None:
+            return self._unresolved(location, device_id, elf_path)
+        address &= ~1  # even breakpoint address; match hardware/bookkeeping
+        result = managed.run(lambda s: pyocd_ops.set_breakpoint(s, address))
+        if result.ok:
+            managed.record_breakpoint(address, location=str(location))
+        return result
+
+    def clear_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        address = self._resolve_location(device_id, location, elf_path)
+        if address is None:
+            return self._unresolved(location, device_id, elf_path)
+        address &= ~1
+        result = managed.run(lambda s: pyocd_ops.clear_breakpoint(s, address))
+        if result.ok:
+            managed.forget_breakpoint(address)
+        return result
+
+    def set_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        result = managed.run(
+            lambda s: pyocd_ops.set_watchpoint(s, address, size=size, access=access)
+        )
+        if result.ok:
+            managed.record_watchpoint(address, size=size, access=access)
+        return result
+
+    def clear_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        result = managed.run(
+            lambda s: pyocd_ops.clear_watchpoint(s, address, size=size, access=access)
+        )
+        if result.ok:
+            managed.forget_watchpoint(address, size=size, access=access)
+        return result
+
+    def run_until(
+        self,
+        device_id: str,
+        location: str | None = None,
+        *,
+        timeout_s: float = 5.0,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        address: int | None = None
+        if location is not None:
+            address = self._resolve_location(device_id, location, elf_path)
+            if address is None:
+                return self._unresolved(location, device_id, elf_path)
+            address &= ~1
+        elf = self._elf_for(device_id, elf_path)
+        result = managed.run(
+            lambda s: pyocd_ops.run_until(
+                s, address=address, timeout_s=timeout_s, elf=elf
+            )
+        )
+        if address is not None and result.data.get("breakpoint_set_by_this_call"):
+            managed.record_breakpoint(address, location=str(location))
+        return result
+
+    def step(
+        self,
+        device_id: str,
+        *,
+        count: int = 1,
+        over: bool = True,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        elf = self._elf_for(device_id, elf_path)
+        return managed.run(
+            lambda s: pyocd_ops.step_core(s, count=count, over=over, elf=elf)
+        )
+
+    def read_registers(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        elf = self._elf_for(device_id, elf_path)
+        return managed.run(lambda s: pyocd_ops.read_registers(s, elf=elf))
+
+    def write_register(
+        self,
+        device_id: str,
+        name: str,
+        value: int,
+        *,
+        target: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        return managed.run(lambda s: pyocd_ops.write_register(s, name, value))
+
+    def backtrace(
+        self,
+        device_id: str,
+        *,
+        max_frames: int = 16,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        elf = self._elf_for(device_id, elf_path)
+
+        def _op(session: Any) -> OperationResult:
+            if not pyocd_ops._is_halted(session.target):
+                return OperationResult.errored(
+                    "Core is running; a backtrace needs a halted core. "
+                    "Call run_until/step/halt_target first."
+                )
+            regs = pyocd_ops._read_registers(session.target)
+            frames = pyocd_ops._naive_backtrace(
+                session, regs, elf=elf, max_frames=max_frames
+            )
+            top = frames[0]["location"] if frames else "?"
+            return OperationResult.passed(
+                f"{len(frames)} frame(s); innermost {top}.",
+                frames=frames,
+                frame_count=len(frames),
+                confidence="low",
+                note="Heuristic LR/stack-scan unwind (no DWARF CFI); verify frames.",
+            )
+
+        return managed.run(_op)
+
+    def list_debug_resources(
+        self, device_id: str, *, target: str | None = None
+    ) -> OperationResult:
+        managed, err = self._require_session(device_id)
+        if err is not None:
+            return err
+        result = managed.run(pyocd_ops.debug_resources)
+        result.data["session_breakpoints"] = managed.breakpoints
+        result.data["session_watchpoints"] = managed.watchpoints
+        return result
+
     # -- ELF / symbol awareness -------------------------------------------
 
     def known_elf(self, device_id: str) -> str | None:
@@ -307,6 +507,40 @@ class PyOcdAdapter(TargetController):
         """Resolve the ``_SEGGER_RTT`` control-block address from the ELF."""
         elf = self._elf_for(device_id, elf_path)
         return elf.symbol_address("_SEGGER_RTT") if elf is not None else None
+
+    def _resolve_location(
+        self, device_id: str, location: Any, elf_path: str | None
+    ) -> int | None:
+        """Resolve a symbol / ``file:line`` / address to a code address."""
+        if isinstance(location, int):
+            return location
+        elf = self._elf_for(device_id, elf_path)
+        if elf is not None:
+            addr = elf.address_for_location(str(location))
+            if addr is not None:
+                return addr
+        # No ELF (or symbol not found): still accept a bare/hex address so the
+        # agent can debug a stripped image by raw address.
+        text = str(location).strip()
+        try:
+            return int(text, 16) if text.lower().startswith("0x") else int(text)
+        except ValueError:
+            return None
+
+    def _unresolved(
+        self, location: Any, device_id: str, elf_path: str | None
+    ) -> OperationResult:
+        have_elf = self._elf_for(device_id, elf_path) is not None
+        hint = (
+            "Pass elf_path (or flash an .elf first) so symbols/lines resolve, "
+            "or give a raw 0x address."
+            if not have_elf
+            else "Check the symbol name / file:line exists in the flashed image, "
+            "or give a raw 0x address."
+        )
+        return OperationResult.errored(
+            f"Could not resolve location {location!r} to an address. {hint}"
+        )
 
     # -- helpers -----------------------------------------------------------
 
@@ -327,6 +561,26 @@ class PyOcdAdapter(TargetController):
         dropped = managed.mark_fresh_run()
         result.data["rtt_backlog_discarded"] = dropped
         result.data["run_epoch"] = managed.run_epoch
+
+    def _require_session(
+        self, device_id: str
+    ) -> tuple[ManagedSession | None, OperationResult | None]:
+        """Return the open managed session for ``device_id``, or an error result.
+
+        Halt-mode debugging must run inside one persistent session; a transient
+        connect would lose the stopped core and any breakpoints between calls.
+        """
+        managed = (
+            self._sessions.find_by_device(device_id) if self._sessions else None
+        )
+        if managed is None:
+            return None, OperationResult.errored(
+                f"No open debug session for {device_id}. Halt-mode debugging "
+                "(breakpoints, run_until, step, registers) needs a persistent "
+                "session — call open_session first; a stopped core and its "
+                "breakpoints do not survive a transient connect."
+            )
+        return managed, None
 
     def _run(
         self,

@@ -343,6 +343,407 @@ def _read_exception_frame(
     return frame
 
 
+# -- halt-mode (interactive) debugging -------------------------------------
+#
+# Everything below stops the core and looks around. It only makes sense inside
+# one persistent session: a stopped core, breakpoints and watchpoints do not
+# survive a fresh connect (Phase 1 already showed halt state is per-connection),
+# so the adapter refuses to run these transiently.
+
+# Core registers worth dumping at a stop (order is display order, not stacking).
+_CORE_REGS = ("r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9",
+              "r10", "r11", "r12", "sp", "lr", "pc", "xpsr", "msp", "psp")
+
+_WATCHPOINT_ACCESS = {"read", "write", "read_write"}
+
+
+def _target_state(target: Any) -> Any:
+    from pyocd.core.target import Target
+
+    try:
+        return target.get_state()
+    except Exception:  # noqa: BLE001
+        return Target.State.HALTED if target.is_halted() else Target.State.RUNNING
+
+
+def _is_halted(target: Any) -> bool:
+    from pyocd.core.target import Target
+
+    return _target_state(target) == Target.State.HALTED
+
+
+def _read_registers(target: Any) -> dict[str, int]:
+    """Read the core register file (best effort; skips any that error)."""
+    regs: dict[str, int] = {}
+    for name in _CORE_REGS:
+        try:
+            regs[name] = int(target.read_core_register(name)) & 0xFFFFFFFF
+        except Exception:  # noqa: BLE001 - a missing reg must not abort the dump
+            pass
+    return regs
+
+
+def _naive_backtrace(
+    session: Any, registers: dict[str, int], *, elf: Any, max_frames: int
+) -> list[dict[str, Any]]:
+    """Heuristic call stack: current PC + LR + Thumb return addresses on the stack.
+
+    This is deliberately simple (no DWARF CFI): frame 0 is the PC, frame 1 is LR
+    when it resolves, and remaining frames are stack words that look like Thumb
+    return addresses (odd, resolving into a known function). Callers must treat
+    it as low-confidence.
+    """
+    frames: list[dict[str, Any]] = []
+
+    def _describe(addr: int) -> str:
+        return elf.describe(addr) if elf is not None else f"{addr:#010x}"
+
+    def _in_function(addr: int) -> bool:
+        # Require a real function (symbol) match, not merely a nearest line row:
+        # the DWARF line lookup is unbounded, so a random stack word can spuriously
+        # "resolve" to a file:line. A symbol hit means the address is inside a
+        # known function's [addr, addr+size) range.
+        if elf is None:
+            return False
+        info = elf.resolve_address(addr & ~1)
+        return info is not None and "symbol" in info
+
+    seen: set[int] = set()
+    pc = registers.get("pc")
+    if pc is not None:
+        frames.append({"pc": pc, "location": _describe(pc)})
+        seen.add(pc & ~1)
+
+    lr = registers.get("lr", 0)
+    if lr and not (lr & 0xFFFFFFF0) == 0xFFFFFFF0 and (lr & ~1) not in seen:
+        frames.append({"pc": lr, "location": _describe(lr)})
+        seen.add(lr & ~1)
+
+    sp = registers.get("sp")
+    if sp and elf is not None and len(frames) < max_frames:
+        try:
+            words = [int(w) & 0xFFFFFFFF for w in session.target.read_memory_block32(sp, 256)]
+        except Exception:  # noqa: BLE001 - unreadable stack ends the walk
+            words = []
+        for word in words:
+            if len(frames) >= max_frames:
+                break
+            if word & 1 and (word & ~1) not in seen and _in_function(word):
+                frames.append({"pc": word, "location": _describe(word)})
+                seen.add(word & ~1)
+    return frames
+
+
+def _context_dump(
+    session: Any,
+    *,
+    elf: Any,
+    reason: str,
+    timed_out: bool,
+    max_frames: int = 16,
+) -> dict[str, Any]:
+    """Full source-mapped stop context: pc, location, registers, backtrace."""
+    target = session.target
+    registers = _read_registers(target)
+    data: dict[str, Any] = {
+        "stopped": True,
+        "reason": reason,
+        "timed_out": timed_out,
+        "registers": registers,
+    }
+    pc = registers.get("pc")
+    if pc is not None:
+        data["pc"] = pc
+        data["location"] = elf.describe(pc) if elf is not None else f"{pc:#010x}"
+    data["backtrace"] = _naive_backtrace(
+        session, registers, elf=elf, max_frames=max_frames
+    )
+    data["backtrace_confidence"] = "low"
+    return data
+
+
+def read_registers(session: Any, *, elf: Any = None) -> OperationResult:
+    """Read the core register file at a stop (requires a halted core)."""
+    target = session.target
+    if not _is_halted(target):
+        return OperationResult.errored(
+            "Core is running; registers are only readable when halted. "
+            "Call run_until/step/halt_target first."
+        )
+    registers = _read_registers(target)
+    data: dict[str, Any] = {"registers": registers}
+    pc = registers.get("pc")
+    if pc is not None:
+        data["pc"] = pc
+        data["pc_location"] = elf.describe(pc) if elf is not None else f"{pc:#010x}"
+    where = f" at {data['pc_location']}" if "pc_location" in data else ""
+    return OperationResult.passed(f"Read {len(registers)} core registers{where}.", **data)
+
+
+def write_register(session: Any, name: str, value: int) -> OperationResult:
+    """Write one core register by name (requires a halted core)."""
+    target = session.target
+    if not _is_halted(target):
+        return OperationResult.errored(
+            "Core is running; registers can only be written when halted."
+        )
+    target.write_core_register(name, value & 0xFFFFFFFF)
+    readback = int(target.read_core_register(name)) & 0xFFFFFFFF
+    return OperationResult.passed(
+        f"Wrote {name} = {value:#010x} (read back {readback:#010x}).",
+        register=name,
+        value=value & 0xFFFFFFFF,
+        readback=readback,
+    )
+
+
+def step_core(
+    session: Any, *, count: int = 1, over: bool = True, elf: Any = None
+) -> OperationResult:
+    """Single-step ``count`` instructions and return the new stop context.
+
+    ``over`` maps to pyOCD's instruction step (it does not skip whole callees at
+    source granularity); it is accepted so the coarse tool surface is stable, and
+    reported back so the agent knows what actually happened.
+    """
+    target = session.target
+    halted_by_call = False
+    if not _is_halted(target):
+        target.halt()
+        halted_by_call = True
+    steps = max(int(count), 1)
+    for _ in range(steps):
+        # If parked on a breakpoint, stepping off it counts as this step.
+        if not _clear_pc_breakpoint_and_step(target):
+            target.step(disable_interrupts=over)
+    data = _context_dump(session, elf=elf, reason="step", timed_out=False)
+    data["steps"] = steps
+    data["over"] = over
+    data["halted_by_this_call"] = halted_by_call
+    loc = data.get("location", "")
+    return OperationResult.passed(
+        f"Stepped {steps} instruction(s); stopped at {loc}.", **data
+    )
+
+
+def _clear_pc_breakpoint_and_step(target: Any) -> bool:
+    """If a breakpoint sits at the current PC, step one instruction past it.
+
+    Resuming (or stepping) with the core parked on an active breakpoint would
+    re-trigger it immediately and never make progress — the classic debugger
+    "breakpoint at current PC" problem. We temporarily lift the breakpoint,
+    single-step over the instruction, then restore it. Returns True if it did.
+    """
+    try:
+        pc = int(target.read_core_register("pc")) & ~1
+    except Exception:  # noqa: BLE001
+        return False
+    if target.find_breakpoint(pc) is None:
+        return False
+    target.remove_breakpoint(pc)
+    try:
+        target.step(disable_interrupts=True)
+    finally:
+        target.set_breakpoint(pc)
+    return True
+
+
+def set_breakpoint(session: Any, address: int) -> OperationResult:
+    """Set a breakpoint at ``address`` (idempotent). Reports a clean error when
+    no hardware breakpoint slot is free."""
+    address &= ~1  # breakpoints live on even (halfword) addresses; drop Thumb bit
+    target = session.target
+    if target.find_breakpoint(address) is not None:
+        return OperationResult.passed(
+            f"Breakpoint already set at {address:#010x}.",
+            address=address,
+            already_set=True,
+        )
+    ok = bool(target.set_breakpoint(address))
+    if not ok:
+        return OperationResult.errored(
+            f"Could not set breakpoint at {address:#010x}: no hardware breakpoint "
+            "slot free (Cortex-M FPB has a small fixed number). Clear one first "
+            "(see list_debug_resources).",
+            address=address,
+        )
+    return OperationResult.passed(
+        f"Breakpoint set at {address:#010x}.", address=address, already_set=False
+    )
+
+
+def clear_breakpoint(session: Any, address: int) -> OperationResult:
+    address &= ~1
+    target = session.target
+    if target.find_breakpoint(address) is None:
+        return OperationResult.passed(
+            f"No breakpoint at {address:#010x} to clear.", address=address, was_set=False
+        )
+    target.remove_breakpoint(address)
+    return OperationResult.passed(
+        f"Cleared breakpoint at {address:#010x}.", address=address, was_set=True
+    )
+
+
+def _watchpoint_type(access: str) -> Any:
+    from pyocd.core.target import Target
+
+    return {
+        "read": Target.WatchpointType.READ,
+        "write": Target.WatchpointType.WRITE,
+        "read_write": Target.WatchpointType.READ_WRITE,
+    }[access]
+
+
+def set_watchpoint(
+    session: Any, address: int, *, size: int = 4, access: str = "write"
+) -> OperationResult:
+    """Set a data watchpoint. The marquee capability: catch the instruction that
+    reads/writes ``address`` (then ``run_until`` reports it as ``func (file:line)``)."""
+    if access not in _WATCHPOINT_ACCESS:
+        return OperationResult.errored(
+            f"Unknown watchpoint access {access!r}; use one of {sorted(_WATCHPOINT_ACCESS)}."
+        )
+    ok = bool(session.target.set_watchpoint(address, size, _watchpoint_type(access)))
+    if not ok:
+        return OperationResult.errored(
+            f"Could not set {access} watchpoint at {address:#010x}: no DWT "
+            "watchpoint slot free. Clear one first (see list_debug_resources).",
+            address=address,
+        )
+    return OperationResult.passed(
+        f"{access.capitalize()} watchpoint set at {address:#010x} (size {size}).",
+        address=address,
+        size=size,
+        access=access,
+    )
+
+
+def clear_watchpoint(
+    session: Any, address: int, *, size: int = 4, access: str = "write"
+) -> OperationResult:
+    if access not in _WATCHPOINT_ACCESS:
+        return OperationResult.errored(
+            f"Unknown watchpoint access {access!r}; use one of {sorted(_WATCHPOINT_ACCESS)}."
+        )
+    session.target.remove_watchpoint(address, size, _watchpoint_type(access))
+    return OperationResult.passed(
+        f"Cleared {access} watchpoint at {address:#010x}.",
+        address=address,
+        size=size,
+        access=access,
+    )
+
+
+def run_until(
+    session: Any,
+    *,
+    address: int | None = None,
+    timeout_s: float = 5.0,
+    elf: Any = None,
+    max_frames: int = 16,
+) -> OperationResult:
+    """Set-if-needed + resume + wait: the headline halt-mode tool.
+
+    Sets a breakpoint at ``address`` (if given and not already set), resumes, and
+    waits up to ``timeout_s`` for the core to stop (breakpoint or watchpoint hit).
+    On timeout it halts the core so the session is left in a known state. Returns
+    a single source-mapped context dump either way; the agent branches on
+    ``data.timed_out`` / verdict.
+    """
+    target = session.target
+    set_here = False
+    if address is not None:
+        address &= ~1  # even (halfword) breakpoint address; drop Thumb bit
+        if target.find_breakpoint(address) is None:
+            if not bool(target.set_breakpoint(address)):
+                return OperationResult.errored(
+                    f"Could not set breakpoint at {address:#010x}: no hardware "
+                    "breakpoint slot free (see list_debug_resources).",
+                    address=address,
+                )
+            set_here = True
+
+    if _is_halted(target):
+        # Step off any breakpoint parked at the current PC first, else the
+        # resume below would re-trigger it immediately without progressing.
+        _clear_pc_breakpoint_and_step(target)
+        if _is_halted(target):
+            target.resume()
+
+    started = time.monotonic()
+    deadline = started + max(timeout_s, 0.0)
+    timed_out = True
+    while time.monotonic() < deadline:
+        if _is_halted(target):
+            timed_out = False
+            break
+        time.sleep(0.01)
+
+    if timed_out:
+        target.halt()
+
+    reason = "timeout" if timed_out else ("breakpoint" if address is not None else "halt")
+    data = _context_dump(
+        session, elf=elf, reason=reason, timed_out=timed_out, max_frames=max_frames
+    )
+    data["breakpoint_set_by_this_call"] = set_here
+    if address is not None:
+        data["target_address"] = address
+
+    if timed_out:
+        result = OperationResult.failed(
+            f"Core did not stop within {timeout_s:.1f}s (halted it). "
+            f"Now at {data.get('location', '?')}.",
+            **data,
+        )
+    else:
+        result = OperationResult.passed(f"Stopped at {data.get('location', '?')}.", **data)
+    result.duration_s = round(time.monotonic() - started, 3)
+    return result
+
+
+def debug_resources(session: Any) -> OperationResult:
+    """Report hardware breakpoint/watchpoint capacity and what is currently set.
+
+    Lets the agent see why a ``set_breakpoint`` failed ("no slot free") and plan
+    around Cortex-M's small fixed budget instead of guessing.
+    """
+    target = session.target
+    core = getattr(target, "selected_core", None) or target
+    data: dict[str, Any] = {}
+
+    def _try(fn: Callable[[], Any]) -> Any:
+        try:
+            return fn()
+        except Exception:  # noqa: BLE001 - introspection is best-effort
+            return None
+
+    bp_free = _try(lambda: int(core.available_breakpoint_count))
+    bp_set = _try(lambda: [int(a) for a in core.bp_manager.get_breakpoints()])
+    wp_total = _try(lambda: int(core.dwt.watchpoint_count))
+    wp_used = _try(lambda: len(core.dwt.get_watchpoints()))
+
+    if bp_free is not None:
+        data["hw_breakpoints_free"] = bp_free
+    if bp_set is not None:
+        data["breakpoints_set"] = [f"{a:#010x}" for a in bp_set]
+        data["breakpoints_set_count"] = len(bp_set)
+    if wp_total is not None:
+        data["watchpoints_total"] = wp_total
+    if wp_used is not None:
+        data["watchpoints_used"] = wp_used
+        if wp_total is not None:
+            data["watchpoints_free"] = max(wp_total - wp_used, 0)
+
+    return OperationResult.passed(
+        "Debug resource usage: "
+        f"{data.get('hw_breakpoints_free', '?')} HW breakpoint slot(s) free, "
+        f"{data.get('watchpoints_free', '?')} watchpoint slot(s) free.",
+        **data,
+    )
+
+
 def read_memory(session: Any, address: int, length: int) -> OperationResult:
     data = bytes(session.target.read_memory_block8(address, length))
     word_aligned = (address % 4) == 0
