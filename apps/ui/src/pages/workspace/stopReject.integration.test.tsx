@@ -47,7 +47,7 @@ async function createRunPastPlan(): Promise<string> {
   });
   for (let i = 0; i < 2000; i++) {
     const events = await api.getRunEvents(runId);
-    if (events.length > 0 && reduceRun(events).run.status === 'plan_ready') {
+    if (events.length > 0 && reduceRun(events)?.run.status === 'plan_ready') {
       await api.approvePlan(runId);
       return runId;
     }

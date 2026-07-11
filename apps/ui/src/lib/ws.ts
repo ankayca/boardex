@@ -161,11 +161,24 @@ export class WsClient {
       return;
     }
     if (this.disposed || epoch !== this.epoch) return;
-    for (const event of replayed) this.options.onEvent(event);
-    const buffered = this.liveBuffer;
-    this.liveBuffer = [];
-    this.replayInFlight = false;
-    for (const event of buffered) this.options.onEvent(event);
+    // The flush must not be able to wedge the client: an onEvent throw that
+    // escaped here used to leave replayInFlight=true, silently parking every
+    // future live event in the buffer (T5.0 FIX_FIRST F1). On error, reset the
+    // replay state and surface it as a connection failure — cycle the socket so
+    // the caller sees 'reconnecting' and the handshake (with its idempotent
+    // replay) retries from the store's last good seq.
+    try {
+      for (const event of replayed) this.options.onEvent(event);
+      const buffered = this.liveBuffer;
+      this.liveBuffer = [];
+      this.replayInFlight = false;
+      for (const event of buffered) this.options.onEvent(event);
+    } catch {
+      if (this.disposed || epoch !== this.epoch) return;
+      this.replayInFlight = false;
+      this.liveBuffer = [];
+      this.cycleSocket();
+    }
   }
 
   private onMessage(raw: unknown): void {

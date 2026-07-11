@@ -59,7 +59,7 @@ function buildView(): RunView {
     envelope(5, 'check.evaluated', { check: ackCheck }),
     envelope(6, 'check.evaluated', { check: orphanCheck }),
   ];
-  return reduceRun(stream);
+  return reduceRun(stream)!;
 }
 
 function renderTab(view: RunView) {
@@ -117,7 +117,7 @@ describe('ChecksTab', () => {
   });
 
   it('renders a quiet status line before any check is evaluated', () => {
-    const view = reduceRun([envelope(1, 'run.created', { run })]);
+    const view = reduceRun([envelope(1, 'run.created', { run })])!;
     renderTab(view);
     expect(screen.getByRole('status')).toHaveTextContent('No checks have been evaluated yet.');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();

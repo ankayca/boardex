@@ -86,7 +86,7 @@ function baseEvents(): Event[] {
 }
 
 function buildView(extra: Event[] = []): RunView {
-  return reduceRun([...baseEvents(), ...extra]);
+  return reduceRun([...baseEvents(), ...extra])!;
 }
 
 function renderDrawer(search: string, view: RunView = buildView()) {

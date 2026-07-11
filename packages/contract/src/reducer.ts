@@ -87,7 +87,10 @@ function upsertById<T extends { id: string }>(items: T[], item: T): void {
   }
 }
 
-export function reduceRun(events: readonly WireEvent[]): RunView {
+// Returns null — the valid, empty view — when the stream carries no known event
+// yet (empty, or only ignored envelopes preceding run.created); throws missing_run
+// only when a KNOWN-typed event arrives before run.created (T5.0 FIX_FIRST F1).
+export function reduceRun(events: readonly WireEvent[]): RunView | null {
   let run: Run | undefined;
   let diagnosis: DiagnosisView | undefined;
   let riskSummary: string | undefined;
@@ -139,6 +142,8 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
     };
   };
 
+  // Narrowing accessor for the cases below; the guard in the loop has already
+  // thrown for any known event that could reach one of them before run.created.
   const requireRun = (event: Event): Run => {
     if (!run) {
       throw new ProtocolError(
@@ -173,6 +178,18 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
       continue;
     }
     const event = wire;
+
+    // A KNOWN-typed stream that starts wrong is a protocol error, whatever the
+    // event: run state must originate in run.created, never be back-filled. (An
+    // IGNORED envelope before run.created is fine — it advanced seq above and
+    // asserts nothing about the run; see the end of this function.)
+    if (!run && event.type !== 'run.created') {
+      throw new ProtocolError(
+        'missing_run',
+        `event "${event.type}" (seq ${event.seq}) arrived before run.created`,
+        { seq: event.seq },
+      );
+    }
 
     switch (event.type) {
       case 'run.created': {
@@ -347,8 +364,12 @@ export function reduceRun(events: readonly WireEvent[]): RunView {
     }
   }
 
+  // No known event yet (empty stream, or only ignored envelopes — a legal prefix
+  // when run.created is not seq 1, §5.1/T5.0 FIX_FIRST F1): a valid, empty view.
+  // Nothing below can have accumulated — every state-carrying case is guarded by
+  // the missing_run throw above.
   if (!run) {
-    throw new ProtocolError('missing_run', 'event stream contains no run.created');
+    return null;
   }
 
   // Whatever the stream never reconciled is a real contract violation (F5): the

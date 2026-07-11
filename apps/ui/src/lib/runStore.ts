@@ -17,8 +17,15 @@ export interface RunEntry {
   bySeq: Map<number, WireEvent>;
   // The gapless, seq-ordered prefix [1..N]; its length is the last contiguous seq.
   events: WireEvent[];
-  // Memoized reduceRun(events); null until seq 1 (run.created) has arrived.
+  // Memoized reduceRun(events); null until run.created has arrived (the reducer
+  // itself returns null while the prefix holds only ignored envelopes, §5.1/T5.0).
   view: RunView | null;
+  // The message of the last reduction failure (a KNOWN-typed stream that starts
+  // wrong, i.e. a runner contract violation). A reduction error must never escape
+  // the WS message handler (T5.0 FIX_FIRST F1): it is caught here, recorded, and
+  // the view holds stable at the last good reduction. Cleared when a later,
+  // longer prefix reduces cleanly.
+  reduceError: string | null;
 }
 
 export interface RunStoreState {
@@ -31,7 +38,12 @@ export interface RunStoreState {
   resetAll: () => void;
 }
 
-const emptyEntry = (): RunEntry => ({ bySeq: new Map(), events: [], view: null });
+const emptyEntry = (): RunEntry => ({
+  bySeq: new Map(),
+  events: [],
+  view: null,
+  reduceError: null,
+});
 
 // Fold one event into an entry. Returns the same entry reference (a no-op) when the
 // seq was already seen — that referential stability is what makes ingest idempotent
@@ -48,8 +60,22 @@ function applyEvent(entry: RunEntry, event: WireEvent): RunEntry {
     nextSeq++;
   }
 
-  const grew = events.length > entry.events.length;
-  return { bySeq, events, view: grew ? reduceRun(events) : entry.view };
+  if (events.length <= entry.events.length) {
+    return { bySeq, events, view: entry.view, reduceError: entry.reduceError };
+  }
+  try {
+    return { bySeq, events, view: reduceRun(events), reduceError: null };
+  } catch (error) {
+    // A reduction failure is a runner contract violation, not a UI crash: hold the
+    // view stable at the last good reduction and record what went wrong (F1). The
+    // prefix keeps growing, so a stream that recovers re-reduces cleanly.
+    return {
+      bySeq,
+      events,
+      view: entry.view,
+      reduceError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function createRunStore() {

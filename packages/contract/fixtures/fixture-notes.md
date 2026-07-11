@@ -25,6 +25,13 @@ changes the contract.
   with `diff -u`, not hand-written.
 - `device_id` in the decodes (`sigrok:kingst-la2016:conn=3.12`) matches the stable-id
   format the contract's BenchStatus samples use (bible v1.2 amendment).
+- **Fail-variant serial log prints what the firmware prints** (reconciled in T5.0
+  FIX_FIRST F2): the iteration-2 driver has no NACKF handling, so an address NACK
+  surfaces as the same `i2c1_wait` timeout lines as iteration 1
+  (`I2C1 ERROR: timeout waiting for TXIS (read setup)`). Over UART the corrected
+  address facing dead hardware is indistinguishable from the wrong address — only
+  the decode tells them apart, which is the variant's point. Asserted line-for-line
+  against the iter1 log by the fixture test.
 
 ## Deliberate technical choices to verify on the real bench
 

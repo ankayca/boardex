@@ -128,6 +128,17 @@ export class RunSession {
     if (this.terminated) {
       return this.conflict('run has already reached a terminal state');
     }
+    // A stop can beat the fixture's own run.created (curl straight after POST
+    // /runs, inside the first delayMs). The stream must still open with the run
+    // it stops — a KNOWN-typed log that starts with run.status_changed is
+    // unreducible by contract (T5.0 FIX_FIRST F1) — so emit the fixture's
+    // run.created first; the replay loop is already parked and never re-sends it.
+    if (!this.log.some((event) => event.type === 'run.created')) {
+      const created = this.entries.find((entry) => entry.event.type === 'run.created');
+      if (created) {
+        this.emit(rekey(created.event, this.id));
+      }
+    }
     this.emit(this.make('run.status_changed', { status: 'stopped', reason: 'Stopped by user' }));
     this.emit(this.make('run.stopped', { byUser: true }));
     this.finish();

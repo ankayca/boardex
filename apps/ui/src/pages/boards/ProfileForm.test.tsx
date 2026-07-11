@@ -30,6 +30,15 @@ vi.mock('../../lib/globalStream', () => ({
   subscribeGlobalStatus: () => () => undefined,
 }));
 
+// Wrap the shared bench source in a spy with its real implementation, so the
+// F4 suite at the bottom can pin the picker to it; every other test runs the
+// hook unchanged.
+vi.mock('../../lib/useBenchStatus', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/useBenchStatus')>();
+  return { useBenchStatus: vi.fn(actual.useBenchStatus) };
+});
+
+import { useBenchStatus } from '../../lib/useBenchStatus';
 import { ProfileForm } from './ProfileForm';
 import { blankDraft, fromProfile } from './profileDraft';
 
@@ -74,7 +83,7 @@ function renderForm(mode: 'new' | 'edit' = 'edit', onSaved = vi.fn()) {
       <ProfileForm mode={mode} initial={initial} onSaved={onSaved} />
     </QueryClientProvider>,
   );
-  return { onSaved };
+  return { onSaved, client };
 }
 
 const rows = () => screen.getAllByRole('listitem', { name: /^Connection \d+$/ });
@@ -315,5 +324,47 @@ describe('detected-device picker', () => {
       '',
       LA_ID,
     ]);
+  });
+});
+
+// T5.0 FIX_FIRST F4: the picker's bench source is pinned to the SHARED
+// useBenchStatus hook — the connection-liveness rule (T4.2 F1) is a property of
+// that source, so a regression back to a page-private bench query (the T5.0/F8
+// bug class) must fail here: the picker would not render the stub's devices,
+// and a bench query would register in the cache behind the hook's back.
+describe('picker bench source is the shared useBenchStatus (T5.0 FIX_FIRST F4)', () => {
+  afterEach(async () => {
+    const actual = await vi.importActual<typeof import('../../lib/useBenchStatus')>(
+      '../../lib/useBenchStatus',
+    );
+    vi.mocked(useBenchStatus).mockImplementation(actual.useBenchStatus);
+  });
+
+  it('renders the picker from useBenchStatus and registers no bench query of its own', async () => {
+    // A device only the hook's snapshot contains — GET /bench never serves it.
+    const SHARED_ID = 'pyocd:stlink:only-the-shared-source-knows-me';
+    vi.mocked(useBenchStatus).mockReturnValue(
+      BenchStatusSchema.parse({
+        runnerOnline: true,
+        contractVersion: 'boardex-contract/0.1',
+        devices: [
+          { id: SHARED_ID, kind: 'debug_probe', name: 'Shared-Source Probe', state: 'online' },
+        ],
+      }),
+    );
+    const { client } = renderForm('new');
+
+    // The picker offers exactly what the shared source holds…
+    expect(await screen.findByRole('option', { name: /Shared-Source Probe/ })).toBeInTheDocument();
+    // …and the form fetched no bench of its own to get it.
+    expect(getBench).not.toHaveBeenCalled();
+    // The stubbed hook registers no query, so ANY bench-keyed query here would be
+    // a private one re-introduced in the form.
+    const benchKeys = client
+      .getQueryCache()
+      .getAll()
+      .map((query) => query.queryKey)
+      .filter((key) => key.includes('bench'));
+    expect(benchKeys).toEqual([]);
   });
 });

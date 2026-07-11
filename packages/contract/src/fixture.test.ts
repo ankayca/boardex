@@ -61,7 +61,7 @@ describe('bme280_run_001 fixture', () => {
   });
 
   it('reduces to the §5.5 story: completed, 2 approvals resolved, iteration 2, 3 passing checks, zero warnings', () => {
-    const view = reduceRun(events);
+    const view = reduceRun(events)!;
 
     expect(view.run.status).toBe('completed');
     expect(view.warnings).toEqual([]);
@@ -99,7 +99,7 @@ describe('bme280_run_001 fixture', () => {
   });
 
   it('links every check to a real artifact and every artifact to a real fixture file with matching size', () => {
-    const view = reduceRun(events);
+    const view = reduceRun(events)!;
     const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
     for (const check of view.checks) {
       expect(artifactIds.has(check.artifactId)).toBe(true);
@@ -114,7 +114,7 @@ describe('bme280_run_001 fixture', () => {
   });
 
   it('every structured artifact file validates against its promoted content schema (T5.0/F2)', () => {
-    const view = reduceRun(events);
+    const view = reduceRun(events)!;
     const schemaByKind = {
       protocol_decode: ProtocolDecodeContentSchema,
       code_diff: CodeDiffContentSchema,
@@ -188,7 +188,7 @@ describe('bme280_run_001_fail fixture (T5.0/F9 — the fail variant)', () => {
   });
 
   it('reduces to the failed terminal: iteration 2, 2 approvals approved, pass/fail/fail checks, zero warnings', () => {
-    const view = reduceRun(failEvents);
+    const view = reduceRun(failEvents)!;
     expect(view.run.status).toBe('failed');
     expect(view.endedAt).toBe(failEvents[failEvents.length - 1]?.ts);
     expect(view.run.iteration).toBe(2);
@@ -202,8 +202,34 @@ describe('bme280_run_001_fail fixture (T5.0/F9 — the fail variant)', () => {
     expect(verdicts.get('serial_output')).toBe('fail');
   });
 
+  it('iter2f serial log carries the strings the evidenced firmware actually prints (T5.0 FIX_FIRST F2)', () => {
+    // The iteration-2 driver (art_diff_iter2) has no NACKF handling: an address
+    // NACK leaves TXIS unset and i2c1_wait times out — over UART, the corrected
+    // address facing dead hardware is indistinguishable from iteration 1's wrong
+    // address. Only the logic-analyzer decode can tell them apart; that is the
+    // fail variant's whole story.
+    const iter1 = readFileSync(join(artifactsDir, 'art_serial_log_iter1.log'), 'utf8');
+    const iter2f = readFileSync(join(artifactsDir, 'art_serial_log_iter2f.log'), 'utf8');
+    expect(iter2f).toContain('I2C1 ERROR: timeout waiting for TXIS (read setup)');
+    expect(iter2f).not.toMatch(/NACKF/); // the firmware never reads, let alone prints, NACKF
+    // Identical failure signature line-for-line: same probe loop, same wait path.
+    const errorLines = (log: string) =>
+      log.split('\n').filter((line) => line.includes('ERROR') || line.includes('FATAL'));
+    expect(errorLines(iter2f)).toEqual(errorLines(iter1));
+
+    // The live stream (seq 77 step.log) mirrors the artifact, not a divergent story.
+    const seq77 = failEvents.find((event) => event.seq === 77);
+    expect(seq77?.type).toBe('step.log');
+    if (seq77?.type === 'step.log' && 'lines' in seq77.payload) {
+      expect(seq77.payload.lines.length).toBeGreaterThan(0);
+      for (const line of seq77.payload.lines) {
+        expect(iter2f).toContain(line);
+      }
+    }
+  });
+
   it('links every artifact to a real fixture file with matching size, contents schema-valid', () => {
-    const view = reduceRun(failEvents);
+    const view = reduceRun(failEvents)!;
     const files = readdirSync(artifactsDir);
     for (const artifact of view.artifacts) {
       const file = files.find((name) => name.replace(/\.[^.]+$/, '') === artifact.id);

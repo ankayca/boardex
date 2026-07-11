@@ -45,7 +45,7 @@ async function driveToTerminal(runId: string): Promise<void> {
   for (let i = 0; i < 2000; i++) {
     const events = await api.getRunEvents(runId);
     if (events.length > 0) {
-      const view = reduceRun(events);
+      const view = reduceRun(events)!;
       if (['completed', 'failed', 'stopped'].includes(view.run.status)) return;
       if (view.run.status === 'plan_ready' && !resolved.has('__plan__')) {
         resolved.add('__plan__');
