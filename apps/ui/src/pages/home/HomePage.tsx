@@ -75,11 +75,22 @@ export default function HomePage() {
     queryFn: () => api.listBoardProfiles(),
   });
 
-  // Live: a run created or advanced anywhere refreshes the authoritative list. GET /runs
-  // is the source of truth, so invalidate rather than patch the cache by hand.
+  // Live: a run created, advanced, or ended anywhere refreshes the authoritative list.
+  // The dedicated terminals ride the global stream without a redundant
+  // run.status_changed (§5.3 v2.0), so they must invalidate too — or a run that ends
+  // via run.completed/failed/stopped keeps its stale row until a manual refresh.
+  // GET /runs is the source of truth, so invalidate rather than patch the cache.
   useGlobalEvents((event) => {
-    if (event.type === 'run.created' || event.type === 'run.status_changed') {
-      void queryClient.invalidateQueries({ queryKey: ['runs'] });
+    switch (event.type) {
+      case 'run.created':
+      case 'run.status_changed':
+      case 'run.completed':
+      case 'run.failed':
+      case 'run.stopped':
+        void queryClient.invalidateQueries({ queryKey: ['runs'] });
+        break;
+      default:
+        break;
     }
   });
 

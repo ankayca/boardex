@@ -141,4 +141,10 @@ export function envelope<T extends Event['type']>(seq: number, type: T, payload:
   return { seq, runId: RUN_ID, ts: TS, type, payload } as Event;
 }
 
-export const viewFrom = (events: Event[]): RunView => reduceRun(events);
+// reduceRun returns null only while a stream has no known event yet (T5.0
+// FIX_FIRST F1); every stream these suites build starts with run.created.
+export const viewFrom = (events: Event[]): RunView => {
+  const view = reduceRun(events);
+  if (view === null) throw new Error('expected reduceRun to materialize a view');
+  return view;
+};

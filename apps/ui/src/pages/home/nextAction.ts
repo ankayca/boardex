@@ -2,11 +2,15 @@
 // one thing the user (or, for in-flight runs, the agent) does next — a button label and
 // the route it opens — and to the attention bucket that drives ordering.
 //
-// The four labels the spec names verbatim (§7.1) are "Approve plan", "Approve flash",
-// "View evidence", "Open report". The in-flight states (planning/running/diagnosing/
-// draft) have no spec label — nothing is *needed* from the user — so they get a neutral
-// "View run" that opens the same workspace. No new routes are invented: every action
-// targets the run workspace at /runs/:id (BIBLE §3 route map).
+// The four labels the spec names verbatim (§7.1, v2.0) are "Approve plan",
+// "Review approval", "View evidence", "Open report". ("Approve flash" until T5.0:
+// awaiting_approval covers ANY pending approval — flash, fix, or something a real
+// runner invents — and the row cannot know which, so the label now names the action
+// the user actually takes rather than guessing the proposal. Kerem's ruling.) The
+// in-flight states (planning/running/diagnosing/draft) have no spec label — nothing
+// is *needed* from the user — so they get a neutral "View run" that opens the same
+// workspace. No new routes are invented: every action targets the run workspace at
+// /runs/:id (BIBLE §3 route map).
 import type { RunStatus, RunSummary } from '@boardex/contract';
 
 /** Ordering bucket (§7.1: "needs-attention first, then active, then recent"). */
@@ -39,7 +43,7 @@ const LABELS: Record<RunStatus, string> = {
   running: 'View run',
   diagnosing: 'View run',
   plan_ready: 'Approve plan',
-  awaiting_approval: 'Approve flash',
+  awaiting_approval: 'Review approval',
   completed: 'Open report',
   failed: 'View evidence',
   stopped: 'View evidence',

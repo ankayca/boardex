@@ -3,7 +3,13 @@
 // gap/duplicate, a mid-run stop, an approval reject, and the degraded bench.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { EventSchema, reduceRun, type Event } from '@boardex/contract';
+import {
+  EventSchema,
+  ListRunsResponseSchema,
+  reduceRun,
+  type Event,
+  type RunView,
+} from '@boardex/contract';
 import { createMockRunner, type MockRunner } from './server';
 
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
@@ -58,11 +64,11 @@ async function driveToCompletion(runId: string): Promise<Event[]> {
   const resolved = new Set<string>();
   for (let i = 0; i < 1000; i++) {
     const events = await getEvents(runId, 0);
-    if (events.length === 0) {
+    const view = events.length === 0 ? null : reduceRun(events);
+    if (view === null) {
       await sleep(15);
       continue;
     }
-    const view = reduceRun(events);
     if (TERMINAL.has(view.run.status)) return events;
 
     if (view.run.status === 'plan_ready' && !resolved.has('__plan__')) {
@@ -82,14 +88,14 @@ async function driveToCompletion(runId: string): Promise<Event[]> {
 // brief window after createRun where the log is still empty.
 async function waitForView(
   runId: string,
-  pred: (view: ReturnType<typeof reduceRun>) => boolean,
+  pred: (view: RunView) => boolean,
   label: string,
-): Promise<{ events: Event[]; view: ReturnType<typeof reduceRun> }> {
+): Promise<{ events: Event[]; view: RunView }> {
   for (let i = 0; i < 600; i++) {
     const events = await getEvents(runId, 0);
     if (events.length > 0) {
       const view = reduceRun(events);
-      if (pred(view)) return { events, view };
+      if (view && pred(view)) return { events, view };
     }
     await sleep(15);
   }
@@ -161,7 +167,7 @@ describe('mock runner', () => {
     expect(events).toHaveLength(90);
     assertContiguous(events, 1, 90);
 
-    const view = reduceRun(events);
+    const view = reduceRun(events)!;
     expect(view.run.status).toBe('completed');
     expect(view.run.iteration).toBe(2); // one fix loop
     expect(view.warnings).toEqual([]); // evidence-linking law satisfied
@@ -211,7 +217,7 @@ describe('mock runner', () => {
     for (const e of replay) seen.set(e.seq, e);
     const merged = [...seen.values()].sort((a, b) => a.seq - b.seq);
     assertContiguous(merged, 1, 90);
-    expect(reduceRun(merged).run.status).toBe('completed');
+    expect(reduceRun(merged)!.run.status).toBe('completed');
   });
 
   it('honors stop at any time and refuses a second stop', async () => {
@@ -230,7 +236,7 @@ describe('mock runner', () => {
     const last = afterStop[afterStop.length - 1];
     expect(last?.type).toBe('run.stopped');
     if (last?.type === 'run.stopped') expect(last.payload.byUser).toBe(true);
-    const view = reduceRun(afterStop);
+    const view = reduceRun(afterStop)!;
     expect(view.run.status).toBe('stopped');
 
     // No further events arrive after the terminal stop.
@@ -263,11 +269,150 @@ describe('mock runner', () => {
     await waitForView(runId, (v) => v.run.status === 'stopped', 'stopped');
     const events = await getEvents(runId, 0);
     assertContiguous(events, 1, events[events.length - 1]!.seq); // still gapless
-    const view = reduceRun(events);
+    const view = reduceRun(events)!;
     expect(view.run.status).toBe('stopped');
     const rejected = view.approvals.find((a) => a.id === pendingId);
     expect(rejected?.status).toBe('rejected');
     expect(events[events.length - 1]?.type).toBe('run.stopped');
+  });
+
+  it('sends the dedicated terminal events on the global stream (§5.3 v2.0)', async () => {
+    const global = await connect('global=1');
+    // The snapshot arrives first (runner.status on connect).
+    await global.waitFor((e) => e.type === 'runner.status');
+
+    // Completed terminal: drive a run to its natural end.
+    const completedRunId = await createRun();
+    void driveToCompletion(completedRunId);
+    const completed = await global.waitFor(
+      (e) => e.type === 'run.completed' && e.runId === completedRunId,
+    );
+    expect(completed.type).toBe('run.completed');
+
+    // Stopped terminal: stop a second run mid-flight; the dashboard hears it.
+    const stoppedRunId = await createRun();
+    await waitForView(stoppedRunId, (v) => v.run.status === 'plan_ready', 'plan_ready');
+    expect((await post(`/runs/${stoppedRunId}/stop`)).status).toBe(204);
+    await global.waitFor((e) => e.type === 'run.stopped' && e.runId === stoppedRunId);
+
+    global.close();
+  });
+
+  it('serves a schema-valid RunSummary in the window before run.created replays (T5.0/F7)', async () => {
+    // SPEED=1 keeps the fixture's 600 ms pre-run.created delay real, so the GET
+    // lands inside the window the audit caught.
+    const slow = await createMockRunner({ port: 0, speed: 1 });
+    try {
+      const res = await fetch(`${slow.url}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskPrompt: 'x', boardProfileId: 'bp_nucleo_f303re' }),
+      });
+      const { runId } = (await res.json()) as { runId: string };
+
+      const list = (await (await fetch(`${slow.url}/runs`)).json()) as unknown[];
+      const summaries = ListRunsResponseSchema.parse(list);
+      const summary = summaries.find((s) => s.id === runId);
+      expect(summary).toBeDefined();
+      expect(summary?.status).toBe('draft');
+      expect(summary?.title.length).toBeGreaterThan(0);
+      expect(summary?.boardProfileId).toBe('bp_nucleo_f303re');
+      expect(Number.isNaN(Date.parse(summary?.updatedAt ?? ''))).toBe(false);
+    } finally {
+      await slow.close();
+    }
+  });
+
+  it('replays the fail variant to run.failed with no further fix approval (T5.0/F9)', async () => {
+    const failing = await createMockRunner({ port: 0, speed: 200, failVariant: true });
+    try {
+      const res = await fetch(`${failing.url}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskPrompt: 'bring up BME280', boardProfileId: 'bp_nucleo_f303re' }),
+      });
+      const { runId } = (await res.json()) as { runId: string };
+
+      // Drive the same three gates as the happy path; the ending differs.
+      const resolved = new Set<string>();
+      let events: Event[] = [];
+      for (let i = 0; i < 1000; i++) {
+        const raw = await (await fetch(`${failing.url}/runs/${runId}/events?afterSeq=0`)).json();
+        events = (raw as unknown[]).map((e) => EventSchema.parse(e));
+        if (events.length > 0) {
+          const view = reduceRun(events)!;
+          if (TERMINAL.has(view.run.status)) break;
+          if (view.run.status === 'plan_ready' && !resolved.has('__plan__')) {
+            const r = await fetch(`${failing.url}/runs/${runId}/plan/approve`, { method: 'POST' });
+            if (r.status === 204) resolved.add('__plan__');
+          }
+          const pending = view.approvals.find((a) => a.status === 'pending');
+          if (pending && !resolved.has(pending.id)) {
+            const r = await fetch(`${failing.url}/runs/${runId}/approvals/${pending.id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'approved' }),
+            });
+            if (r.status === 204) resolved.add(pending.id);
+          }
+        }
+        await sleep(15);
+      }
+
+      expect(events).toHaveLength(85);
+      assertContiguous(events, 1, 85);
+      expect(events[events.length - 1]?.type).toBe('run.failed');
+
+      const view = reduceRun(events)!;
+      expect(view.run.status).toBe('failed');
+      expect(view.run.iteration).toBe(2);
+      expect(view.warnings).toEqual([]);
+      // Both approvals were the base story's; nothing new was requested after the
+      // iteration-2 checks failed.
+      expect(view.approvals).toHaveLength(2);
+      expect(view.approvals.every((a) => a.status === 'approved')).toBe(true);
+      const verdicts = new Map(view.checks.map((c) => [c.requirementId, c.verdict]));
+      expect(verdicts.get('i2c_clock')).toBe('pass');
+      expect(verdicts.get('device_ack')).toBe('fail');
+      expect(verdicts.get('serial_output')).toBe('fail');
+      // The variant's evidence is fetchable like any other artifact.
+      const decode = await fetch(`${failing.url}/artifacts/art_i2c_decode_iter2f`);
+      expect(decode.status).toBe(200);
+      expect(decode.headers.get('content-type')).toBe('application/json');
+    } finally {
+      await failing.close();
+    }
+  });
+
+  it('a stop that beats run.created still yields a reducible stream (T5.0 FIX_FIRST F1)', async () => {
+    // SPEED=1 keeps the fixture's 600 ms pre-run.created delay real, so the stop
+    // lands in the window curl can hit: POST /runs then POST /stop immediately.
+    const slow = await createMockRunner({ port: 0, speed: 1 });
+    try {
+      const res = await fetch(`${slow.url}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskPrompt: 'x', boardProfileId: 'bp_nucleo_f303re' }),
+      });
+      const { runId } = (await res.json()) as { runId: string };
+
+      const stop = await fetch(`${slow.url}/runs/${runId}/stop`, { method: 'POST' });
+      expect(stop.status).toBe(204);
+
+      // The log used to open with run.status_changed — unreducible by contract.
+      // Now it opens with the fixture's run.created and ends in run.stopped.
+      const raw = (await (await fetch(`${slow.url}/runs/${runId}/events?afterSeq=0`)).json()) as unknown[];
+      const events = raw.map((e) => EventSchema.parse(e));
+      expect(events[0]?.type).toBe('run.created');
+      expect(events[events.length - 1]?.type).toBe('run.stopped');
+      assertContiguous(events, 1, events.length);
+
+      const view = reduceRun(events);
+      expect(view).not.toBeNull();
+      expect(view?.run.status).toBe('stopped');
+    } finally {
+      await slow.close();
+    }
   });
 
   it('marks the logic analyzer offline under --degraded', async () => {

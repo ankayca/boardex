@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Event, Run, RunStep } from '@boardex/contract';
-import { WsClient, type WebSocketCtor, type WebSocketLike } from './ws';
+import {
+  isKnownEvent,
+  parseWireEvent,
+  type Event,
+  type Run,
+  type RunStep,
+  type WireEvent,
+} from '@boardex/contract';
+import { WsClient, type WebSocketCtor, type WebSocketLike, type WsConnectionStatus } from './ws';
 import { createRunStore } from './runStore';
 
 const at = (s: number): string => `2026-07-07T14:00:0${s}.000Z`;
@@ -80,8 +87,8 @@ const runnerStatusEvent: Event = {
 };
 
 describe('WsClient', () => {
-  it('ignores unknown event types and malformed frames (§5.1 forward compatibility)', () => {
-    const seen: Event[] = [];
+  it('parses envelope-first: unknown types arrive tagged ignored, non-envelopes drop (§5.1, T5.0/F1)', () => {
+    const seen: WireEvent[] = [];
     const client = new WsClient({
       wsBase: 'ws://runner',
       target: { kind: 'global' },
@@ -92,19 +99,25 @@ describe('WsClient', () => {
     client.connect();
     lastSocket().fireOpen();
 
-    // (a) a well-formed envelope carrying a type outside the MVP catalog
+    // (a) a well-formed envelope carrying a type outside the MVP catalog is
+    // DELIVERED as an ignored envelope — its seq must reach the store, or the
+    // gapless prefix parks forever (the F1 failure).
     lastSocket().fireMessage(
       JSON.stringify({ seq: 1, runId: '_global', ts: at(0), type: 'run.teleported', payload: {} }),
     );
-    // (b) a malformed (non-JSON) frame
-    lastSocket().fireMessage('{ not valid json');
-    // Neither is dispatched, and neither throws.
-    expect(seen).toHaveLength(0);
-
-    // A subsequent valid frame still dispatches normally.
-    lastSocket().fireMessage(JSON.stringify(runnerStatusEvent));
     expect(seen).toHaveLength(1);
-    expect(seen[0]?.type).toBe('runner.status');
+    expect(seen[0] && isKnownEvent(seen[0])).toBe(false);
+    expect(seen[0]?.seq).toBe(1);
+
+    // (b) a malformed (non-JSON) frame has no envelope and no seq: dropped, no throw.
+    lastSocket().fireMessage('{ not valid json');
+    expect(seen).toHaveLength(1);
+
+    // A subsequent valid frame still dispatches normally, strictly typed.
+    lastSocket().fireMessage(JSON.stringify(runnerStatusEvent));
+    expect(seen).toHaveLength(2);
+    expect(seen[1]?.type).toBe('runner.status');
+    expect(seen[1] && isKnownEvent(seen[1])).toBe(true);
 
     client.close();
   });
@@ -179,6 +192,114 @@ describe('WsClient', () => {
     const view = store.getState().runs[RUN_ID]?.view;
     expect(view?.lastSeq).toBe(3);
     expect(view?.steps).toHaveLength(1);
+
+    client.close();
+  });
+
+  // T5.0 FIX_FIRST F1: an ignored envelope can legally hold seq 1 (§5.2 does not
+  // promise run.created is first). Both delivery paths — HTTP replay and the live
+  // socket — must carry it into the store without wedging the view.
+  it('an ignored envelope at seq 1 flows through replay AND live delivery into a materialized view', async () => {
+    const RUN_ID = 'run_ws_ignored_first';
+    const run: Run = {
+      id: RUN_ID,
+      title: 'BME280 bring-up',
+      taskPrompt: 'bring up',
+      boardProfileId: 'bp_1',
+      status: 'running',
+      createdAt: at(0),
+      updatedAt: at(0),
+      iteration: 1,
+    };
+    // What the runner of the future sends: a type outside today's catalog, at seq 1.
+    const unknownFirst = parseWireEvent({
+      seq: 1,
+      runId: RUN_ID,
+      ts: at(0),
+      type: 'run.preflight_checked',
+      payload: { ok: true },
+    }) as WireEvent;
+    expect(isKnownEvent(unknownFirst)).toBe(false);
+    const created: Event = { seq: 2, runId: RUN_ID, ts: at(1), type: 'run.created', payload: { run } };
+
+    const store = createRunStore();
+    const client = new WsClient({
+      wsBase: 'ws://runner',
+      target: { kind: 'run', runId: RUN_ID },
+      WebSocketImpl: FakeCtor,
+      heartbeatTimeoutMs: 0,
+      onEvent: (event) => store.getState().ingest(RUN_ID, event),
+      // Replay path: the HTTP replay body carries the ignored envelope (§5.1 —
+      // an unknown-typed event must not fail the replay response).
+      fetchReplay: () => Promise.resolve([unknownFirst]),
+    });
+    client.connect();
+    lastSocket().fireOpen();
+    await waitUntil(() => store.getState().lastContiguousSeq(RUN_ID) === 1);
+    // Held, not thrown: the view is legitimately empty until run.created lands.
+    expect(store.getState().runs[RUN_ID]?.view).toBeNull();
+    expect(store.getState().runs[RUN_ID]?.reduceError).toBeNull();
+
+    // Live path: run.created arrives over the socket and materializes the view.
+    lastSocket().fireMessage(JSON.stringify(created));
+    const view = store.getState().runs[RUN_ID]?.view;
+    expect(view?.run.id).toBe(RUN_ID);
+    expect(view?.lastSeq).toBe(2);
+
+    client.close();
+  });
+
+  it('a throw during the replay flush cannot wedge the client: state resets and the handshake retries', async () => {
+    const RUN_ID = 'run_ws_flush_throw';
+    const run: Run = {
+      id: RUN_ID,
+      title: 'BME280 bring-up',
+      taskPrompt: 'bring up',
+      boardProfileId: 'bp_1',
+      status: 'running',
+      createdAt: at(0),
+      updatedAt: at(0),
+      iteration: 1,
+    };
+    const created: Event = { seq: 1, runId: RUN_ID, ts: at(0), type: 'run.created', payload: { run } };
+    const running: Event = { seq: 2, runId: RUN_ID, ts: at(1), type: 'run.status_changed', payload: { status: 'running' } };
+
+    const store = createRunStore();
+    const statuses: WsConnectionStatus[] = [];
+    let explodeOnce = true;
+    const client = new WsClient({
+      wsBase: 'ws://runner',
+      target: { kind: 'run', runId: RUN_ID },
+      WebSocketImpl: FakeCtor,
+      heartbeatTimeoutMs: 0,
+      backoff: { baseMs: 1, maxMs: 2 },
+      onStatusChange: (status) => statuses.push(status),
+      onEvent: (event) => {
+        if (explodeOnce) {
+          explodeOnce = false;
+          throw new Error('handler exploded mid-flush');
+        }
+        store.getState().ingest(RUN_ID, event);
+      },
+      fetchReplay: () => Promise.resolve([created]),
+    });
+
+    client.connect();
+    lastSocket().fireOpen();
+    // Before the fix the throw escaped with replayInFlight stuck true: every later
+    // live event was parked in the buffer forever and no reconnect was scheduled.
+    // Now the failed flush surfaces as a connection error and cycles the socket.
+    await waitUntil(() => FakeSocket.instances.length >= 2);
+    expect(statuses).toContain('reconnecting');
+
+    // The retried handshake replays from the store's cursor and recovers fully.
+    lastSocket().fireOpen();
+    await waitUntil(() => store.getState().runs[RUN_ID]?.view !== undefined && store.getState().runs[RUN_ID]?.view !== null);
+
+    // Live delivery works again — nothing is stuck behind a stale replay buffer.
+    lastSocket().fireMessage(JSON.stringify(running));
+    expect(store.getState().runs[RUN_ID]?.view?.lastSeq).toBe(2);
+    expect(store.getState().runs[RUN_ID]?.view?.run.status).toBe('running');
 
     client.close();
   });

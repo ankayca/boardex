@@ -5,6 +5,9 @@
 import { useMutation } from '@tanstack/react-query';
 import type { Approval, RunView } from '@boardex/contract';
 import { api, StateConflict } from '../../lib/api';
+import { benchIssues } from '../../lib/benchReadiness';
+import { useBenchStatus } from '../../lib/useBenchStatus';
+import { BenchWarning } from '../composer/BenchReadiness';
 import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
@@ -48,6 +51,18 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
   const showDiagnosis =
     view.diagnosis !== undefined && (run.status === 'diagnosing' || fixApproval !== null);
 
+  // The §7.2 bench-degraded warning repeats at every approval that proposes
+  // hardware actions (Kerem's T5.0 adjudication): an operator about to authorize a
+  // flash deserves the same "your analyzer is unplugged" they got at composition.
+  // Profile-independent by the same ruling — mid-run approvals gate on the bench's
+  // own report only (instruments: null), never on re-resolving a profile.
+  const bench = useBenchStatus();
+  const pendingApproval = gate?.kind === 'ready' ? gate.approval : null;
+  const hardwareApprovalIssues =
+    pendingApproval && pendingApproval.proposal.hardwareActions.length > 0
+      ? benchIssues(bench, null)
+      : [];
+
   // isSuccess holds the buttons disabled until the resolved/stopped event arrives;
   // the approval-id check re-arms them if a later approval reuses this mutation.
   const stopping = stop.isPending || stop.isSuccess;
@@ -62,6 +77,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       <StatusCard
         run={run}
         endedAt={view.endedAt}
+        warnings={view.warnings}
         stopping={stopping}
         stopError={commandError(
           stop.error,
@@ -69,6 +85,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
         )}
         onStop={() => stop.mutate()}
       />
+      {hardwareApprovalIssues.length > 0 && <BenchWarning issues={hardwareApprovalIssues} />}
       {gate && fixApproval === null && (
         <ApprovalCard
           gate={gate}

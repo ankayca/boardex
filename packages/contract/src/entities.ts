@@ -6,10 +6,13 @@ import { z } from 'zod';
 export const IdSchema = z.string().describe('String ULID identifier (format not enforced)');
 
 // Timestamps are ISO 8601 strings (§4 Run.createdAt/updatedAt, §5.1 envelope ts).
+// §4 says "ISO 8601", not "ISO 8601 with zone": naive (zoneless) timestamps are
+// accepted on the wire alongside offset and Z forms (T5.0). Producers SHOULD emit
+// UTC with Z; the schema is the reader and reads what §4 actually promises.
 export const IsoDateTimeSchema = z
   .string()
-  .datetime({ offset: true })
-  .describe('ISO 8601 timestamp');
+  .datetime({ offset: true, local: true })
+  .describe('ISO 8601 timestamp (offset, Z, or naive/local)');
 
 export const RunStatusSchema = z.enum([
   'draft',

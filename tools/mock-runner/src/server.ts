@@ -23,6 +23,9 @@ export interface MockRunnerOptions {
   host?: string;
   speed?: number;
   degraded?: boolean;
+  // Replay the fail variant (T5.0/F9): iteration 2's checks fail again and the
+  // run ends in run.failed with no further fix approval.
+  failVariant?: boolean;
   // Validate every outbound event against the contract at send time (§5.6). On by
   // default; a conforming runner never trips it, so a throw here is a real defect.
   validateOutbound?: boolean;
@@ -41,7 +44,7 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
   const degraded = options.degraded ?? false;
   const validateOutbound = options.validateOutbound ?? true;
 
-  const fixture = loadFixture();
+  const fixture = loadFixture(options.failVariant ? 'fail' : 'default');
   const artifactCatalog = buildArtifactCatalog(fixture);
   const bench: BenchStatus = buildBenchStatus(degraded);
 
@@ -70,13 +73,24 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
   }
 
   // Fan out a session event: per-run subscribers get everything; the global
-  // dashboard gets run.created + run.status_changed (§5.3).
+  // dashboard gets the run-lifecycle events — run.created, run.status_changed,
+  // and the dedicated terminals run.completed/run.failed/run.stopped (§5.3 v2.0:
+  // a run that ends via its terminal event must reach the dashboard without a
+  // redundant run.status_changed riding along).
+  const GLOBAL_EVENT_TYPES = new Set([
+    'run.created',
+    'run.status_changed',
+    'run.completed',
+    'run.failed',
+    'run.stopped',
+  ]);
+
   function dispatch(session: RunSession, event: Event): void {
     if (event.type === 'artifact.created') {
       artifactMeta.set(event.payload.artifact.id, event.payload.artifact);
     }
     broadcast(runClients.get(session.id), event);
-    if (event.type === 'run.created' || event.type === 'run.status_changed') {
+    if (GLOBAL_EVENT_TYPES.has(event.type)) {
       broadcast(globalClients, event);
     }
   }

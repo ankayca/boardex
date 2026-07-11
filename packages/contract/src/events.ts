@@ -118,7 +118,7 @@ export const RunnerStatusEventSchema = event(
   z.object({ bench: BenchStatusSchema }),
 );
 
-export const EventSchema = z.discriminatedUnion('type', [
+const eventSchemas = [
   RunCreatedEventSchema,
   RunPlanGeneratedEventSchema,
   RunStatusChangedEventSchema,
@@ -136,9 +136,65 @@ export const EventSchema = z.discriminatedUnion('type', [
   RunFailedEventSchema,
   RunStoppedEventSchema,
   RunnerStatusEventSchema,
-]);
+] as const;
+
+export const EventSchema = z.discriminatedUnion('type', [...eventSchemas]);
 export type Event = z.infer<typeof EventSchema>;
 export type EventType = Event['type'];
+
+/** Every type in the §5.2 catalog — the boundary of "known" for wire parsing. */
+export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set(
+  eventSchemas.map((schema) => schema.shape.type.value),
+);
+
+// ---------------------------------------------------------------------------
+// Envelope-first wire parsing (§5.1, T5.0 / audit F1).
+//
+// "Unknown event types must be ignored by the UI" — but seq is gapless, so a
+// dropped frame is indistinguishable from a lost one: it parks the reducer on a
+// permanent gap and turns every reconnect replay into the same failure (a
+// reconnect loop). Ignoring an event therefore CANNOT mean dropping it. Wire
+// parsing is envelope-first: any well-formed envelope is kept so its seq counts
+// toward continuity; only envelopes that also pass the strict catalog parse
+// carry state. The rest — unknown types, and equally a known type whose payload
+// does not conform — are tagged IgnoredEvent and contribute nothing but their
+// seq. The tag is a parse-time marker, never a wire field (both the envelope
+// and the catalog schemas strip unknown keys, so no wire object can smuggle it).
+// ---------------------------------------------------------------------------
+
+export interface IgnoredEvent extends EventEnvelope {
+  ignored: true;
+}
+
+/** What the wire actually yields: a catalog event, or an envelope kept for seq. */
+export type WireEvent = Event | IgnoredEvent;
+
+/** Narrow a WireEvent to the strict catalog union. */
+export function isKnownEvent(wire: WireEvent): wire is Event {
+  return !('ignored' in wire);
+}
+
+/**
+ * Parse one wire value envelope-first. Returns null only for frames that are not
+ * well-formed envelopes at all (no seq to account for); everything else is either
+ * a catalog Event or an IgnoredEvent that still counts toward seq continuity.
+ */
+export function parseWireEvent(value: unknown): WireEvent | null {
+  const envelope = EventEnvelopeSchema.safeParse(value);
+  if (!envelope.success) return null;
+  const known = EventSchema.safeParse(value);
+  return known.success ? known.data : { ...envelope.data, ignored: true };
+}
+
+/** Zod form of parseWireEvent, for response schemas (GET /runs/{id}/events). */
+export const WireEventSchema = z.unknown().transform((value, ctx): WireEvent => {
+  const wire = parseWireEvent(value);
+  if (wire === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'not a well-formed event envelope' });
+    return z.NEVER;
+  }
+  return wire;
+});
 
 export type RunCreatedEvent = z.infer<typeof RunCreatedEventSchema>;
 export type RunPlanGeneratedEvent = z.infer<typeof RunPlanGeneratedEventSchema>;

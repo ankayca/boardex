@@ -4,7 +4,7 @@
 // whole app rides one global connection no matter how many surfaces listen — the top
 // bar's runner pill (bench snapshot) and the Home list's live run updates both do.
 import { useEffect, useRef } from 'react';
-import type { Event } from '@boardex/contract';
+import { isKnownEvent, type Event } from '@boardex/contract';
 import { RUNNER_WS_BASE } from './config';
 import { WsClient, type WsConnectionStatus } from './ws';
 
@@ -22,9 +22,11 @@ function ensureClient(): void {
     wsBase: RUNNER_WS_BASE,
     target: { kind: 'global' },
     // Snapshot the set: a listener that unsubscribes mid-dispatch must not perturb the
-    // iteration (and the global stream is forward-compatible — unknown types dropped
-    // upstream in WsClient, §5.1).
+    // iteration. Forward compatibility (§5.1): the wire yields ignored envelopes for
+    // unknown types; the global stream has no seq continuity to preserve (no store, no
+    // replay), so they are simply not delivered — listeners see catalog events only.
     onEvent: (event) => {
+      if (!isKnownEvent(event)) return;
       for (const listener of [...listeners]) listener(event);
     },
     // The liveness signal behind everything derived from runner.status: a consumer

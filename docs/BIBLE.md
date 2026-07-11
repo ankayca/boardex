@@ -1,7 +1,7 @@
 # BOARDEX UI BIBLE
 ## Master Build Document for the Boardex Desktop MVP — UI, Contracts, and Claude Code Execution Plan
 
-Version 1.5 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged). v1.4: RunView's `logsByStep` values carry the `step.log` stream per line (`{stream, line}[]`), and RunView gains `iterations[]` (`{iteration, reason, firstStepIndex}` from `run.iteration_started`) — both reducer-only; wire contract unchanged (needed by T2.1's per-stream log tabs and iteration divider). v1.5: RunView gains `endedAt?` from the terminal event's envelope `ts` (reducer-only; wire contract unchanged — needed by T2.2's frozen terminal duration). v1.6: RunView's `diagnosis` gains `fixApprovalId?` — the id of the first `approval.requested` following `diagnosis.created` — so the UI binds the Diagnosis Card to exactly its fix approval (reducer-only; wire contract unchanged; T2.2 review F1/F3).
+Version 2.0 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged). v1.4: RunView's `logsByStep` values carry the `step.log` stream per line (`{stream, line}[]`), and RunView gains `iterations[]` (`{iteration, reason, firstStepIndex}` from `run.iteration_started`) — both reducer-only; wire contract unchanged (needed by T2.1's per-stream log tabs and iteration divider). v1.5: RunView gains `endedAt?` from the terminal event's envelope `ts` (reducer-only; wire contract unchanged — needed by T2.2's frozen terminal duration). v1.6: RunView's `diagnosis` gains `fixApprovalId?` — the id of the first `approval.requested` following `diagnosis.created` — so the UI binds the Diagnosis Card to exactly its fix approval (reducer-only; wire contract unchanged; T2.2 review F1/F3). **v2.0 (T5.0 conformance hardening — wire changes)**: envelope-first parse rule made normative in §5.1 (an unknown-typed, well-formed envelope still counts toward seq continuity); `ts` accepts naive ISO 8601 (§5.1); the three structured artifact content schemas (protocol_decode — reconciled to the boardex-logic parsers' actual shapes — code_diff, timing_measurement) are contract-owned and emitted to `json-schema/artifacts.schema.json` (§4); the global stream carries the dedicated terminal events `run.completed`/`run.failed`/`run.stopped` (§5.3); §5.7 adds the normative run-status transition graph; §7.1's next-action label for `awaiting_approval` is "Review approval"; the §7.2 bench-degraded warning repeats at hardware-action approvals (§7.3). Reducer-only, same release: legal-ordering reconciliation (§5.4 — early `step.completed`/`approval.resolved` buffered until their entity arrives; a check downgraded by the evidence law upgrades when its artifact lands; only what the stream never reconciles remains a warning), `reduceRun` takes `WireEvent[]` and returns `RunView | null` (§5.4 — ignored envelopes may legally precede `run.created`; a stream with no known event yet is the valid, empty view), and `RunView.warnings` surfaces in the workspace status card. Same release, fixtures: the fail-variant fixture `bme280_run_001_fail.jsonl` (§5.5) and the mock runner's `--fail-variant`/`FIXTURE=fail` switch (§5.6) exercise the `failed` terminal.
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -207,6 +207,8 @@ BenchStatus = { runnerOnline: boolean, contractVersion: string,
              name: string, state: 'online'|'offline'|'error', detail?: string }[] }
 ```
 
+**Structured artifact content (v2.0):** the structured kinds' JSON bodies are contract-owned schemas in `packages/contract/src/artifacts.ts`, emitted to `json-schema/artifacts.schema.json`: `protocol_decode` → `ProtocolDecodeContent` (annotations exactly as `servers/boardex-logic`'s `parse.py::parse_annotations` yields them — `{ raw, start?, end?, decoder?, text }` — folded into transactions exactly as `decode/i2c.py::parse_transactions` does), `code_diff` → `CodeDiffContent` (`{ files: [{ path, reason, diff }] }`), `timing_measurement` → `TimingMeasurementContent` (`{ measurement, valueHz }`). The runner serves its pipeline output verbatim; the UI parses with the same schemas.
+
 **Evidence-linking law (enforced in the reducer and in review):** a `MeasurementCheck` without a resolvable `artifactId` is invalid. A run cannot reach `completed` with unresolved `needs_review` checks unless the user explicitly accepts them.
 
 ---
@@ -229,7 +231,9 @@ Every event, no exceptions:
 }
 ```
 
-Rules: `seq` is per-run and gapless — the UI treats a gap as a protocol error and re-fetches via HTTP replay. Events are immutable and append-only. Unknown event types must be ignored by the UI (forward compatibility), but unknown types appearing in review of the mock runner are a failure (backward discipline).
+Rules: `seq` is per-run and gapless — the UI treats a gap as a protocol error and re-fetches via HTTP replay. Events are immutable and append-only. Unknown event types must be ignored by the UI (forward compatibility), but unknown types appearing in review of the mock runner are a failure (backward discipline). `ts` is ISO 8601; a naive (zoneless) timestamp is legal on the wire — producers SHOULD emit UTC with `Z`.
+
+**Envelope-first parsing (normative, v2.0):** because `seq` is gapless, "ignore" cannot mean "drop". Consumers parse every frame against the envelope first; a well-formed envelope whose type (or payload) fails the catalog parse still counts toward seq continuity and is then discarded without effect. This applies identically to the live WS stream and the HTTP replay body — an unknown-typed event in the log must not fail the replay response, or reconnect becomes a loop. Frames that are not well-formed envelopes at all carry no accountable `seq` and are dropped.
 
 ## 5.2 Event catalog (complete for MVP)
 
@@ -269,7 +273,10 @@ GET  /runs/{id}/events?afterSeq=N    -> Event[]        (HTTP replay for reconnec
 GET  /artifacts/{id}                 -> content (Content-Type per artifact.mimeType)
 GET  /artifacts/{id}/meta            -> Artifact
 WS   /ws?runId={id}                  -> event stream for one run (server pushes; client sends nothing)
-WS   /ws?global=1                    -> runner.status + run.created + run.status_changed for all runs (dashboard)
+WS   /ws?global=1                    -> runner.status + run.created + run.status_changed
+                                        + run.completed + run.failed + run.stopped for all runs (dashboard;
+                                        v2.0 — a run ending via its dedicated terminal event must reach the
+                                        dashboard without a redundant run.status_changed riding along)
 ```
 
 Command errors: HTTP 409 with `{ error, currentStatus }` when a command is invalid for the run's state (e.g. approving an already-resolved approval). The UI must render 409s as state refresh, not as crashes.
@@ -279,15 +286,21 @@ Command errors: HTTP 409 with `{ error, currentStatus }` when a command is inval
 `packages/contract/src/reducer.ts` exports:
 
 ```ts
-reduceRun(events: Event[]): RunView
+reduceRun(events: WireEvent[]): RunView | null
+// WireEvent = Event | IgnoredEvent, the envelope-first parse's output (§5.1): an
+// ignored envelope advances seq continuity and carries no state. Returns null —
+// the valid, empty view — while the stream holds no known event yet (ignored
+// envelopes may legally precede run.created); throws ProtocolError only on a seq
+// gap or a KNOWN-typed stream that starts before run.created.
 // RunView = { run, steps[], artifacts[], checks[], approvals[],
 //             diagnosis?: Diagnosis & { fixApprovalId?: string },
 //             riskSummary?: string, endedAt?: string,
 //             logsByStep: Map<stepId, {stream, line}[]>,
-//             iterations: {iteration, reason, firstStepIndex}[], lastSeq }
+//             iterations: {iteration, reason, firstStepIndex}[], lastSeq,
+//             warnings: string[] }   // contract violations observed while reducing
 ```
 
-Pure, deterministic, unit-tested against the fixture. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`, or a `run.status_changed` carrying a terminal status; the dedicated terminal events take precedence) and is undefined while the run is non-terminal. `diagnosis.fixApprovalId` is the id of the first `approval.requested` whose seq follows the `diagnosis.created`, and is undefined until that approval arrives — it is how the UI knows which pending approval is the fix approval. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
+Pure, deterministic, unit-tested against the fixture. Legal-ordering reconciliation (v2.0/T5.0): seq is ordered but §5.2 does not promise an `artifact.created` precedes the check citing it, a `step.started` precedes its outcome, or an `approval.requested` precedes its resolution — the reducer buffers such early references and reconciles them when the entity arrives; a check the evidence law downgraded to `needs_review` gets its wire verdict back when its artifact lands; only what the stream never reconciles remains in `RunView.warnings`. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`, or a `run.status_changed` carrying a terminal status; the dedicated terminal events take precedence) and is undefined while the run is non-terminal. `diagnosis.fixApprovalId` is the id of the first `approval.requested` whose seq follows the `diagnosis.created`, and is undefined until that approval arrives — it is how the UI knows which pending approval is the fix approval. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
 
 ## 5.5 Fixture: `bme280_run_001.jsonl`
 
@@ -310,6 +323,8 @@ The fixture tells this exact story (this narrative is the demo script and the ac
 
 Artifacts referenced by the fixture live as static files in `fixtures/artifacts/` (small, realistic: a plausible diff, ~40 lines of serial log, a decoded I2C transaction table as JSON, a build log). The cofounder later replaces this authored fixture with a genuinely recorded one — same format, zero UI changes.
 
+**Fail variant (v2.0): `bme280_run_001_fail.jsonl`** — the correct-fix-meets-faulty-hardware ending. Verbatim identical to the base story through iteration 2's flash (seq 68; asserted by the fixture test), then diverges: the capture decodes NACKs on every address phase at the *corrected* wire byte 0xEC, serial shows the same `i2c1_wait` timeout lines as iteration 1 (the driver has no NACKF handling, so the UART cannot tell the two failures apart — only the decode can), `device_ack` and `serial_output` fail again, and with nothing left to propose the run ends in `run.failed` with **no further approval requested**. Its own `iter2f` evidence artifacts live alongside the base set. This is the UI's real `failed` terminal (§2.2) — evidence retained, no report.
+
 ## 5.6 Mock runner behavior (tools/mock-runner)
 
 Node + TypeScript, `ws` + a minimal HTTP layer. Behavior:
@@ -322,6 +337,31 @@ Node + TypeScript, `ws` + a minimal HTTP layer. Behavior:
 - Supports `GET /runs/{id}/events?afterSeq=` from its in-memory log (reconnect testing).
 - Serves fixture artifacts with correct MIME types.
 - Ships one canned BoardProfile ("Nucleo-F303RE") and a BenchStatus with probe (ST-Link/pyOCD), serial, and logic analyzer (Kingst LA2016 via sigrok) all online, plus a `--degraded` flag that marks the logic analyzer offline (for readiness-UI testing).
+- `--fail-variant` (or env `FIXTURE=fail`) replays the fail-variant fixture (§5.5) instead of the base story — same gates, but iteration 2's checks fail again and the run ends in `run.failed` (v2.0; for failed-terminal UI testing).
+
+## 5.7 Run status transitions (normative, v2.0)
+
+A conforming runner moves a run's status only along these edges. Anything else is a contract violation, whether it arrives via `run.status_changed` or a dedicated event.
+
+```
+draft ──► planning ──► plan_ready ──► running
+                                        │  ▲
+                                        ▼  │ (approved)
+                                awaiting_approval
+                                        ▲
+                                        │ (fix approval requested)
+running ──► diagnosing ─────────────────┘
+running    ──► completed | failed
+diagnosing ──► failed            (no viable fix / iteration cap)
+any non-terminal ──► stopped     (user stop, or approval rejected)
+```
+
+Rules:
+
+1. **Terminal states are terminal.** `completed`, `failed`, `stopped` have no outgoing edges; nothing follows the dedicated terminal event.
+2. **A runner blocking on plan approval MUST have reported `plan_ready`.** The pause at the plan gate is visible state, not an implementation detail: `run.plan_generated` is emitted at or after the `plan_ready` transition, never while the run still reads `planning`.
+3. **`awaiting_approval` is entered only with a pending approval.** An `approval.requested` accompanies (or immediately follows) the transition; approving returns the run to `running`, rejecting ends it via `stopped`.
+4. **`diagnosing` follows failed checks** and exits either to `awaiting_approval` (fix proposed) or `failed` (nothing left to propose, or the profile's iteration cap is reached).
 
 ---
 
@@ -367,7 +407,7 @@ Six screens. Each lists purpose, content, states, and what "done" means.
 
 ## 7.1 Home / Runs
 
-Purpose: land, orient, resume. Content: runner status pill (online/offline + `runnerKind`), "New Run" primary button, list of runs — each row: title, board name, status badge, updated-at, **next action** as a real button (Approve plan / Approve flash / View evidence / Open report). Sorted: needs-attention first, then active, then recent. States: empty (first-use hero pointing to New Run), runner offline (banner with retry + troubleshooting note, list still renders from HTTP), bench needs attention (advisory one-line amber link under the banner slot — "N instruments need attention" → /boards — shown only while the runner is online; never gates New Run), populated. Done when: a user understands what Boardex is working on and what needs them within ten seconds.
+Purpose: land, orient, resume. Content: runner status pill (online/offline + `runnerKind`), "New Run" primary button, list of runs — each row: title, board name, status badge, updated-at, **next action** as a real button (Approve plan / Review approval / View evidence / Open report — "Review approval" since v2.0: the row cannot know which proposal is pending, so the label names the user's action, not a guessed hardware step). Sorted: needs-attention first, then active, then recent. States: empty (first-use hero pointing to New Run), runner offline (banner with retry + troubleshooting note, list still renders from HTTP), bench needs attention (advisory one-line amber link under the banner slot — "N instruments need attention" → /boards — shown only while the runner is online; never gates New Run), populated. Done when: a user understands what Boardex is working on and what needs them within ten seconds.
 
 ## 7.2 New Run Composer
 
@@ -379,7 +419,7 @@ Purpose: watch and control the active run; embodies §2.2's six states. Layout p
 
 - **Left rail — Board Context:** compact card: board name, MCU, repo (basename), instrument list resolved by reference against the live bench (found = green dot + the DEVICE NAME, the thing an operator recognises on the bench — the stable registry id it resolved to lives in the "View details" drawer, where it is the thing you copy into a bug report; degraded = the device's own StatusDot, amber offline / red error; missing = no dot, the profile's reference, amber "<reference> was not found on the bench"; serial resolves by kind; and with NO bench snapshot the list is unknown — no dots, plain instrument names, one neutral "Bench status unavailable." line, matching §7.2: never an assumed anything, since a pessimistic amber reports a healthy instrument as unplugged every time the socket blinks), safety line ("Flash requires approval · Max 3 iterations · Manual power: 3V3 confirmed"), "View details" → drawer with full profile incl. connection checklist.
 - **Center — Plan & Progress:** task prompt (collapsed to 2 lines, expandable); the plan as a vertical timeline — each step shows status (pending/active/succeeded/failed), title, and when expanded: summary, artifact chips, and a log pane (LogViewer, per-stream tabs: agent/build/flash/serial). Active step auto-expanded. Iteration ≥2 renders a divider: "Iteration 2 — applying fix" (driven by the `run.iteration_started` event).
-- **Right rail — Status & Approval:** current status card (status badge, elapsed, Stop Run — danger, always visible while non-terminal, with ConfirmDialog). When `awaiting_approval`: the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
+- **Right rail — Status & Approval:** current status card (status badge, elapsed, Stop Run — danger, always visible while non-terminal, with ConfirmDialog). When `awaiting_approval`: the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When the pending approval proposes hardware actions and the bench is degraded, the §7.2 warning repeats on the rail (v2.0, Kerem's ruling) — advisory, never gating, and profile-independent: mid-run approvals report the bench's own unhealthy devices only, they never re-resolve profile references. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
 - **Bottom — Evidence Summary band:** one chip per MeasurementCheck (verdict badge + short name, e.g. "I2C clock · PASS"), plus Open Logs / Open Diff / Open Report buttons. Clicking a chip opens Evidence Detail.
 
 States: all six from §2.2 plus `stopped`/`failed` terminal (muted summary + evidence retained). Reconnect: on WS drop show a thin amber "reconnecting" bar; on reconnect, HTTP replay from `lastSeq` then resume WS — no data loss, no duplicate rendering (reducer idempotence by seq). Done when: the full fixture plays start-to-finish with both approvals, the failure/diagnosis pass, iteration 2, and completion — and a mid-run page refresh restores identical state.

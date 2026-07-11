@@ -1,9 +1,11 @@
 // WebSocket client for the event stream (BIBLE §5.3/§5.4). It connects per run
-// (`/ws?runId=`) or globally (`/ws?global=1`), Zod-validates every inbound message,
-// ignores unknown event types (§5.1 forward compatibility), auto-reconnects with
-// backoff, runs a heartbeat/timeout watchdog, and — for run streams — replays the
-// events the socket missed over HTTP before resuming live delivery (D5).
-import { EventSchema, type Event } from '@boardex/contract';
+// (`/ws?runId=`) or globally (`/ws?global=1`), parses every inbound message
+// envelope-first (§5.1/T5.0: an unknown-typed event is delivered as an ignored
+// envelope so its seq still counts toward continuity — dropping it would park the
+// reducer on a permanent gap), auto-reconnects with backoff, runs a heartbeat/
+// timeout watchdog, and — for run streams — replays the events the socket missed
+// over HTTP before resuming live delivery (D5).
+import { parseWireEvent, type WireEvent } from '@boardex/contract';
 
 // Structural WebSocket shape — satisfied by the browser WebSocket, Node's global
 // WebSocket, and the `ws` package. Structural typing keeps this module free of the
@@ -25,11 +27,11 @@ export type WsTarget = { kind: 'run'; runId: string } | { kind: 'global' };
 export interface WsClientOptions {
   wsBase: string;
   target: WsTarget;
-  onEvent: (event: Event) => void;
+  onEvent: (event: WireEvent) => void;
   // Run targets only: fetch the events after the caller's last-known contiguous seq,
   // fed through onEvent on every (re)connect before live events resume. Omit for the
   // global stream (the runner re-sends a runner.status snapshot on connect).
-  fetchReplay?: () => Promise<Event[]>;
+  fetchReplay?: () => Promise<WireEvent[]>;
   onStatusChange?: (status: WsConnectionStatus) => void;
   backoff?: { baseMs?: number; maxMs?: number };
   // Silence longer than this cycles the socket, defending against a silently dead
@@ -43,17 +45,18 @@ export interface WsClientOptions {
 const DEFAULT_BACKOFF = { baseMs: 300, maxMs: 5000 };
 const DEFAULT_HEARTBEAT_MS = 30000;
 
-// Parse one inbound frame. Known events are returned; a well-formed envelope with an
-// unknown type (or any malformed frame) is dropped, never thrown (§5.1).
-function parseEvent(raw: unknown): Event | null {
+// Parse one inbound frame, envelope-first (§5.1/T5.0): catalog events arrive typed,
+// a well-formed envelope that fails the catalog parse arrives as an IgnoredEvent
+// (its seq must still reach the store), and only frames that are not envelopes at
+// all are dropped — never thrown.
+function parseEvent(raw: unknown): WireEvent | null {
   let json: unknown;
   try {
     json = JSON.parse(typeof raw === 'string' ? raw : String(raw));
   } catch {
     return null;
   }
-  const parsed = EventSchema.safeParse(json);
-  return parsed.success ? parsed.data : null;
+  return parseWireEvent(json);
 }
 
 export class WsClient {
@@ -67,7 +70,7 @@ export class WsClient {
   private attempt = 0;
   private disposed = false;
   private replayInFlight = false;
-  private liveBuffer: Event[] = [];
+  private liveBuffer: WireEvent[] = [];
   // Connection generation. Bumped whenever a socket is opened, cycled, or closed, so
   // an async onOpen continuation can detect that its socket was superseded while it
   // awaited and bail out instead of corrupting the newer handshake's replay state.
@@ -145,7 +148,7 @@ export class WsClient {
     // them after — the store dedupes by seq, so overlap with the replay is a no-op.
     this.replayInFlight = true;
     this.liveBuffer = [];
-    let replayed: Event[];
+    let replayed: WireEvent[];
     try {
       replayed = await this.options.fetchReplay();
     } catch {
@@ -158,11 +161,24 @@ export class WsClient {
       return;
     }
     if (this.disposed || epoch !== this.epoch) return;
-    for (const event of replayed) this.options.onEvent(event);
-    const buffered = this.liveBuffer;
-    this.liveBuffer = [];
-    this.replayInFlight = false;
-    for (const event of buffered) this.options.onEvent(event);
+    // The flush must not be able to wedge the client: an onEvent throw that
+    // escaped here used to leave replayInFlight=true, silently parking every
+    // future live event in the buffer (T5.0 FIX_FIRST F1). On error, reset the
+    // replay state and surface it as a connection failure — cycle the socket so
+    // the caller sees 'reconnecting' and the handshake (with its idempotent
+    // replay) retries from the store's last good seq.
+    try {
+      for (const event of replayed) this.options.onEvent(event);
+      const buffered = this.liveBuffer;
+      this.liveBuffer = [];
+      this.replayInFlight = false;
+      for (const event of buffered) this.options.onEvent(event);
+    } catch {
+      if (this.disposed || epoch !== this.epoch) return;
+      this.replayInFlight = false;
+      this.liveBuffer = [];
+      this.cycleSocket();
+    }
   }
 
   private onMessage(raw: unknown): void {

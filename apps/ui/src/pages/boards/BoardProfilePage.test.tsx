@@ -20,6 +20,13 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 
+// ProfileForm's picker reads the bench through useBenchStatus (T5.0/F8); stub the
+// global socket inert so its reconnect churn cannot bump the snapshot generation
+// mid-test (liveness itself is covered by benchLiveness.integration.test.tsx).
+vi.mock('../../lib/globalStream', () => ({
+  subscribeGlobalStatus: () => () => undefined,
+}));
+
 import BoardProfilePage from './BoardProfilePage';
 import BoardsPage from './BoardsPage';
 

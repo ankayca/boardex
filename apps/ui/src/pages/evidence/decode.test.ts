@@ -151,6 +151,24 @@ describe('decodeRows derivation', () => {
     expect(rows[14]?.annotation).toMatch(/^START REPEAT/);
   });
 
+  it('degrades time to an em dash when the aligned annotation has no sample prefix', () => {
+    // parse.py leaves start/end unset for -A lines without a sample-range prefix
+    // (sigrok without --protocol-decoder-samplenum); the row must still render.
+    const decode = {
+      protocol: 'i2c',
+      sample_rate_hz: 4_000_000,
+      annotations: [
+        { raw: 'i2c-1: START', decoder: 'i2c-1', text: 'START' },
+        { raw: 'i2c-1: ADDRESS WRITE: 76 ACK', decoder: 'i2c-1', text: 'ADDRESS WRITE: 76 ACK' },
+        { raw: 'i2c-1: STOP', decoder: 'i2c-1', text: 'STOP' },
+      ],
+      transactions: [{ addr_7bit: 59, rw: 'w' as const, write: [], read: [], nack_at: null }],
+    };
+    const [row] = decodeRows(decode);
+    expect(row?.time).toBe('—');
+    expect(row?.annotation).toContain('ADDRESS WRITE: 76 ACK');
+  });
+
   it('degrades time/annotation to em dashes when segments cannot align', () => {
     const decode = {
       protocol: 'i2c',
