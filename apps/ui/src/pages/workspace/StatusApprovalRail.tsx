@@ -3,6 +3,7 @@
 // until the confirming event lands in the reduced view, and a 409 StateConflict is
 // state refresh, not an error — the event stream reconciles the view (§5.3).
 import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { Approval, RunView } from '@boardex/contract';
 import { api, StateConflict } from '../../lib/api';
 import { benchIssues } from '../../lib/benchReadiness';
@@ -34,6 +35,11 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       if (error instanceof StateConflict) resolve.reset();
     },
   });
+
+  // The completed run's deliverable (§7.6): a prominent link to the Validation
+  // Report, shown only once the report_md artifact exists — a failed run that never
+  // produced one renders no link, no dead end.
+  const reportTarget = evidenceTargets(view).report;
 
   const awaiting = run.status === 'awaiting_approval';
   const gate = awaiting ? deriveApprovalGate(view) : null;
@@ -85,6 +91,14 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
         )}
         onStop={() => stop.mutate()}
       />
+      {reportTarget && (
+        <Link
+          to={`/runs/${run.id}/report`}
+          className="flex w-full items-center justify-center rounded-button bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+        >
+          Open Validation Report
+        </Link>
+      )}
       {hardwareApprovalIssues.length > 0 && <BenchWarning issues={hardwareApprovalIssues} />}
       {gate && fixApproval === null && (
         <ApprovalCard

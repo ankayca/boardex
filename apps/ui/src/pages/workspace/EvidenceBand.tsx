@@ -87,7 +87,9 @@ export function EvidenceBand({ view }: { view: RunView }) {
       <div className="flex shrink-0 items-center gap-2">
         <BandAction label="Open Logs" to={targets.logs && evidenceHref(run.id, targets.logs)} />
         <BandAction label="Open Diff" to={targets.diff && evidenceHref(run.id, targets.diff)} />
-        <BandAction label="Open Report" to={targets.report && evidenceHref(run.id, targets.report)} />
+        {/* Open Report opens the dedicated §7.6 Validation Report screen (not the
+            evidence drawer); disabled until the run's report_md artifact exists. */}
+        <BandAction label="Open Report" to={targets.report ? `/runs/${run.id}/report` : null} />
       </div>
     </section>
   );

@@ -90,7 +90,7 @@ describe('EvidenceBand geometry (§6.3)', () => {
 });
 
 describe('EvidenceBand actions', () => {
-  it('deep-links Open Logs / Open Diff / Open Report to real artifact ids from RunView', () => {
+  it('deep-links Open Logs / Open Diff to real artifact ids, Open Report to the §7.6 report screen', () => {
     const view = buildView([
       { type: 'artifact.created', payload: { artifact: artifactOf('art_diff', 'code_diff') } },
       { type: 'artifact.created', payload: { artifact: artifactOf('art_serial', 'serial_log') } },
@@ -101,7 +101,10 @@ describe('EvidenceBand actions', () => {
 
     expect(screen.getByRole('link', { name: 'Open Logs' }).getAttribute('href')).toBe(href('art_serial'));
     expect(screen.getByRole('link', { name: 'Open Diff' }).getAttribute('href')).toBe(href('art_diff'));
-    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(href('art_report'));
+    // Open Report leaves the evidence drawer for the dedicated Validation Report view.
+    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(
+      '/runs/run_t21/report',
+    );
   });
 });
 
