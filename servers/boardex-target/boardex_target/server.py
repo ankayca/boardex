@@ -21,7 +21,12 @@ from mcp.server.fastmcp import FastMCP
 
 from .backends import build_registry
 from .session import SessionManager
-from .tools import composite, sessions as session_tools, target_ops
+from .tools import (
+    composite,
+    debug as debug_tools,
+    sessions as session_tools,
+    target_ops,
+)
 
 log = logging.getLogger("boardex.target")
 
@@ -39,6 +44,7 @@ registry: BackendRegistry[TargetController] = build_registry(sessions)
 # Registration order is part of the agent-facing surface; keep it stable.
 target_ops.register(mcp, registry)
 session_tools.register(mcp, registry, sessions)
+debug_tools.register(mcp, registry, sessions)
 composite.register(mcp, registry, sessions)
 
 

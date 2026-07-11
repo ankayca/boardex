@@ -99,3 +99,109 @@ class SupportsRttLocation(Protocol):
     def rtt_control_block(
         self, device_id: str, elf_path: str | None = None
     ) -> int | None: ...
+
+
+@runtime_checkable
+class SupportsHaltModeDebug(Protocol):
+    """Backend can stop the core and inspect/control it (interactive debugging).
+
+    This is the intrusive counterpart to the non-intrusive flash -> run ->
+    observe loop: the core is *stopped* so no signals reach the instrument side.
+    Every method is coarse and verdict-returning (never a raw gdb micro-op): the
+    agent asks ``run_until(symbol)`` and gets a full source-mapped context dump
+    back rather than driving step/continue/read_reg in a loop.
+
+    Halt-mode state (a stopped core, set breakpoints/watchpoints) does not
+    survive a fresh connect, so a backend implementing this must run every
+    method inside one persistent session (``SupportsSessions``); a transient
+    tool-to-tool connect cannot compose these. ``location`` accepts a symbol
+    name, ``file:line``, or a raw/hex address.
+    """
+
+    def set_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def clear_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def set_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult: ...
+
+    def clear_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult: ...
+
+    def run_until(
+        self,
+        device_id: str,
+        location: str | None = None,
+        *,
+        timeout_s: float = 5.0,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def step(
+        self,
+        device_id: str,
+        *,
+        count: int = 1,
+        over: bool = True,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def read_registers(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def write_register(
+        self,
+        device_id: str,
+        name: str,
+        value: int,
+        *,
+        target: str | None = None,
+    ) -> OperationResult: ...
+
+    def backtrace(
+        self,
+        device_id: str,
+        *,
+        max_frames: int = 16,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult: ...
+
+    def list_debug_resources(
+        self, device_id: str, *, target: str | None = None
+    ) -> OperationResult: ...

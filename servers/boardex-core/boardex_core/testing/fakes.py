@@ -67,6 +67,12 @@ class FakeTargetController(TargetController):
         self.flashed: list[str] = []
         self.rtt_channel = FakeRttChannel() if with_rtt else None
         self.native_sessions: list[FakeNativeSession] = []
+        # Halt-mode debug simulation.
+        self.breakpoints: set[int] = set()
+        self.watchpoints: set[tuple[int, int, str]] = set()
+        self.registers: dict[str, int] = {"pc": 0x0800_0000, "sp": 0x2000_1000, "lr": 0}
+        self.hw_breakpoint_slots = 6
+        self.watchpoint_slots = 4
 
     # -- Backend -------------------------------------------------------------
 
@@ -225,6 +231,188 @@ class FakeTargetController(TargetController):
             pins={},
             clocks={},
             hints=[],
+        )
+
+    # -- SupportsHaltModeDebug ---------------------------------------------
+
+    @staticmethod
+    def _addr(location: Any) -> int | None:
+        if isinstance(location, int):
+            return location
+        text = str(location).strip()
+        try:
+            return int(text, 16) if text.lower().startswith("0x") else int(text)
+        except ValueError:
+            return None  # a symbol name; the fake has no ELF to resolve it
+
+    def set_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        addr = self._addr(location)
+        if addr is None:
+            return OperationResult.errored(f"Fake cannot resolve {location!r}.")
+        if addr in self.breakpoints:
+            return OperationResult.passed("Breakpoint already set.", address=addr)
+        if len(self.breakpoints) >= self.hw_breakpoint_slots:
+            return OperationResult.errored("No hardware breakpoint slot free.")
+        self.breakpoints.add(addr)
+        return OperationResult.passed(f"Breakpoint set at {addr:#010x}.", address=addr)
+
+    def clear_breakpoint(
+        self,
+        device_id: str,
+        location: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        addr = self._addr(location)
+        self.breakpoints.discard(addr)  # type: ignore[arg-type]
+        return OperationResult.passed(f"Cleared breakpoint.", address=addr)
+
+    def set_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        if len(self.watchpoints) >= self.watchpoint_slots:
+            return OperationResult.errored("No DWT watchpoint slot free.")
+        self.watchpoints.add((address, size, access))
+        return OperationResult.passed("Watchpoint set.", address=address, access=access)
+
+    def clear_watchpoint(
+        self,
+        device_id: str,
+        address: int,
+        *,
+        size: int = 4,
+        access: str = "write",
+        target: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        self.watchpoints.discard((address, size, access))
+        return OperationResult.passed("Cleared watchpoint.", address=address)
+
+    def run_until(
+        self,
+        device_id: str,
+        location: str | None = None,
+        *,
+        timeout_s: float = 5.0,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        self.halted = True
+        if location is not None:
+            addr = self._addr(location)
+            if addr is None:
+                return OperationResult.errored(f"Fake cannot resolve {location!r}.")
+            self.registers["pc"] = addr
+            self.breakpoints.add(addr)
+            reason = "breakpoint"
+        else:
+            reason = "halt"
+        return OperationResult.passed(
+            f"Stopped at {self.registers['pc']:#010x}.",
+            stopped=True,
+            reason=reason,
+            timed_out=False,
+            pc=self.registers["pc"],
+            location=f"{self.registers['pc']:#010x}",
+            registers=dict(self.registers),
+            backtrace=[{"pc": self.registers["pc"], "location": f"{self.registers['pc']:#010x}"}],
+        )
+
+    def step(
+        self,
+        device_id: str,
+        *,
+        count: int = 1,
+        over: bool = True,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        self.halted = True
+        self.registers["pc"] += 2 * max(count, 1)
+        return OperationResult.passed(
+            f"Stepped {count}.",
+            steps=max(count, 1),
+            over=over,
+            pc=self.registers["pc"],
+            registers=dict(self.registers),
+        )
+
+    def read_registers(
+        self,
+        device_id: str,
+        *,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        if not self.halted:
+            return OperationResult.errored("Core is running; halt it first.")
+        return OperationResult.passed(
+            "Read registers.", registers=dict(self.registers), pc=self.registers["pc"]
+        )
+
+    def write_register(
+        self,
+        device_id: str,
+        name: str,
+        value: int,
+        *,
+        target: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        if not self.halted:
+            return OperationResult.errored("Core is running; halt it first.")
+        self.registers[name] = value & 0xFFFFFFFF
+        return OperationResult.passed(
+            f"Wrote {name}.", register=name, value=value & 0xFFFFFFFF, readback=self.registers[name]
+        )
+
+    def backtrace(
+        self,
+        device_id: str,
+        *,
+        max_frames: int = 16,
+        target: str | None = None,
+        elf_path: str | None = None,
+    ) -> OperationResult:
+        self._check(device_id)
+        if not self.halted:
+            return OperationResult.errored("Core is running; halt it first.")
+        frames = [{"pc": self.registers["pc"], "location": f"{self.registers['pc']:#010x}"}]
+        return OperationResult.passed(
+            f"{len(frames)} frame(s).", frames=frames, frame_count=len(frames), confidence="low"
+        )
+
+    def list_debug_resources(
+        self, device_id: str, *, target: str | None = None
+    ) -> OperationResult:
+        self._check(device_id)
+        return OperationResult.passed(
+            "Debug resources.",
+            hw_breakpoints_free=self.hw_breakpoint_slots - len(self.breakpoints),
+            breakpoints_set_count=len(self.breakpoints),
+            watchpoints_total=self.watchpoint_slots,
+            watchpoints_used=len(self.watchpoints),
+            watchpoints_free=self.watchpoint_slots - len(self.watchpoints),
         )
 
     # -- test helpers ---------------------------------------------------------

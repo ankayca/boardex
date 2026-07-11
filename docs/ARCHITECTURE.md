@@ -157,11 +157,18 @@ What makes these *agent-actionable* rather than raw hardware pokes:
   Turns "flash and run" into a deterministic checkpoint while leaving the
   pass/fail judgment to the agent (`data.matched`).
 
-The next programmer-side phase — interactive/halt-mode debugging (breakpoints,
-watchpoints, `run_until`, backtrace) — is specified in
-[`phase2-interactive-debug.md`](phase2-interactive-debug.md). It builds on the
-`elf`/`cortex_m`/session foundations above and lands on the `TargetController`
-ABC so every future probe adapter inherits it.
+- **Interactive (halt-mode) debugging.** The intrusive counterpart to the loop
+  above: `set_breakpoint`/`set_watchpoint`, `run_until` (set-if-needed + resume +
+  wait, returning a source-mapped stop context), `step`, `read_registers`/
+  `write_register`, `backtrace`, and `list_debug_resources`. It builds on the
+  `elf`/`cortex_m`/session foundations and ships as the opt-in
+  `SupportsHaltModeDebug` capability (like `SupportsSessions`), not on the base
+  ABC — a probe that only flashes need not implement it. Because a stopped core
+  and its FPB/DWT slots do not survive a fresh connect, every method runs inside
+  one persistent session; transient tool-to-tool composition is refused.
+  `run_until` + a write `set_watchpoint` is the marquee feature with no `printf`
+  equivalent: catch the instruction that corrupts an address and report it as
+  `func (file:line)`.
 
 ## How to add a new backend (the contributor workflow)
 

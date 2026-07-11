@@ -7,10 +7,12 @@ from typing import Any, Callable
 from boardex_core import (
     NativeSession,
     OperationResult,
+    SupportsHaltModeDebug,
     SupportsPeripheralInspection,
     SupportsRttLocation,
     SupportsSessions,
 )
+from boardex_core.testing import FakeTargetController
 
 
 class _BareAdapter:
@@ -53,6 +55,13 @@ def test_bare_adapter_supports_nothing() -> None:
     assert not isinstance(adapter, SupportsSessions)
     assert not isinstance(adapter, SupportsPeripheralInspection)
     assert not isinstance(adapter, SupportsRttLocation)
+    assert not isinstance(adapter, SupportsHaltModeDebug)
+
+
+def test_fake_target_controller_supports_halt_mode_debug() -> None:
+    # The reference fake implements every optional capability, including the
+    # Phase 2 halt-mode debug surface.
+    assert isinstance(FakeTargetController(), SupportsHaltModeDebug)
 
 
 def test_full_adapter_supports_all() -> None:

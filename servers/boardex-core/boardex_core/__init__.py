@@ -8,6 +8,7 @@ from __future__ import annotations
 from .capabilities import (
     NativeSession,
     RttChannel,
+    SupportsHaltModeDebug,
     SupportsPeripheralInspection,
     SupportsRttLocation,
     SupportsSessions,
@@ -41,6 +42,7 @@ __all__ = [
     "OperationResult",
     "RttChannel",
     "RttUnavailableError",
+    "SupportsHaltModeDebug",
     "SupportsPeripheralInspection",
     "SupportsRttLocation",
     "SupportsSessions",

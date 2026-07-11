@@ -66,3 +66,36 @@ def test_load_returns_none_for_missing_or_nonelf(tmp_path):
     junk = tmp_path / "junk.elf"
     junk.write_text("not an elf")
     assert ElfInfo.load(str(junk)) is None
+
+
+# -- inverse resolution (Phase 2: line -> address, location -> address) ----
+
+
+def test_line_to_address_is_inverse_of_line_lookup(sample_elf):
+    elf = ElfInfo.load(sample_elf)
+    # helper is one line; resolve its entry to a (file, line), then invert it.
+    info = elf.resolve_address(elf.symbol_address("helper"))
+    addr = elf.line_to_address(info["file"], info["line"])
+    assert addr is not None
+    # The inverted address must resolve back to the same source line.
+    assert elf.resolve_address(addr)["line"] == info["line"]
+
+
+def test_line_to_address_matches_basename(sample_elf):
+    elf = ElfInfo.load(sample_elf)
+    info = elf.resolve_address(elf.symbol_address("main"))
+    # A bare basename ("sample.c") resolves the same as the full path.
+    assert elf.line_to_address("sample.c", info["line"]) is not None
+
+
+def test_address_for_location_accepts_symbol_line_and_hex(sample_elf):
+    elf = ElfInfo.load(sample_elf)
+    by_symbol = elf.address_for_location("main")
+    assert by_symbol == elf.symbol_address("main")
+
+    info = elf.resolve_address(elf.symbol_address("helper"))
+    by_line = elf.address_for_location(f"sample.c:{info['line']}")
+    assert by_line is not None
+
+    assert elf.address_for_location("0x08000abc") == 0x08000ABC
+    assert elf.address_for_location("nonexistent_symbol_xyz") is None
