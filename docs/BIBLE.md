@@ -592,6 +592,28 @@ Acceptance: from the fixture's failed device_ack check, a user reaches the exact
 ### T5.2 — Run history: terminal runs render fully from HTTP event replay (no WS), proving the event-sourcing bet.
 ### T5.3 — Real-runner integration + backend conformance audit (see §10). This is the joint task with the cofounder; UI changes REQUIRED to be zero — any needed UI change is by definition a contract bug and gets fixed in the contract + mock first.
 
+## Sprint 6 — UI Excellence (goal: the UI reads as a designed product; Documents/Sources lands as contract v2.1)
+
+Protocol for this sprint: T6.1/T6.2/T6.4/T6.5 run the **light loop** — build → Kerem's screenshot review → iterate — with one sprint-level adversarial review (§9.2) at the end covering all four. T6.3 and T6.6 touch the contract surface and keep the full per-task protocol (§9.1/§9.2).
+
+### T6.1 — Design language v2
+Evolved type scale and rhythm; an elevation + focus-state system; motion tokens (durations/easings for run-state transitions); timeline status iconography; the /design gallery updated as the new visual-regression baseline. D14 color reservations are non-negotiable.
+
+### T6.2 — Workspace as theater
+Timeline motion on step transitions; active-step live treatment; LogViewer upgrades (timestamps, per-stream accents within token law, find-in-log); Progress wired into the StatusCard (steps completed); artifact chips animating in as evidence lands; the evidence-band verdict-flip moment.
+
+### T6.3 — Documents & Sources (full protocol; contract v2.1 via PR to the backend owner)
+`BoardProfile.documents[]`; `GET /documents/{id}` by reference; a `source_excerpt` artifact kind; resolvable `sourceRef`. The mock serves a real datasheet excerpt + schematic PDF. UI: a Sources tab in the evidence drawer + a reference panel in the workspace rail; citations deep-link to the exact section.
+
+### T6.4 — Command palette & keyboard-first
+⌘K palette (navigate runs/boards/evidence; actions navigate to their surface — approvals still require their card); global shortcuts; visible focus order.
+
+### T6.5 — First-run experience & demo mode
+Onboarding empty states; "Watch a demo run" replaying the fixture as a guided, self-narrating tour.
+
+### T6.6 — Settings + model selection (gated on the runner-capabilities contract proposal riding in T6.3's PR)
+Runner URL setting replacing the baked env var; a model picker in the composer; model attribution in the report.
+
 ---
 
 # 9. Working Protocol (the entire "process" we keep — nothing else)
