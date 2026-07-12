@@ -10,8 +10,10 @@ import {
   ApprovalSchema,
   ArtifactSchema,
   BenchStatusSchema,
+  BoardDocumentSchema,
   BoardProfileSchema,
   DiagnosisSchema,
+  DocumentKindSchema,
   IdSchema,
   IsoDateTimeSchema,
   MeasurementCheckSchema,
@@ -59,6 +61,7 @@ import {
   CreateRunResponseSchema,
   GetArtifactMetaResponseSchema,
   GetBenchResponseSchema,
+  GetDocumentMetaResponseSchema,
   GetRunEventsQuerySchema,
   HealthResponseSchema,
   ListBoardProfilesResponseSchema,
@@ -85,6 +88,8 @@ const entityDefinitions = {
   MeasurementCheck: MeasurementCheckSchema,
   Approval: ApprovalSchema,
   Diagnosis: DiagnosisSchema,
+  DocumentKind: DocumentKindSchema,
+  BoardDocument: BoardDocumentSchema,
   BoardProfile: BoardProfileSchema,
   BenchStatus: BenchStatusSchema,
 };
@@ -134,6 +139,7 @@ const commandDefinitions = {
   // deliberately looser; a transform cannot round-trip to JSON Schema anyway.)
   GetRunEventsResponse: z.array(EventSchema),
   GetArtifactMetaResponse: GetArtifactMetaResponseSchema,
+  GetDocumentMetaResponse: GetDocumentMetaResponseSchema,
   ConflictError: ConflictErrorSchema,
 };
 
@@ -172,7 +178,9 @@ const commandsDocument = {
     'POST /runs/{id}/stop: StopRunRequest -> 204; ' +
     'GET /runs/{id}/events?afterSeq=N (GetRunEventsQuery) -> GetRunEventsResponse; ' +
     'GET /artifacts/{id} -> raw content per artifact.mimeType; ' +
-    'GET /artifacts/{id}/meta -> GetArtifactMetaResponse. ' +
+    'GET /artifacts/{id}/meta -> GetArtifactMetaResponse; ' +
+    'GET /documents/{id} -> raw content per BoardDocument.mimeType (v2.1); ' +
+    'GET /documents/{id}/meta -> GetDocumentMetaResponse (v2.1). ' +
     'Invalid-for-state commands answer HTTP 409 with ConflictError.',
   definitions: buildDefinitions(commandDefinitions),
 };

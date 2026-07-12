@@ -97,16 +97,20 @@ export default function RunPage() {
 
   const { run } = view;
 
-  const evidenceDrawer = evidenceOpen ? (
-    <EvidenceDrawer view={view} onClose={() => navigate(`/runs/${id}`)} />
-  ) : null;
-
   // Fail-closed (decisions.md 2026-07-07): the profile is resolved only when the query
   // succeeded AND the run's boardProfileId is in the list. Anything else — pending,
   // errored, or unknown id — is unresolved safety context and blocks approval.
   const profile = profilesQuery.isSuccess
     ? (profilesQuery.data.find((p) => p.id === run.boardProfileId) ?? null)
     : null;
+
+  const evidenceDrawer = evidenceOpen ? (
+    <EvidenceDrawer
+      view={view}
+      documents={profile?.documents}
+      onClose={() => navigate(`/runs/${id}`)}
+    />
+  ) : null;
 
   if (!COMPOSER_STATUSES.has(run.status)) {
     return (

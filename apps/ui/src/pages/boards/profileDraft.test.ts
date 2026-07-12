@@ -5,12 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { BoardProfileSchema, type BoardProfile } from '@boardex/contract';
 import {
   addChecklistRow,
+  addDocumentRow,
   blankDraft,
   fromProfile,
   moveChecklistRow,
   newBoardProfileId,
   newChecklistRow,
   removeChecklistRow,
+  removeDocumentRow,
   validateDraft,
   type ChecklistRow,
   type ProfileDraft,
@@ -63,6 +65,52 @@ describe('validateDraft — a complete draft', () => {
   it('preserves knownQuirks, which §7.5 gives no section and the form never shows', () => {
     const result = validateDraft(validDraft());
     expect(result.ok && result.profile.knownQuirks).toEqual(FULL.knownQuirks);
+  });
+
+  // v2.1 (T6.3): documents round-trip through the editable rows, trimmed, and a
+  // documents-less profile omits the key entirely.
+  it('round-trips documents through the metadata rows, and omits the key when there are none', () => {
+    const withDocs = {
+      ...FULL,
+      documents: [
+        { id: 'doc_bme280_datasheet', label: 'BME280 datasheet', kind: 'datasheet', mimeType: 'text/markdown' },
+      ] as const,
+    };
+    const kept = validateDraft(fromProfile({ ...withDocs, documents: [...withDocs.documents] }));
+    expect(kept.ok && kept.profile.documents).toEqual(withDocs.documents);
+
+    // A documents-less profile round-trips with no documents key at all.
+    const none = validateDraft(validDraft());
+    expect(none.ok && 'documents' in none.profile).toBe(false);
+  });
+});
+
+describe('validateDraft — Documents rows (T6.3)', () => {
+  it('errors a document row missing id, label, or MIME type, at its contract path', () => {
+    const draft = { ...validDraft(), documents: [addDocumentRow([])[0]!] }; // one blank row
+    const result = validateDraft(draft);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).toHaveProperty('documents.0.id');
+    expect(result.errors).toHaveProperty('documents.0.label');
+    expect(result.errors).toHaveProperty('documents.0.mimeType');
+    // kind is a select — always valid, never an error path.
+    expect(result.errors).not.toHaveProperty('documents.0.kind');
+  });
+
+  it('trims a filled row and emits it as a BoardDocument', () => {
+    const row = { ...addDocumentRow([])[0]!, id: '  doc_x ', label: ' Datasheet ', kind: 'reference' as const, mimeType: ' application/pdf ' };
+    const result = validateDraft({ ...validDraft(), documents: [row] });
+    expect(result.ok && result.profile.documents).toEqual([
+      { id: 'doc_x', label: 'Datasheet', kind: 'reference', mimeType: 'application/pdf' },
+    ]);
+  });
+
+  it('add/remove are pure and key-stable', () => {
+    const one = addDocumentRow([]);
+    const two = addDocumentRow(one);
+    expect(two).toHaveLength(2);
+    expect(removeDocumentRow(two, one[0]!.key)).toEqual([two[1]]);
   });
 });
 

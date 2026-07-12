@@ -6,40 +6,54 @@
 // its artifact in ≤2 clicks.
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Artifact, RunView } from '@boardex/contract';
+import type { Artifact, BoardDocument, RunView } from '@boardex/contract';
 import { Drawer } from '../../design';
 import { ChecksTab } from './ChecksTab';
 import { DecodeTab } from './DecodeTab';
 import { DiffTab } from './DiffTab';
 import { LogsTab } from './LogsTab';
 import { RawTab } from './RawTab';
+import { SourcesTab } from './SourcesTab';
 import { EVIDENCE_TABS, latestOfKind, resolveDeepLink, type EvidenceTabId } from './tabs';
 
 export interface EvidenceDrawerProps {
   view: RunView;
+  /** The run's board profile documents (§7.3, T6.3) — the Sources tab's subject. */
+  documents?: readonly BoardDocument[];
   onClose: () => void;
 }
 
-export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
+export function EvidenceDrawer({ view, documents, onClose }: EvidenceDrawerProps) {
   const [searchParams] = useSearchParams();
   const artifactParam = searchParams.get('artifact');
+  // Sources deep link (T6.3): ?doc=<id>&loc=<locator> opens the Sources tab at that
+  // document, highlighted at the locator. doc and artifact links are mutually
+  // exclusive in practice — each surface emits one.
+  const docParam = searchParams.get('doc');
+  const locParam = searchParams.get('loc');
   const target = resolveDeepLink(view.artifacts, artifactParam);
+  // A doc deep link wins the Sources tab; otherwise the artifact resolution decides.
+  const deepLinkTab: EvidenceTabId = docParam ? 'sources' : target.tab;
 
   // The deep link picks the tab; the user can still switch tabs freely afterwards.
   // Derived-state reset (same pattern as useRunStream): re-derive before painting
-  // when the ?artifact param changes — a check row or band chip was clicked — OR
-  // when the param's resolution changes: a link can reference an artifact whose
-  // artifact.created hasn't streamed in yet, in which case the drawer shows the
-  // fail-closed notice on Checks and must route to the artifact's own tab the
-  // moment it lands in RunView.artifacts.
+  // when the ?artifact/?doc/?loc param changes — a check row, band chip, or citation
+  // was clicked — OR when the artifact param's resolution changes: a link can
+  // reference an artifact whose artifact.created hasn't streamed in yet, in which
+  // case the drawer shows the fail-closed notice on Checks and must route to the
+  // artifact's own tab the moment it lands in RunView.artifacts. locParam is part of
+  // the key so a SECOND citation into the same document at a different locator
+  // re-opens Sources and re-highlights — without it, doc-unchanged reads as no-op and
+  // the second citation looks dead (review F1).
   const resolvedId = target.artifact?.id ?? null;
+  const paramKey = `${artifactParam ?? ''}|${docParam ?? ''}|${locParam ?? ''}`;
   const [tabState, setTabState] = useState<{
-    param: string | null;
+    paramKey: string;
     resolvedId: string | null;
     tab: EvidenceTabId;
-  }>({ param: artifactParam, resolvedId, tab: target.tab });
-  if (tabState.param !== artifactParam || tabState.resolvedId !== resolvedId) {
-    setTabState({ param: artifactParam, resolvedId, tab: target.tab });
+  }>({ paramKey, resolvedId, tab: deepLinkTab });
+  if (tabState.paramKey !== paramKey || tabState.resolvedId !== resolvedId) {
+    setTabState({ paramKey, resolvedId, tab: deepLinkTab });
   }
   const activeTab = tabState.tab;
 
@@ -71,7 +85,7 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
               role="tab"
               aria-selected={selected}
               aria-controls={`evidence-panel-${tab.id}`}
-              onClick={() => setTabState({ param: artifactParam, resolvedId, tab: tab.id })}
+              onClick={() => setTabState({ paramKey, resolvedId, tab: tab.id })}
               className={`-mb-px rounded-t-button border-b-2 px-4 py-2 text-body font-medium transition-colors ${
                 selected
                   ? 'border-accent text-accent'
@@ -90,7 +104,10 @@ export function EvidenceDrawer({ view, onClose }: EvidenceDrawerProps) {
         aria-label={EVIDENCE_TABS.find((tab) => tab.id === activeTab)?.label}
         className="pt-4"
       >
-        {activeTab === 'checks' && <ChecksTab view={view} />}
+        {activeTab === 'checks' && <ChecksTab view={view} documents={documents} />}
+        {activeTab === 'sources' && (
+          <SourcesTab documents={documents ?? []} initialDocId={docParam} locator={locParam} />
+        )}
         {activeTab === 'decode' && (
           <DecodeTab artifact={decodeArtifact} scrollToFailure={decodeTarget !== null} />
         )}

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Boardex command API",
-  "description": "Request/response schemas for the boardex-contract/0.1 HTTP command API (BIBLE §5.3). Routes: GET /health -> HealthResponse; GET /bench -> GetBenchResponse; GET /board-profiles -> ListBoardProfilesResponse; POST /board-profiles: SaveBoardProfileRequest -> SaveBoardProfileResponse; GET /runs -> ListRunsResponse; POST /runs: CreateRunRequest -> CreateRunResponse; POST /runs/{id}/plan/approve: ApprovePlanRequest -> 204; POST /runs/{id}/approvals/{aid}: ResolveApprovalRequest -> 204; POST /runs/{id}/stop: StopRunRequest -> 204; GET /runs/{id}/events?afterSeq=N (GetRunEventsQuery) -> GetRunEventsResponse; GET /artifacts/{id} -> raw content per artifact.mimeType; GET /artifacts/{id}/meta -> GetArtifactMetaResponse. Invalid-for-state commands answer HTTP 409 with ConflictError.",
+  "description": "Request/response schemas for the boardex-contract/0.1 HTTP command API (BIBLE §5.3). Routes: GET /health -> HealthResponse; GET /bench -> GetBenchResponse; GET /board-profiles -> ListBoardProfilesResponse; POST /board-profiles: SaveBoardProfileRequest -> SaveBoardProfileResponse; GET /runs -> ListRunsResponse; POST /runs: CreateRunRequest -> CreateRunResponse; POST /runs/{id}/plan/approve: ApprovePlanRequest -> 204; POST /runs/{id}/approvals/{aid}: ResolveApprovalRequest -> 204; POST /runs/{id}/stop: StopRunRequest -> 204; GET /runs/{id}/events?afterSeq=N (GetRunEventsQuery) -> GetRunEventsResponse; GET /artifacts/{id} -> raw content per artifact.mimeType; GET /artifacts/{id}/meta -> GetArtifactMetaResponse; GET /documents/{id} -> raw content per BoardDocument.mimeType (v2.1); GET /documents/{id}/meta -> GetDocumentMetaResponse (v2.1). Invalid-for-state commands answer HTTP 409 with ConflictError.",
   "definitions": {
     "Id": {
       "type": "string",
@@ -120,6 +120,9 @@
         "iteration": {
           "type": "integer",
           "minimum": 1
+        },
+        "model": {
+          "type": "string"
         }
       },
       "required": [
@@ -302,6 +305,21 @@
         },
         "sourceRef": {
           "type": "string"
+        },
+        "sourceDoc": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "$ref": "#/definitions/Id"
+            },
+            "locator": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -457,6 +475,38 @@
       ],
       "additionalProperties": false
     },
+    "DocumentKind": {
+      "type": "string",
+      "enum": [
+        "datasheet",
+        "schematic",
+        "reference"
+      ]
+    },
+    "BoardDocument": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/DocumentKind"
+        },
+        "mimeType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "mimeType"
+      ],
+      "additionalProperties": false
+    },
     "BoardProfile": {
       "type": "object",
       "properties": {
@@ -555,6 +605,12 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoardDocument"
           }
         }
       },
@@ -1373,6 +1429,18 @@
             "mock",
             "real"
           ]
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1446,6 +1514,9 @@
         },
         "knownQuirks": {
           "$ref": "#/definitions/BoardProfile/properties/knownQuirks"
+        },
+        "documents": {
+          "$ref": "#/definitions/BoardProfile/properties/documents"
         }
       },
       "required": [
@@ -1502,6 +1573,9 @@
         },
         "knownQuirks": {
           "$ref": "#/definitions/BoardProfile/properties/knownQuirks"
+        },
+        "documents": {
+          "$ref": "#/definitions/BoardProfile/properties/documents"
         }
       },
       "required": [
@@ -1562,6 +1636,9 @@
         },
         "boardProfileId": {
           "$ref": "#/definitions/Id"
+        },
+        "model": {
+          "type": "string"
         }
       },
       "required": [
@@ -1657,6 +1734,30 @@
         "label",
         "mimeType",
         "sizeBytes"
+      ],
+      "additionalProperties": false
+    },
+    "GetDocumentMetaResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "label": {
+          "$ref": "#/definitions/BoardDocument/properties/label"
+        },
+        "kind": {
+          "$ref": "#/definitions/DocumentKind"
+        },
+        "mimeType": {
+          "$ref": "#/definitions/BoardDocument/properties/mimeType"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "mimeType"
       ],
       "additionalProperties": false
     },

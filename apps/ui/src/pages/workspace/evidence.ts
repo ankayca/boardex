@@ -25,6 +25,16 @@ export function evidenceHref(runId: string, artifactId: string): string {
   return `/runs/${runId}/evidence?artifact=${artifactId}`;
 }
 
+// The Sources tab (§7.4, T6.3), opened at a specific document and optional locator.
+// A check's sourceDoc citation routes through here — resolvable in the Checks table
+// and the Validation Report — so a citation always lands on the exact section, never
+// a dead link (the plain sourceRef text stays the fallback when it can't resolve).
+export function evidenceDocHref(runId: string, documentId: string, locator?: string): string {
+  const params = new URLSearchParams({ doc: documentId });
+  if (locator) params.set('loc', locator);
+  return `/runs/${runId}/evidence?${params.toString()}`;
+}
+
 // "Open Logs" prefers the serial console log, then build, then flash — the most
 // human-relevant log lands first when several exist.
 const LOG_KIND_PRIORITY: readonly Artifact['kind'][] = ['serial_log', 'build_log', 'flash_log'];

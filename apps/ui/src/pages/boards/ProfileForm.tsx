@@ -11,6 +11,7 @@ import { api } from '../../lib/api';
 import { matchInstruments, type InstrumentMatch } from '../../lib/benchReadiness';
 import { useBenchStatus } from '../../lib/useBenchStatus';
 import { ChecklistEditor } from './ChecklistEditor';
+import { DocumentsEditor } from './DocumentsEditor';
 import { FormSection, TextField, ToggleField } from './Field';
 import { InstrumentField } from './InstrumentField';
 import { ValidationPanel } from './ValidationPanel';
@@ -227,6 +228,17 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
         <ChecklistEditor
           rows={draft.checklist}
           onChange={(rows: ChecklistRow[]) => set('checklist', rows)}
+          errors={errors}
+        />
+      </FormSection>
+
+      <FormSection
+        title="Documents"
+        hint="Reference material the runner serves (datasheets, schematics). Metadata only — the runner owns the file content; this edits the id, label, kind, and MIME type."
+      >
+        <DocumentsEditor
+          rows={draft.documents}
+          onChange={(rows) => set('documents', rows)}
           errors={errors}
         />
       </FormSection>

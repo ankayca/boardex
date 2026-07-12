@@ -121,6 +121,9 @@
         "iteration": {
           "type": "integer",
           "minimum": 1
+        },
+        "model": {
+          "type": "string"
         }
       },
       "required": [
@@ -303,6 +306,21 @@
         },
         "sourceRef": {
           "type": "string"
+        },
+        "sourceDoc": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "$ref": "#/definitions/Id"
+            },
+            "locator": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -458,6 +476,38 @@
       ],
       "additionalProperties": false
     },
+    "DocumentKind": {
+      "type": "string",
+      "enum": [
+        "datasheet",
+        "schematic",
+        "reference"
+      ]
+    },
+    "BoardDocument": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/DocumentKind"
+        },
+        "mimeType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "mimeType"
+      ],
+      "additionalProperties": false
+    },
     "BoardProfile": {
       "type": "object",
       "properties": {
@@ -556,6 +606,12 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoardDocument"
           }
         }
       },

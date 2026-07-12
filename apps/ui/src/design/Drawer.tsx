@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
 import { useExitPresence } from './motion';
@@ -36,7 +37,12 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
     return null;
   }
 
-  return (
+  // Portal to <body> so the overlay escapes any ancestor stacking context. The
+  // workspace rails are `position: sticky` (§6.3, T6.2b), which establishes a
+  // stacking context; rendered inline, the drawer's z-50 would be scoped to its
+  // sticky rail and a sibling sticky rail could paint over it. At the body level
+  // the §6.1 overlay elevation sits above all sticky content unconditionally.
+  return createPortal(
     <div className="fixed inset-0 z-50">
       {/* Scrim: text-primary at 40% alpha — no colors outside §6.1. */}
       <div
@@ -62,6 +68,7 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
         </header>
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

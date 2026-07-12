@@ -129,6 +129,16 @@ describe('EventSchema envelope rules', () => {
     const naive = { ...catalog['run.created'], ts: '2026-07-07T14:02:03.412' };
     expect(EventSchema.parse(naive).ts).toBe('2026-07-07T14:02:03.412');
   });
+
+  // v2.1 (T6.3): run.created carries an optional echoed model on its Run payload.
+  it('round-trips run.created with an optional Run.model (v2.1)', () => {
+    const withModel = envelope(1, 'run.created', { run: { ...sampleRun, model: 'mock-model' } });
+    const parsed = EventSchema.parse(withModel);
+    expect(parsed).toEqual(withModel);
+    if (parsed.type === 'run.created') {
+      expect(parsed.payload.run.model).toBe('mock-model');
+    }
+  });
 });
 
 describe('parseWireEvent — envelope-first (§5.1, T5.0/F1)', () => {

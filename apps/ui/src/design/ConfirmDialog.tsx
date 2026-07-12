@@ -1,4 +1,5 @@
 import { useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './Button';
 
 export interface ConfirmDialogProps {
@@ -43,7 +44,10 @@ export function ConfirmDialog({
     return null;
   }
 
-  return (
+  // Portal to <body> so the overlay escapes any ancestor stacking context — the
+  // Stop-Run confirm lives inside the `position: sticky` status rail (§6.3), which
+  // would otherwise scope this z-50 locally. Same reasoning as Drawer.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Scrim: text-primary at 40% alpha — no colors outside §6.1. Entrance
           animates at motion-fast; dismissal is instant — a confirm should get
@@ -73,6 +77,7 @@ export function ConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

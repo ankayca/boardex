@@ -72,6 +72,13 @@ export interface ApiClient {
   getArtifactMeta(artifactId: string): Promise<Artifact>;
   /** URL of an artifact's raw content (GET /artifacts/{id}); fetched by reference (§D4). */
   artifactUrl(artifactId: string): string;
+  /** URL of a document's raw content (GET /documents/{id}, v2.1) — used by the PDF embed. */
+  documentUrl(documentId: string): string;
+  /**
+   * Raw document content as text (GET /documents/{id}, v2.1). No schema: content is
+   * typed by BoardDocument.mimeType (§5.3), rendered by the Sources tab per kind.
+   */
+  getDocumentText(documentId: string): Promise<string>;
   /**
    * Raw artifact content as text (GET /artifacts/{id}). No schema here: content is
    * typed by artifact.mimeType (§5.3); structured kinds are parsed by their reader.
@@ -151,6 +158,14 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
       const res = await fetch(`${base}/artifacts/${artifactId}`);
       if (!res.ok) {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
+      }
+      return res.text();
+    },
+    documentUrl: (documentId) => `${base}/documents/${documentId}`,
+    getDocumentText: async (documentId) => {
+      const res = await fetch(`${base}/documents/${documentId}`);
+      if (!res.ok) {
+        throw new ApiError(`GET /documents/${documentId} failed with ${res.status}`, res.status);
       }
       return res.text();
     },

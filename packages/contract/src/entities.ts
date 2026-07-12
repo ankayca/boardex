@@ -65,6 +65,9 @@ export const RunSchema = z.object({
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
   iteration: z.number().int().min(1), // fix-loop counter, starts at 1
+  // v2.1 (T6.3): the runner model this run used, echoed from CreateRun.model.
+  // Optional and feature-detected — a runner advertising no capabilities omits it.
+  model: z.string().optional(),
 });
 export type Run = z.infer<typeof RunSchema>;
 
@@ -128,7 +131,17 @@ export const MeasurementCheckSchema = z.object({
   }),
   verdict: CheckVerdictSchema,
   artifactId: IdSchema, // REQUIRED — evidence linking is law
-  sourceRef: z.string().optional(), // e.g. "BME280 datasheet §6.2"
+  sourceRef: z.string().optional(), // e.g. "BME280 datasheet §6.2" (free-text; fallback rendering)
+  // v2.1 (T6.3): the resolvable form of the citation, beside sourceRef. documentId
+  // is a BoardProfile.documents[] id; locator is an in-document pointer (a markdown
+  // heading slug/anchor, or best-effort text for other kinds). sourceRef stays as
+  // the fallback when a document cannot be resolved.
+  sourceDoc: z
+    .object({
+      documentId: IdSchema,
+      locator: z.string().optional(),
+    })
+    .optional(),
 });
 export type MeasurementCheck = z.infer<typeof MeasurementCheckSchema>;
 
@@ -172,6 +185,20 @@ export const DiagnosisSchema = z.object({
 });
 export type Diagnosis = z.infer<typeof DiagnosisSchema>;
 
+// v2.1 (T6.3): profile-attached reference material. The runner owns the bytes and
+// serves them by reference (§5.3 GET /documents/{id}); the Board Profile Builder
+// edits this metadata only — content upload is the runner's, not the UI's.
+export const DocumentKindSchema = z.enum(['datasheet', 'schematic', 'reference']);
+export type DocumentKind = z.infer<typeof DocumentKindSchema>;
+
+export const BoardDocumentSchema = z.object({
+  id: IdSchema,
+  label: z.string(),
+  kind: DocumentKindSchema,
+  mimeType: z.string(), // e.g. "text/markdown", "application/pdf"
+});
+export type BoardDocument = z.infer<typeof BoardDocumentSchema>;
+
 export const BoardProfileSchema = z.object({
   id: IdSchema,
   name: z.string(),
@@ -195,6 +222,8 @@ export const BoardProfileSchema = z.object({
   }),
   connectionChecklist: z.array(z.object({ label: z.string(), detail: z.string() })), // D12
   knownQuirks: z.array(z.string()),
+  // v2.1 (T6.3): reference material the runner serves by id (§5.3).
+  documents: z.array(BoardDocumentSchema).optional(),
 });
 export type BoardProfile = z.infer<typeof BoardProfileSchema>;
 

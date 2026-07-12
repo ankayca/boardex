@@ -33,6 +33,8 @@ export interface RunSessionOptions {
   entries: readonly FixtureEntry[];
   speed: number;
   validateOutbound: boolean;
+  // v2.1 (T6.3): the chosen runner model, echoed onto the run.created Run when set.
+  model?: string;
   onEvent: (event: Event) => void;
 }
 
@@ -70,6 +72,7 @@ export class RunSession {
   private readonly entries: readonly FixtureEntry[];
   private readonly speed: number;
   private readonly validateOutbound: boolean;
+  private readonly model: string | undefined;
   private readonly onEvent: (event: Event) => void;
 
   private readonly log: Event[] = [];
@@ -93,6 +96,7 @@ export class RunSession {
     this.entries = options.entries;
     this.speed = options.speed;
     this.validateOutbound = options.validateOutbound;
+    this.model = options.model;
     this.onEvent = options.onEvent;
     // Seed a schema-valid RunSummary at POST /runs time (T5.0/F7): the fixture's
     // run.created replays only after its delayMs, and a GET /runs in that window
@@ -224,7 +228,14 @@ export class RunSession {
   // Emit an event: validate (dev mode, fail loud), append to the log, track run
   // status, then broadcast. Fixture events carry their own gapless seq; synthetic
   // events (make) take the next seq. Either way nextSeq advances past this event.
-  private emit(event: Event): void {
+  private emit(rawEvent: Event): void {
+    // v2.1 (T6.3): stamp the chosen model onto the run.created Run so the UI can
+    // render the run's model (§4 Run.model). Every run.created goes through emit
+    // (replay loop and the stop-before-created path), so this is the one seam.
+    const event =
+      this.model !== undefined && rawEvent.type === 'run.created'
+        ? { ...rawEvent, payload: { run: { ...rawEvent.payload.run, model: this.model } } }
+        : rawEvent;
     if (this.validateOutbound) {
       // Throws on any non-conforming outbound event — a loud failure by design.
       EventSchema.parse(event);

@@ -6,20 +6,53 @@
 // highlight-on-Checks fallback is gone: every artifact kind now has its own tab,
 // so deep links never land here carrying an artifact.)
 import { Link } from 'react-router-dom';
-import type { RunView } from '@boardex/contract';
+import type { BoardDocument, MeasurementCheck, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
-import { evidenceHref } from '../workspace/evidence';
+import { evidenceDocHref, evidenceHref } from '../workspace/evidence';
 import { formatActual, formatExpected } from './checksTable';
 
 const CELL = 'px-3 py-2 align-top';
 const EVIDENCE_LINK_BASE = 'whitespace-nowrap text-meta font-medium';
+const SOURCE_LINK = 'text-accent hover:text-accent-hover underline underline-offset-2';
 
 export interface ChecksTabProps {
   view: RunView;
+  /** Profile documents (T6.3): a check whose sourceDoc resolves to one deep-links. */
+  documents?: readonly BoardDocument[];
 }
 
-export function ChecksTab({ view }: ChecksTabProps) {
+// The Source cell (§7.4 / T6.3). A check's sourceDoc deep-links to the Sources tab
+// at the exact document + locator WHEN that document is among the profile's
+// documents; otherwise the free-text sourceRef renders plainly. Never a dead link:
+// an unresolvable sourceDoc falls back to sourceRef, and a check with neither shows
+// an em dash. The link text is the sourceRef when present (it names the section a
+// human recognises), else the document's label.
+function SourceCell({
+  check,
+  runId,
+  documentsById,
+}: {
+  check: MeasurementCheck;
+  runId: string;
+  documentsById: Map<string, BoardDocument>;
+}) {
+  const doc = check.sourceDoc ? documentsById.get(check.sourceDoc.documentId) : undefined;
+  if (check.sourceDoc && doc) {
+    return (
+      <Link
+        to={evidenceDocHref(runId, check.sourceDoc.documentId, check.sourceDoc.locator)}
+        className={SOURCE_LINK}
+      >
+        {check.sourceRef ?? doc.label}
+      </Link>
+    );
+  }
+  return <>{check.sourceRef ?? '—'}</>;
+}
+
+export function ChecksTab({ view, documents }: ChecksTabProps) {
   const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
+  const documentsById = new Map((documents ?? []).map((doc) => [doc.id, doc]));
 
   if (view.checks.length === 0) {
     return (
@@ -56,7 +89,9 @@ export function ChecksTab({ view }: ChecksTabProps) {
               <td className={CELL}>
                 <Badge kind="verdict" value={check.verdict} />
               </td>
-              <td className={`${CELL} text-text-secondary`}>{check.sourceRef ?? '—'}</td>
+              <td className={`${CELL} text-text-secondary`}>
+                <SourceCell check={check} runId={view.run.id} documentsById={documentsById} />
+              </td>
               <td className={CELL}>
                 {artifactIds.has(check.artifactId) ? (
                   <Link

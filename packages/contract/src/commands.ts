@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   ArtifactSchema,
   BenchStatusSchema,
+  BoardDocumentSchema,
   BoardProfileSchema,
   IdSchema,
   IsoDateTimeSchema,
@@ -17,6 +18,13 @@ export const HealthResponseSchema = z.object({
   ok: z.boolean(),
   contractVersion: z.string(),
   runnerKind: z.enum(['mock', 'real']),
+  // v2.1 (T6.3, riding along for T6.6): optional runner capabilities. Absent =>
+  // the UI feature-detects no model selection; never assumed.
+  capabilities: z
+    .object({
+      models: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
@@ -45,6 +53,9 @@ export const ListRunsResponseSchema = z.array(RunSummarySchema);
 export const CreateRunRequestSchema = z.object({
   taskPrompt: z.string(),
   boardProfileId: IdSchema,
+  // v2.1 (T6.3): the chosen runner model, when the runner advertised
+  // capabilities.models. Optional — absent when the runner offers no choice.
+  model: z.string().optional(),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequestSchema>;
 export const CreateRunResponseSchema = z.object({ runId: IdSchema });
@@ -77,6 +88,11 @@ export const GetRunEventsResponseSchema = z.array(WireEventSchema);
 
 // GET /artifacts/{id}/meta
 export const GetArtifactMetaResponseSchema = ArtifactSchema;
+
+// v2.1 (T6.3) — GET /documents/{id} returns raw content typed by
+// BoardDocument.mimeType (no JSON schema, like GET /artifacts/{id}); GET
+// /documents/{id}/meta returns the BoardDocument descriptor.
+export const GetDocumentMetaResponseSchema = BoardDocumentSchema;
 
 // Command errors: HTTP 409 with { error, currentStatus } when a command is
 // invalid for the run's state. The UI renders 409s as state refresh, not crashes.
