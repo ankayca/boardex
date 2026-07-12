@@ -80,6 +80,7 @@ class RunEngine:
         self.updated_at = self.created_at
         self.iteration = 1
         self._gate: _Gate | None = None
+        self._last_check_total = 0  # checks evaluated in the latest iteration
         self._artifact_ids: dict[str, str] = {}  # bench name -> wire artifact id
         self._suffix = run_id.rsplit("_", 1)[-1][:6]
         self.task: asyncio.Task[None] | None = None
@@ -384,7 +385,8 @@ class RunEngine:
                 return
 
             self._transition(
-                "diagnosing", f"{len(failed_checks)} of 3 checks failed"
+                "diagnosing",
+                f"{len(failed_checks)} of {self._last_check_total} checks failed",
             )
             diag_step, diagnosis = await self._call(
                 self.bench.diagnose, self.iteration, failed_checks
@@ -507,6 +509,7 @@ class RunEngine:
                 }
             },
         )
+        self._last_check_total = len(checks)
         failed: list[dict[str, Any]] = []
         for check in checks:
             await self._sleep(300)

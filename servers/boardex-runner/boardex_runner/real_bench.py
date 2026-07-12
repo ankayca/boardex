@@ -156,17 +156,15 @@ class RealBench:
                 "riskLevel": "low",
                 "hardwareAction": False,
             },
-            {
-                "index": 1,
-                "title": "Build the firmware",
-                "detail": f"Run the profile's build ({self.config.build_command or 'make'}).",
-                "riskLevel": "low",
-                "hardwareAction": False,
-            },
+            # Index 2 covers build AND flash: the engine emits both step kinds
+            # under planIndex 2 (like the fake bench's story), and a plan row
+            # no step ever claims would sit "Pending" forever in the timeline.
+            # The scripted bench has no edit step, so no index-1 row exists.
             {
                 "index": 2,
-                "title": "Flash the firmware",
-                "detail": "Program and verify the image via the debug probe, then reset. "
+                "title": "Build and flash the firmware",
+                "detail": f"Run the profile's build ({self.config.build_command or 'make'}), "
+                "then program and verify the image via the debug probe and reset. "
                 "Flashing needs approval.",
                 "riskLevel": "medium",
                 "hardwareAction": True,
