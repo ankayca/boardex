@@ -15,11 +15,23 @@ import { createMockRunner, type MockRunner } from './server';
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-let runner: MockRunner;
+// BIBLE §10.4 item 2: RUNNER_BASE_URL points this suite at an external (real)
+// runner instead of an in-process mock. Cases that depend on mock-only knobs
+// (fixture-exact event counts, fail-variant/degraded/slow runners) are skipped
+// in external mode; everything else is the shared conformance surface.
+const EXTERNAL_BASE = process.env.RUNNER_BASE_URL;
+const itMockOnly = EXTERNAL_BASE ? it.skip : it;
+
+let runner: MockRunner | undefined;
 let base: string;
 let wsBase: string;
 
 beforeAll(async () => {
+  if (EXTERNAL_BASE) {
+    base = EXTERNAL_BASE.replace(/\/$/, '');
+    wsBase = base.replace(/^http/, 'ws');
+    return;
+  }
   // Ephemeral port; speed 200 keeps a full run to well under a couple of seconds.
   runner = await createMockRunner({ port: 0, speed: 200 });
   base = runner.url;
@@ -27,7 +39,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await runner.close();
+  await runner?.close();
 });
 
 // --- HTTP helpers -----------------------------------------------------------
@@ -152,9 +164,13 @@ function assertContiguous(events: Event[], firstSeq: number, lastSeq: number): v
 // --- tests ------------------------------------------------------------------
 
 describe('mock runner', () => {
-  it('reports runnerKind "mock" and the contract version', async () => {
+  it('reports its runnerKind and the contract version', async () => {
     const health = await getJson<{ ok: boolean; contractVersion: string; runnerKind: string }>('/health');
-    expect(health).toEqual({ ok: true, contractVersion: 'boardex-contract/0.1', runnerKind: 'mock' });
+    expect(health).toEqual({
+      ok: true,
+      contractVersion: 'boardex-contract/0.1',
+      runnerKind: EXTERNAL_BASE ? 'real' : 'mock',
+    });
   });
 
   it('drives a full run to completion over HTTP + WS with the fixture event count', async () => {
@@ -164,8 +180,9 @@ describe('mock runner', () => {
     const events = await driveToCompletion(runId);
 
     // The happy path emits exactly the fixture's 90 events (no synthetic endings).
-    expect(events).toHaveLength(90);
-    assertContiguous(events, 1, 90);
+    // An external runner tells its own story; the seq law still holds.
+    if (!EXTERNAL_BASE) expect(events).toHaveLength(90);
+    assertContiguous(events, 1, events.length);
 
     const view = reduceRun(events)!;
     expect(view.run.status).toBe('completed');
@@ -203,20 +220,23 @@ describe('mock runner', () => {
     // Reconnect a live WS-B and let the run finish; WS-B must receive the tail.
     const wsB = await connect(`runId=${runId}`);
     await wsB.waitFor((e) => e.type === 'run.completed');
-    await driving;
+    const finalEvents = await driving;
+    const totalSeq = finalEvents[finalEvents.length - 1]!.seq;
     wsB.close();
     // WS-B's live tail is itself gapless and strictly newer than the drop point.
     expect(wsB.events.every((e) => e.seq > lastSeq)).toBe(true);
 
-    // HTTP replay from lastSeq fills the gap: no duplicate, no gap, ends at 90.
+    // HTTP replay from lastSeq fills the gap: no duplicate, no gap, ends at the
+    // stream's terminal seq (exactly 90 for the fixture story).
+    if (!EXTERNAL_BASE) expect(totalSeq).toBe(90);
     const replay = await getEvents(runId, lastSeq);
     expect(replay.every((e) => e.seq > lastSeq)).toBe(true); // no duplicate
-    assertContiguous(replay, lastSeq + 1, 90); // resumes at lastSeq+1, gapless
+    assertContiguous(replay, lastSeq + 1, totalSeq); // resumes at lastSeq+1, gapless
 
-    // The reconstructed stream (pre-drop + replay) is a gapless 1..90.
+    // The reconstructed stream (pre-drop + replay) is gapless from 1.
     for (const e of replay) seen.set(e.seq, e);
     const merged = [...seen.values()].sort((a, b) => a.seq - b.seq);
-    assertContiguous(merged, 1, 90);
+    assertContiguous(merged, 1, totalSeq);
     expect(reduceRun(merged)!.run.status).toBe('completed');
   });
 
@@ -298,7 +318,7 @@ describe('mock runner', () => {
     global.close();
   });
 
-  it('serves a schema-valid RunSummary in the window before run.created replays (T5.0/F7)', async () => {
+  itMockOnly('serves a schema-valid RunSummary in the window before run.created replays (T5.0/F7)', async () => {
     // SPEED=1 keeps the fixture's 600 ms pre-run.created delay real, so the GET
     // lands inside the window the audit caught.
     const slow = await createMockRunner({ port: 0, speed: 1 });
@@ -323,7 +343,7 @@ describe('mock runner', () => {
     }
   });
 
-  it('replays the fail variant to run.failed with no further fix approval (T5.0/F9)', async () => {
+  itMockOnly('replays the fail variant to run.failed with no further fix approval (T5.0/F9)', async () => {
     const failing = await createMockRunner({ port: 0, speed: 200, failVariant: true });
     try {
       const res = await fetch(`${failing.url}/runs`, {
@@ -384,7 +404,7 @@ describe('mock runner', () => {
     }
   });
 
-  it('a stop that beats run.created still yields a reducible stream (T5.0 FIX_FIRST F1)', async () => {
+  itMockOnly('a stop that beats run.created still yields a reducible stream (T5.0 FIX_FIRST F1)', async () => {
     // SPEED=1 keeps the fixture's 600 ms pre-run.created delay real, so the stop
     // lands in the window curl can hit: POST /runs then POST /stop immediately.
     const slow = await createMockRunner({ port: 0, speed: 1 });
@@ -415,7 +435,7 @@ describe('mock runner', () => {
     }
   });
 
-  it('marks the logic analyzer offline under --degraded', async () => {
+  itMockOnly('marks the logic analyzer offline under --degraded', async () => {
     const degraded = await createMockRunner({ port: 0, speed: 200, degraded: true });
     try {
       const res = await fetch(`${degraded.url}/bench`);
@@ -429,16 +449,37 @@ describe('mock runner', () => {
     }
   });
 
-  it('serves fixture artifacts with the declared MIME type', async () => {
-    const res = await fetch(`${base}/artifacts/art_report`);
+  it('serves artifacts by reference with the declared MIME type', async () => {
+    // Derive artifact ids from a completed run's own stream, so the same
+    // assertions hold for the fixture story and for an external runner's.
+    const runId = await createRun();
+    const events = await driveToCompletion(runId);
+    const view = reduceRun(events)!;
+    expect(view.artifacts.length).toBeGreaterThan(0);
+
+    const report = view.artifacts.find((a) => a.kind === 'report_md');
+    expect(report).toBeDefined();
+    expect(report?.mimeType).toBe('text/markdown');
+    const res = await fetch(`${base}/artifacts/${report!.id}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/markdown');
     expect(await res.text()).toContain('#'); // Markdown report body
 
-    const decode = await fetch(`${base}/artifacts/art_i2c_decode_iter1`);
+    const decodeMeta = view.artifacts.find((a) => a.kind === 'protocol_decode');
+    expect(decodeMeta).toBeDefined();
+    const decode = await fetch(`${base}/artifacts/${decodeMeta!.id}`);
     expect(decode.headers.get('content-type')).toBe('application/json');
 
     const missing = await fetch(`${base}/artifacts/does_not_exist`);
     expect(missing.status).toBe(404);
+  });
+
+  it('returns 404 for an unknown run id on every run route', async () => {
+    expect((await fetch(`${base}/runs/run_does_not_exist/events?afterSeq=0`)).status).toBe(404);
+    expect((await post('/runs/run_does_not_exist/stop')).status).toBe(404);
+    expect((await post('/runs/run_does_not_exist/plan/approve')).status).toBe(404);
+    expect(
+      (await post('/runs/run_does_not_exist/approvals/apr_x', { status: 'approved' })).status,
+    ).toBe(404);
   });
 });

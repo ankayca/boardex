@@ -30,6 +30,43 @@ spec — the emitted JSON Schema is the only cross-language bridge.
 - The MCP servers (`boardex-core`/`-target`/`-logic`) are NOT bound by this
   contract (BIBLE §10.0); it binds only the future `servers/boardex-runner`.
 
+## v2.0 enforcement details the UI actually applies (from Kerem's one-pager)
+
+These are client-side behaviors; violating them deadlocks or fail-closes the UI
+even when every individual event is schema-valid.
+
+- **Envelope-first seq counting**: every well-formed envelope counts toward seq
+  continuity, even unknown-typed ones (payload discarded). "Ignore" never means
+  "drop" — a gap parks the store and nothing past it renders. This applies to
+  the HTTP replay body too: an unknown-typed event must not fail the response.
+- **First KNOWN event must be `run.created`**, in the live stream and in every
+  replay — including the edge where a stop beats run creation: emit
+  `run.created` first, then the stopped ending (the mock does exactly this).
+- **§5.7 transition graph is normative.** The one MUST: report `plan_ready`
+  (via `run.status_changed`) BEFORE blocking on plan approval, or the UI never
+  offers the approve button and the run deadlocks.
+- **Dedicated terminal events** (`run.completed|failed|stopped`) end the run
+  and MUST also reach the global stream (§5.3 v2.0). `status_changed(terminal)`
+  alone is legal but emit the dedicated event too; nothing may follow it.
+- **404 fail-close**: unknown run id → 404 on every run route (the UI
+  fail-closes on it; any other status loops). **409 re-sync**: invalid-state
+  command → `{ error, currentStatus }`; the UI swallows it and refreshes.
+- **Approvals block absolutely**: after `approval.requested`, no hardware
+  action until the HTTP resolution lands.
+- **Replay is the history API**: `GET /runs/{id}/events?afterSeq=N` serves the
+  full log for the run's lifetime; terminal runs cold-load from it with no
+  socket (refusing WS for archived runs is allowed).
+- **Decode shape = the house parser output**: `protocol_decode` annotations are
+  exactly `parse.py::parse_annotations` lines (`{raw, start?, end?, decoder?,
+  text}` with `raw == "{start}-{end} {decoder}: {text}"`), transactions exactly
+  `decode/i2c.py::parse_transactions`. Serve the pipeline output verbatim.
+- **Every `MeasurementCheck.artifactId` must resolve** — unresolved checks are
+  downgraded to `needs_review` with inert links (evidence-linking law).
+- **§10.3 fixture format**: one `{"delayMs": N, "event": {...}}` per line
+  (delayMs ≤ 20000), artifact bodies as `artifacts/<artifactId>.<ext>` files
+  with sizes matching `sizeBytes`. The contract package's fixture test is the
+  acceptance gate and must pass unmodified.
+
 ## When building `servers/boardex-runner` (BIBLE §10.2)
 
 - **Events are truth**: everything the UI needs must be expressible as a §5.2
@@ -48,3 +85,9 @@ spec — the emitted JSON Schema is the only cross-language bridge.
 - **Validate every outbound event** against `packages/contract/json-schema/`
   in the test suite, exactly as the mock runner does. HTTP event replay via
   `afterSeq`; 409 for commands invalid in the current run state.
+
+`servers/boardex-runner` now exists and implements all of the above: the
+schema bridge lives in `boardex_runner/contract.py` (validates every outbound
+event and structured artifact body at emit time), the §5.7 graph in
+`boardex_runner/engine.py`. For running it and pointing the UI or the mock
+suite at it, see the `runner-conformance` skill.
