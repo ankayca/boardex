@@ -1,4 +1,5 @@
 import type { StepStatus } from '@boardex/contract';
+import { ActiveGlyph, CheckGlyph, CrossGlyph, DashGlyph, RingGlyph } from './glyphs';
 
 /**
  * Timeline status iconography (T6.1): one glyph per StepStatus so a timeline
@@ -16,82 +17,18 @@ export interface StepStatusIconProps {
   className?: string;
 }
 
-const STROKE_ON_FILL = 'var(--color-bg-panel)';
-
 function glyph(status: StepStatus) {
   switch (status) {
     case 'pending':
-      return (
-        <circle
-          cx="7"
-          cy="7"
-          r="5.75"
-          fill="var(--color-bg-panel)"
-          stroke="var(--color-border-strong)"
-          strokeWidth="1.5"
-        />
-      );
+      return <RingGlyph />;
     case 'active':
-      return (
-        <>
-          <circle
-            className="animate-step-pulse"
-            cx="7"
-            cy="7"
-            r="5.75"
-            fill="var(--color-bg-panel)"
-            stroke="var(--color-accent)"
-            strokeWidth="1.5"
-          />
-          <circle cx="7" cy="7" r="2.5" fill="var(--color-accent)" />
-        </>
-      );
+      return <ActiveGlyph />;
     case 'succeeded':
-      return (
-        <>
-          <circle cx="7" cy="7" r="6.5" fill="var(--color-pass)" />
-          <path
-            d="M4.3 7.3l1.9 1.9 3.5-3.9"
-            fill="none"
-            stroke={STROKE_ON_FILL}
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      );
+      return <CheckGlyph />;
     case 'failed':
-      return (
-        <>
-          <circle cx="7" cy="7" r="6.5" fill="var(--color-fail)" />
-          <path
-            d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2"
-            fill="none"
-            stroke={STROKE_ON_FILL}
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </>
-      );
+      return <CrossGlyph />;
     case 'skipped':
-      return (
-        <>
-          <circle
-            cx="7"
-            cy="7"
-            r="5.75"
-            fill="var(--color-neutral-badge-bg)"
-            stroke="var(--color-border-strong)"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M4.5 7h5"
-            stroke="var(--color-neutral-badge)"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </>
-      );
+      return <DashGlyph />;
   }
 }
 

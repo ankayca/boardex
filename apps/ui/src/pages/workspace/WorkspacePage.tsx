@@ -5,7 +5,6 @@
 // A thin amber reconnecting bar sits above it all on a WS drop. Below 1280px the
 // right rail stacks under center.
 import type { BenchStatus, BoardProfile, RunView } from '@boardex/contract';
-import { Badge } from '../../design';
 import type { RunStreamStatus } from '../../lib/runStream';
 import { BoardContextRail } from './BoardContextRail';
 import { EvidenceBand } from './EvidenceBand';
@@ -29,27 +28,27 @@ export function WorkspacePage({
   connection,
 }: WorkspacePageProps) {
   const { run } = view;
+  // Frame v2 (T6.1b): the run title + status badge live in the shell's top bar.
+  // The three-zone split keys on content width (container query, index.css) so
+  // the sidebar participates; the center column caps at 940px — rails keep
+  // their §6.3 widths and surplus space distributes to the gutters.
   return (
     <>
       <ReconnectingBar status={connection} />
-      <main className="px-6 py-6">
-        <header className="flex items-center gap-3">
-          <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
-          <Badge kind="status" value={run.status} />
-        </header>
-
-        <div className="mt-6 grid grid-cols-[280px_minmax(0,1fr)] gap-6 xl:grid-cols-[280px_minmax(560px,1fr)_340px]">
+      <main className="workspace-container px-6 py-6">
+        <div className="workspace-grid">
           <BoardContextRail
             profile={profile}
             profileLoading={profileLoading}
             bench={bench}
             boardProfileId={run.boardProfileId}
           />
-          <PlanTimeline view={view} />
-          <aside
-            aria-label="Run status and approval"
-            className="col-start-2 xl:col-auto xl:col-start-3"
-          >
+          <div className="min-w-0">
+            <div className="mx-auto max-w-[940px]">
+              <PlanTimeline view={view} />
+            </div>
+          </div>
+          <aside aria-label="Run status and approval" className="workspace-rail">
             <StatusApprovalRail view={view} />
           </aside>
         </div>

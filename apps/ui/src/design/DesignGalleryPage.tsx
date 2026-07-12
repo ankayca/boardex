@@ -16,6 +16,7 @@ import { EmptyState } from './EmptyState';
 import { KeyValue } from './KeyValue';
 import { LogViewer } from './LogViewer';
 import { Progress } from './Progress';
+import { RunStatusIcon } from './RunStatusIcon';
 import { StatusDot } from './StatusDot';
 import { StepStatusIcon } from './StepStatusIcon';
 
@@ -239,6 +240,21 @@ export default function DesignGalleryPage() {
           </p>
         </GallerySection>
 
+        <GallerySection title="RunStatusIcon">
+          <div className="flex flex-wrap items-center gap-5">
+            {RUN_STATUSES.map((status) => (
+              <span key={status} className="inline-flex items-center gap-1.5">
+                <RunStatusIcon status={status} />
+                <span className="text-meta text-text-secondary">{status}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-meta text-text-secondary">
+            Run-status glyphs for dense surfaces (sidebar, Home table) — Badge&apos;s D14
+            mapping as shape: amber attention exactly where a human action exists.
+          </p>
+        </GallerySection>
+
         <GallerySection title="KeyValue">
           <Card className="max-w-md">
             <KeyValue label="Board" value="Nucleo-F303RE" />
@@ -257,11 +273,11 @@ export default function DesignGalleryPage() {
         </GallerySection>
 
         <GallerySection title="LogViewer">
-          <LogViewer lines={logLines} height={240} label="Build log" />
+          <LogViewer lines={logLines} maxHeightPx={240} label="Build log" />
           <Button variant="secondary" onClick={appendLogLine}>
             Append line (auto-follow demo)
           </Button>
-          <LogViewer lines={[]} height={96} label="Empty log" />
+          <LogViewer lines={[]} label="Empty log" />
         </GallerySection>
 
         <GallerySection title="EmptyState">

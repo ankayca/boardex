@@ -70,11 +70,13 @@ function ExecutedStepRow({ step, logs, artifacts, expanded, onToggle }: Executed
   return (
     <li className="relative pb-6 pl-6">
       <TimelineMarker status={step.status} />
+      {/* T6.1b: the status label sits adjacent to the title (icon · title · status),
+          not orphaned at the row's right edge. */}
       <button
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex w-full items-baseline justify-between gap-3 text-left"
+        className="flex w-full items-baseline gap-2.5 text-left"
       >
         <span className="text-body font-medium text-text-primary">{step.title}</span>
         <span className={`shrink-0 text-meta font-medium ${statusTextClasses[step.status]}`}>
@@ -96,7 +98,7 @@ function PlannedStepRow({ title, detail }: { title: string; detail: string }) {
   return (
     <li className="relative pb-6 pl-6">
       <TimelineMarker status="pending" />
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-baseline gap-2.5">
         <span className="text-body font-medium text-text-primary">{title}</span>
         <span className="shrink-0 text-meta font-medium text-text-secondary">Pending</span>
       </div>

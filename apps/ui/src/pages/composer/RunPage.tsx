@@ -124,11 +124,10 @@ export default function RunPage() {
   }
   const planReady = run.status === 'plan_ready' && run.plan !== undefined;
 
+  // Frame v2 (T6.1b): the run title + status badge live in the shell's top bar.
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
-      <h1 className="text-page font-semibold text-text-primary">{run.title}</h1>
-
-      <div className="mt-6 space-y-4">
+      <div className="space-y-4">
         <p className="whitespace-pre-wrap rounded-card border border-border bg-bg-panel p-5 text-section text-text-primary shadow-subtle">
           {run.taskPrompt}
         </p>

@@ -125,6 +125,32 @@ body {
   animation: step-active-pulse 2s var(--ease-standard) infinite;
 }
 
+/* Workspace three-zone grid (§6.3) under the frame (T6.1b): the 3-column split
+   keys on CONTENT width via container query, not the viewport — the sidebar
+   (240px expanded, 56px collapsed) participates automatically, where a viewport
+   breakpoint would overflow the right rail on laptop widths. 1240px ≈ 280 rail
+   + 560 center minimum + 340 rail + 2×24 gaps. Below it, the right rail stacks
+   under center (the §6.3 sub-1280 behavior). */
+.workspace-container {
+  container-type: inline-size;
+}
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+}
+.workspace-rail {
+  grid-column: 2;
+}
+@container (min-width: 1240px) {
+  .workspace-grid {
+    grid-template-columns: 280px minmax(560px, 1fr) 340px;
+  }
+  .workspace-rail {
+    grid-column: 3;
+  }
+}
+
 /* Reduced motion: state changes still land (final frames apply), they just
    stop travelling. iteration-count 1 also halts the active-step pulse. */
 @media (prefers-reduced-motion: reduce) {

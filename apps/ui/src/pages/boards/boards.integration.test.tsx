@@ -108,12 +108,19 @@ describe('board profile builder → composer (integration)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create Profile' }));
 
-    // Saved: the runner echoed it back and /boards lists it — including the picked
-    // probe's stable device id, which survived the POST round-trip (review F5).
+    // Saved: the runner echoed it back and /boards lists it. T6.1b (T4.2 F4): the
+    // list row shows the probe's DEVICE NAME resolved against the live bench — the
+    // stored id is demoted to the edit view. The id's POST round-trip survival
+    // (review F5) is asserted against the runner directly below.
     const list = await screen.findByRole('list', { name: 'Board profiles' });
     expect(list).toHaveTextContent('Blue Pill F103');
     expect(list).toHaveTextContent('STM32F103C8 (Cortex-M3)');
-    expect(list).toHaveTextContent(PROBE_ID);
+    expect(list).toHaveTextContent('ST-Link/V2-1 (NUCLEO-F303RE)');
+    expect(list).not.toHaveTextContent(PROBE_ID);
+    const savedResponse = await fetch(`${runner.url}/board-profiles`);
+    const savedProfiles = ListBoardProfilesResponseSchema.parse(await savedResponse.json());
+    const saved = savedProfiles.find((candidate) => candidate.name === 'Blue Pill F103');
+    expect(saved?.instruments.debugProbe).toBe(PROBE_ID);
     cleanup();
 
     // --- act 2: edit the profile the fixture's run references --------------------

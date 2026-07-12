@@ -54,7 +54,7 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
       >
         <LogViewer
           lines={activeLines}
-          height={220}
+          maxHeightPx={320}
           label={`${stepTitle} — ${STREAM_LABELS[active]} log`}
         />
       </div>

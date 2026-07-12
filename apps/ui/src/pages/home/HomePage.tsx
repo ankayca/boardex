@@ -120,26 +120,47 @@ export default function HomePage() {
     void profilesQuery.refetch();
   };
 
+  // Frame v2 (T6.1b): the page title and the header New Run action live in the
+  // shell's top bar now; content declares its own width — table-width,
+  // left-aligned in the content area.
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-page font-semibold text-text-primary">Runs</h1>
-        <NewRunButton />
-      </div>
-
+    <main className="max-w-[1040px] px-8 py-8">
       {!online && <RunnerOfflineBanner onRetry={retry} />}
       {attention > 0 && <BenchAttentionLine count={attention} />}
 
       {runs.length > 0 ? (
-        <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-bg-panel">
-          {runs.map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              boardName={boardNames.get(run.boardProfileId) ?? run.boardProfileId}
-            />
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-card border border-border bg-bg-panel">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                  Status
+                </th>
+                <th className="w-2/5 px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                  Run
+                </th>
+                <th className="w-1/5 px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                  Board
+                </th>
+                <th className="px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                  Updated
+                </th>
+                <th className="px-4 py-2.5">
+                  <span className="sr-only">Next action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {runs.map((run) => (
+                <RunRow
+                  key={run.id}
+                  run={run}
+                  boardName={boardNames.get(run.boardProfileId) ?? run.boardProfileId}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : runsQuery.isPending ? (
         <p className="text-body text-text-secondary">Loading runs…</p>
       ) : runsQuery.isSuccess ? (
@@ -148,8 +169,9 @@ export default function HomePage() {
         // already explains why, and "start your first run" would misread the situation.
         <EmptyState
           title="No runs yet"
-          description="Boardex brings up boards for you — describe a task and it plans, flashes, measures, and reports. Start with your first run."
+          description="Describe a bring-up task and Boardex plans, flashes, measures, and reports."
           action={<NewRunButton />}
+          className="py-10"
         />
       ) : null}
     </main>

@@ -46,10 +46,11 @@ export default function NewRunPage() {
 
   const canCreate = taskPrompt.trim().length > 0 && profile !== null && !create.isPending;
 
+  // Frame v2 (T6.1b): the "New Run" title lives in the shell's top bar; the page
+  // is the ~760px reading column (§ task item 3).
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
-      <h1 className="text-page font-semibold text-text-primary">New Run</h1>
-      <p className="mt-1 text-body text-text-secondary">
+      <p className="text-body text-text-secondary">
         Tell Boardex what to validate. Boardex will plan, run, measure, and report.
       </p>
 

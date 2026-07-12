@@ -7,19 +7,34 @@ const FOLLOW_THRESHOLD_PX = LINE_HEIGHT_PX;
 
 export interface LogViewerProps {
   lines: readonly string[];
-  /** Viewport height in px; the list virtualizes within it. */
-  height?: number;
+  /** Viewport cap in px — the pane sizes to its content up to this (T6.1b). */
+  maxHeightPx?: number;
+  /** Floor in px so a one-line log still reads as a pane, not a sliver. */
+  minHeightPx?: number;
   /** Accessible name for the log region. */
   label?: string;
 }
 
+// Content padding (py-1) around the virtualized rows, included in the fit height.
+const VERTICAL_PADDING_PX = 8;
+
 /**
- * Virtualized monospace log pane (BIBLE §6.2). Follows the tail while the user is
- * at the bottom; scrolling up pauses follow and reveals a "Jump to latest" control.
+ * Virtualized monospace log pane (BIBLE §6.2). Sizes to its content between
+ * minHeightPx and maxHeightPx; follows the tail while the user is at the
+ * bottom; scrolling up pauses follow and reveals a "Jump to latest" control.
  */
-export function LogViewer({ lines, height = 320, label = 'Log output' }: LogViewerProps) {
+export function LogViewer({
+  lines,
+  maxHeightPx = 320,
+  minHeightPx = 96,
+  label = 'Log output',
+}: LogViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
+  const height = Math.min(
+    maxHeightPx,
+    Math.max(minHeightPx, lines.length * LINE_HEIGHT_PX + VERTICAL_PADDING_PX),
+  );
 
   const virtualizer = useVirtualizer({
     count: lines.length,
