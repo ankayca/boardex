@@ -3,7 +3,7 @@
 // real artifacts; a quiet neutral line before any check is evaluated. Views are the
 // real reduceRun output (D5).
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { Event, RunView } from '@boardex/contract';
 import { EvidenceBand } from './EvidenceBand';
@@ -61,6 +61,46 @@ describe('EvidenceBand chips', () => {
     expect(chips[0]!.querySelector('[data-kind="verdict"][data-value="pass"]')).not.toBeNull();
     expect(chips[1]!.querySelector('[data-kind="verdict"][data-value="fail"]')).not.toBeNull();
     expect(chips[2]!.querySelector('[data-kind="verdict"][data-value="needs_review"]')).not.toBeNull();
+  });
+});
+
+describe('EvidenceBand verdict-flip (T6.2)', () => {
+  // The badge wrapper is the parent of the verdict badge span.
+  const flipWrapper = () =>
+    screen
+      .getByRole('list', { name: 'Evidence checks' })
+      .querySelector('[data-kind="verdict"]')!.parentElement!;
+
+  const ackView = (verdict: 'pass' | 'fail') =>
+    buildView([
+      { type: 'artifact.created', payload: { artifact: artifactOf('art_ack', 'protocol_decode') } },
+      { type: 'check.evaluated', payload: { check: checkOf('chk_ack', 'device_ack', 'art_ack', verdict) } },
+    ]);
+
+  it('plays the emphasis only when a check re-evaluates FAIL → PASS', async () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('fail')} />
+      </MemoryRouter>,
+    );
+    // Initial fail render: no emphasis.
+    expect(flipWrapper().className).not.toContain('animate-verdict-flip');
+
+    rerender(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('pass')} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(flipWrapper().className).toContain('animate-verdict-flip'));
+  });
+
+  it('does not flip a check that is PASS from the first render (reloaded run)', () => {
+    render(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('pass')} />
+      </MemoryRouter>,
+    );
+    expect(flipWrapper().className).not.toContain('animate-verdict-flip');
   });
 });
 

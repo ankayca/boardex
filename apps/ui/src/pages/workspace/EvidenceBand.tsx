@@ -7,10 +7,44 @@
 // artifactId) renders the chip inert, never a dead link. The strip holds its 88px:
 // chips overflow horizontally in their own scroll container instead of wrapping the
 // band taller. Before any check is evaluated, a quiet neutral line — not an empty box.
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { RunView } from '@boardex/contract';
+import type { CheckVerdict, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
 import { checkLabel, evidenceHref, evidenceTargets } from './evidence';
+
+// The iteration-2 verdict-flip moment (T6.2 item 3): when a check the reducer
+// upserts by id flips FAIL → PASS on re-evaluation, its badge plays a one-shot
+// emphasis. Tracked in state (not a render-time diff) with a timer just past the
+// gentle token, so an interleaved re-render can't truncate the animation. Green
+// only because the verdict now IS pass (D14 — the emphasis is the flip landing,
+// not decoration). First render seeds the baseline, so a reloaded pass never flips.
+function useVerdictFlips(checks: readonly { id: string; verdict: CheckVerdict }[]): Set<string> {
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
+  const prev = useRef<Map<string, CheckVerdict>>(new Map());
+
+  useEffect(() => {
+    const newlyPassed: string[] = [];
+    for (const check of checks) {
+      if (prev.current.get(check.id) === 'fail' && check.verdict === 'pass') {
+        newlyPassed.push(check.id);
+      }
+      prev.current.set(check.id, check.verdict);
+    }
+    if (newlyPassed.length === 0) return;
+    setFlipped((current) => new Set([...current, ...newlyPassed]));
+    const timer = window.setTimeout(() => {
+      setFlipped((current) => {
+        const next = new Set(current);
+        for (const id of newlyPassed) next.delete(id);
+        return next;
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [checks]);
+
+  return flipped as Set<string>;
+}
 
 // Secondary-button styling (mirrors design/Button's secondary variant) applied to a
 // Link, so the actions are real anchors carrying an href. Disabled — no artifact of
@@ -42,6 +76,7 @@ export function EvidenceBand({ view }: { view: RunView }) {
   // Evidence-linking law (§4): only an artifactId with a live artifact.created in
   // RunView gets a link; the reducer has already downgraded the miss to needs_review.
   const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
+  const flipped = useVerdictFlips(checks);
 
   return (
     <section
@@ -59,11 +94,14 @@ export function EvidenceBand({ view }: { view: RunView }) {
                 <span className="text-meta font-medium text-text-primary">
                   {checkLabel(check.requirementId)}
                 </span>
-                <Badge kind="verdict" value={check.verdict} />
+                <span className={flipped.has(check.id) ? 'inline-flex animate-verdict-flip' : 'inline-flex'}>
+                  <Badge kind="verdict" value={check.verdict} />
+                </span>
               </>
             );
             return (
-              <li key={check.id} className="shrink-0">
+              // T6.2: each chip rises + fades in (fast) as its check.evaluated lands.
+              <li key={check.id} className="animate-chip-in shrink-0">
                 {artifactIds.has(check.artifactId) ? (
                   <Link
                     to={evidenceHref(run.id, check.artifactId)}
