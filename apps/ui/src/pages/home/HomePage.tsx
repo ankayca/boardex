@@ -167,11 +167,13 @@ export default function HomePage() {
         // A genuine empty response — the first-use hero (§7.1). We DON'T show this on a
         // failed fetch: an offline cold start has no runs to list, but the banner above
         // already explains why, and "start your first run" would misread the situation.
+        // T6.1c: the first-use hero floats on the canvas ~35vh down, no card chrome.
         <EmptyState
           title="No runs yet"
           description="Describe a bring-up task and Boardex plans, flashes, measures, and reports."
           action={<NewRunButton />}
-          className="py-10"
+          frameless
+          className="mt-[24vh]"
         />
       ) : null}
     </main>

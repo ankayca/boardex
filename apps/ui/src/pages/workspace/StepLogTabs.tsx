@@ -42,7 +42,12 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
               }`}
             >
               {STREAM_LABELS[stream]}
-              {count > 0 && <span className="ml-1.5 text-text-secondary">{count}</span>}
+              {/* T6.1c: line count as a small neutral chip, not appended text. */}
+              {count > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-neutral-badge-bg px-1.5 text-label font-medium text-neutral-badge">
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}

@@ -115,7 +115,7 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
           <li key={run.id}>
             <NavLink
               to={`/runs/${run.id}`}
-              title={collapsed ? run.title : undefined}
+              title={run.title}
               className={({ isActive }) =>
                 `flex items-center gap-2 rounded-button px-2 py-1.5 text-meta transition-colors duration-fast ease-motion ${
                   isActive
@@ -181,7 +181,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-border bg-bg-panel transition-[width] duration-medium ease-motion ${
+      className={`sidebar-height sticky top-0 flex shrink-0 flex-col border-r border-border bg-bg-panel transition-[width] duration-medium ease-motion ${
         collapsed ? 'w-14' : 'w-60'
       }`}
     >
@@ -206,7 +206,36 @@ export function Sidebar() {
 
       <div className="flex min-h-0 flex-1 flex-col px-2 pt-2">
         <nav aria-label="Primary" className="space-y-0.5">
-          <NavItem to="/" label="Runs" icon={<RunsIcon />} active={runsActive} collapsed={collapsed} />
+          {/* T6.1c: a quiet "+" beside Runs — the sidebar's new-run affordance.
+              Hidden on the icon rail; the top bar's New Run remains on Home. */}
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <NavItem
+                to="/"
+                label="Runs"
+                icon={<RunsIcon />}
+                active={runsActive}
+                collapsed={collapsed}
+              />
+            </div>
+            {!collapsed && (
+              <NavLink
+                to="/runs/new"
+                aria-label="New run"
+                title="New run"
+                className="shrink-0 rounded-button p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+              >
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none">
+                  <path
+                    d="M8 3.5v9M3.5 8h9"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </NavLink>
+            )}
+          </div>
           <NavItem
             to="/boards"
             label="Boards"

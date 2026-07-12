@@ -379,12 +379,23 @@ Pass/success ONLY: #16A34A  (green-600); bg tint #F0FDF4
 Fail/stop ONLY:    #DC2626  (red-600);   bg tint #FEF2F2
 Approval/warn ONLY:#D97706  (amber-600); bg tint #FFFBEB
 Neutral badge:     #78716C on #F5F5F4
-Radius: 10px cards, 8px buttons/inputs. Shadows: subtle only
-  (0 1px 2px rgba(0,0,0,0.05)); depth comes from borders + whitespace, not shadows.
+Radius: 10px cards, 8px buttons/inputs.
+Elevation (T6.1, 3 levels — depth still reads borders + whitespace first):
+  subtle   0 1px 2px rgba(0,0,0,0.05)                      resting cards/panels
+  raised   subtle + 0 3px 10px rgba(0,0,0,0.06)            floating over content
+  overlay  0 2px 8px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.12)  dialogs/drawers
+Motion (T6.1): fast 120ms (state flips: badge/dot/button) · medium 200ms
+  (surfaces: drawer/dialog) · gentle 360ms (progress); eases
+  cubic-bezier(0.2,0,0,1) standard, cubic-bezier(0.16,1,0.3,1) entrance;
+  prefers-reduced-motion collapses all motion (final states still land).
+Focus (T6.1): one 2px accent :focus-visible ring, offset 2px, everywhere;
+  text fields keep their accent-border focus instead.
 Spacing rhythm: 4px base; panels padded 20–24px; sections separated 32px.
-Type: Inter (UI), JetBrains Mono (logs, diffs, values, commands).
-Scale: 13px meta, 14px body, 16px section titles, 20px page titles,
-  22–24px only for the Ask Boardex composer placeholder.
+Type: Inter (UI), JetBrains Mono (logs, diffs, values, commands);
+  tabular numerals app-wide — measurement columns align in either face.
+Scale: 11px uppercase label (+0.05em tracking; badges, chips, table headers),
+  13px meta, 14px body, 16px section titles (−0.01em), 20px page titles
+  (−0.017em), 22–24px only for the Ask Boardex composer placeholder.
 ```
 
 Hard rules: green/red/amber are semantically reserved (D14) — never decorative. One accent. No gradients, no glassmorphism, no dark mode in MVP. Density: calm by default; monospace areas (logs, decode tables) may be dense.
@@ -397,7 +408,9 @@ Risk badge mapping: low = neutral, medium = amber outline, high = amber solid, c
 
 ## 6.3 Layout (the three zones + evidence band, spec §17.2)
 
-Run Workspace grid on desktop (≥1280px): left Board Context rail 280px · center fluid (min 560px) · right Run Status & Approval rail 340px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1280px the right rail stacks under center; this is a desktop tool — mobile is out of scope.
+The app frame (T6.1b): a persistent left sidebar (240px, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title + status badge, right-aligned page actions). Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column.
+
+Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1240px of content area — frame-aware, so the sidebar's 240/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 340px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1240px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope.
 
 ---
 

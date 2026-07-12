@@ -91,14 +91,17 @@ export function StatusCard({ run, endedAt, warnings, stopping, stopError, onStop
         </p>
       )}
       {!terminal && (
-        <Button
-          variant="danger"
-          className="mt-4 w-full"
-          disabled={stopping}
-          onClick={() => setConfirming(true)}
-        >
-          {stopping ? 'Stopping…' : 'Stop Run'}
-        </Button>
+        // T6.1c: outline-danger at natural width, right-aligned — an ever-present
+        // escape hatch, not a full-width alarm bar. Red still means stop only (D14).
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="outline-danger"
+            disabled={stopping}
+            onClick={() => setConfirming(true)}
+          >
+            {stopping ? 'Stopping…' : 'Stop Run'}
+          </Button>
+        </div>
       )}
       <ConfirmDialog
         open={confirming}

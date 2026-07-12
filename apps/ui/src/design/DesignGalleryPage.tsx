@@ -163,6 +163,7 @@ export default function DesignGalleryPage() {
             <Button variant="primary">Approve &amp; Continue</Button>
             <Button variant="secondary">Review Diff</Button>
             <Button variant="danger">Stop Run</Button>
+            <Button variant="outline-danger">Stop Run</Button>
             <Button variant="ghost">Edit task</Button>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -175,10 +176,18 @@ export default function DesignGalleryPage() {
             <Button variant="danger" disabled>
               Stop Run
             </Button>
+            <Button variant="outline-danger" disabled>
+              Stop Run
+            </Button>
             <Button variant="ghost" disabled>
               Edit task
             </Button>
           </div>
+          <p className="text-meta text-text-secondary">
+            outline-danger is the resting form for ever-present destructive controls (Stop
+            Run) — solid red only under hover intent. Disabled buttons keep 60% presence so
+            a gated CTA never vanishes.
+          </p>
         </GallerySection>
 
         <GallerySection title="Card">

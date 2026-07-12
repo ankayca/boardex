@@ -125,6 +125,14 @@ body {
   animation: step-active-pulse 2s var(--ease-standard) infinite;
 }
 
+/* Sidebar height (T6.1c): dvh where supported so the runner pill can never sit
+   below the visible viewport edge (100vh overshoots when browser UI eats into
+   the window); plain vh is the fallback. */
+.sidebar-height {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Workspace three-zone grid (§6.3) under the frame (T6.1b): the 3-column split
    keys on CONTENT width via container query, not the viewport — the sidebar
    (240px expanded, 56px collapsed) participates automatically, where a viewport
