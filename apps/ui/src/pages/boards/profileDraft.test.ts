@@ -64,6 +64,23 @@ describe('validateDraft — a complete draft', () => {
     const result = validateDraft(validDraft());
     expect(result.ok && result.profile.knownQuirks).toEqual(FULL.knownQuirks);
   });
+
+  // v2.1 (T6.3): documents have no editing section in stage 1, so the form must
+  // carry them untouched — saving an edited profile can't drop the field.
+  it('carries documents (v2.1) through untouched, and omits the key when there are none', () => {
+    const withDocs = {
+      ...FULL,
+      documents: [
+        { id: 'doc_bme280_datasheet', label: 'BME280 datasheet', kind: 'datasheet', mimeType: 'text/markdown' },
+      ] as const,
+    };
+    const kept = validateDraft(fromProfile({ ...withDocs, documents: [...withDocs.documents] }));
+    expect(kept.ok && kept.profile.documents).toEqual(withDocs.documents);
+
+    // A documents-less profile round-trips with no documents key at all.
+    const none = validateDraft(validDraft());
+    expect(none.ok && 'documents' in none.profile).toBe(false);
+  });
 });
 
 describe('validateDraft — required fields, per §7.5 section', () => {

@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   EventSchema,
+  GetDocumentMetaResponseSchema,
+  HealthResponseSchema,
   ListRunsResponseSchema,
   reduceRun,
   type Event,
@@ -153,9 +155,22 @@ function assertContiguous(events: Event[], firstSeq: number, lastSeq: number): v
 // --- tests ------------------------------------------------------------------
 
 describe('mock runner', () => {
-  it('reports runnerKind "mock" and the contract version', async () => {
-    const health = await getJson<{ ok: boolean; contractVersion: string; runnerKind: string }>('/health');
-    expect(health).toEqual({ ok: true, contractVersion: 'boardex-contract/0.1', runnerKind: 'mock' });
+  it('reports runnerKind "mock", the contract version, and v2.1 capabilities', async () => {
+    const health = await getJson<{
+      ok: boolean;
+      contractVersion: string;
+      runnerKind: string;
+      capabilities?: { models?: string[] };
+    }>('/health');
+    expect(health).toEqual({
+      ok: true,
+      contractVersion: 'boardex-contract/0.1',
+      runnerKind: 'mock',
+      // T6.3 (riding along for T6.6): the mock advertises one model.
+      capabilities: { models: ['mock-model'] },
+    });
+    // Validates against the contract schema (capabilities is optional there).
+    expect(HealthResponseSchema.parse(health)).toEqual(health);
   });
 
   it('drives a full run to completion over HTTP + WS with the fixture event count', async () => {
@@ -472,5 +487,71 @@ describe('mock runner', () => {
 
     const missing = await fetch(`${base}/artifacts/does_not_exist`);
     expect(missing.status).toBe(404);
+  });
+
+  // v2.1 (T6.3): the canned profile carries two authored documents and the runner
+  // serves them by reference with the declared MIME type.
+  it('lists the profile documents and serves them by reference (T6.3)', async () => {
+    const profiles = await getJson<
+      { id: string; documents?: { id: string; kind: string; mimeType: string }[] }[]
+    >('/board-profiles');
+    const nucleo = profiles.find((p) => p.id === 'bp_nucleo_f303re');
+    expect(nucleo?.documents?.map((d) => d.id).sort()).toEqual([
+      'doc_bme280_datasheet',
+      'doc_schematic_notes',
+    ]);
+
+    // Content by reference, MIME honored.
+    const datasheet = await fetch(`${base}/documents/doc_bme280_datasheet`);
+    expect(datasheet.status).toBe(200);
+    expect(datasheet.headers.get('content-type')).toBe('text/markdown');
+    const md = await datasheet.text();
+    // The headings the fixture's sourceDoc locators point at are present, and the
+    // technical facts are consistent with the fixture story.
+    expect(md).toContain('## I2C device addressing');
+    expect(md).toContain('## Timing specifications');
+    expect(md).toContain('0x76');
+    expect(md).toContain('0xEC');
+
+    // Meta returns the BoardDocument descriptor and validates against the contract.
+    const meta = await getJson('/documents/doc_bme280_datasheet/meta');
+    const doc = GetDocumentMetaResponseSchema.parse(meta);
+    expect(doc).toMatchObject({
+      id: 'doc_bme280_datasheet',
+      kind: 'datasheet',
+      mimeType: 'text/markdown',
+    });
+
+    // The schematic notes carry the pin mapping.
+    const schematic = await (await fetch(`${base}/documents/doc_schematic_notes`)).text();
+    expect(schematic).toContain('PB8');
+    expect(schematic).toContain('PB9');
+
+    const missing = await fetch(`${base}/documents/does_not_exist`);
+    expect(missing.status).toBe(404);
+    expect((await fetch(`${base}/documents/does_not_exist/meta`)).status).toBe(404);
+  });
+
+  // v2.1 (T6.3): a model chosen at create-run time is echoed onto the run.created
+  // Run; omitting it leaves the Run without a model (feature-detected end to end).
+  it('echoes a chosen model onto run.created, and omits it when unspecified (T6.3)', async () => {
+    const withModel = await post('/runs', {
+      taskPrompt: 'bring up BME280',
+      boardProfileId: 'bp_nucleo_f303re',
+      model: 'mock-model',
+    });
+    const { runId } = (await withModel.json()) as { runId: string };
+    const { events } = await waitForView(runId, (v) => v.run.status !== 'draft', 'run.created');
+    const created = events.find((e) => e.type === 'run.created');
+    expect(created?.type === 'run.created' && created.payload.run.model).toBe('mock-model');
+
+    const plainId = await createRun();
+    const { events: plainEvents } = await waitForView(
+      plainId,
+      (v) => v.run.status !== 'draft',
+      'run.created (no model)',
+    );
+    const plainCreated = plainEvents.find((e) => e.type === 'run.created');
+    expect(plainCreated?.type === 'run.created' && plainCreated.payload.run.model).toBeUndefined();
   });
 });

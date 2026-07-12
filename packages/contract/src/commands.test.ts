@@ -3,13 +3,14 @@ import {
   ConflictErrorSchema,
   CreateRunRequestSchema,
   CreateRunResponseSchema,
+  GetDocumentMetaResponseSchema,
   GetRunEventsQuerySchema,
   HealthResponseSchema,
   ListRunsResponseSchema,
   ResolveApprovalRequestSchema,
   SaveBoardProfileRequestSchema,
 } from './commands';
-import { sampleBoardProfile } from './test-samples';
+import { sampleBoardDocument, sampleBoardProfile } from './test-samples';
 
 describe('command schemas', () => {
   it('parses a health response', () => {
@@ -18,11 +19,45 @@ describe('command schemas', () => {
     expect(() => HealthResponseSchema.parse({ ...health, runnerKind: 'fake' })).toThrow();
   });
 
+  // v2.1 (T6.3): capabilities is optional and feature-detected — a health response
+  // without it is valid (a runner that offers no model choice), and one with it
+  // round-trips the advertised models.
+  it('round-trips an optional capabilities block on health', () => {
+    const withCaps = {
+      ok: true,
+      contractVersion: 'boardex-contract/0.1',
+      runnerKind: 'mock',
+      capabilities: { models: ['mock-model', 'mock-model-pro'] },
+    };
+    expect(HealthResponseSchema.parse(withCaps)).toEqual(withCaps);
+    // Absent capabilities parses too (no field injected).
+    const parsed = HealthResponseSchema.parse({
+      ok: true,
+      contractVersion: 'boardex-contract/0.1',
+      runnerKind: 'real',
+    });
+    expect(parsed.capabilities).toBeUndefined();
+  });
+
   it('parses create-run request/response and rejects missing fields', () => {
     const request = { taskPrompt: 'Bring up BME280', boardProfileId: 'bp_01' };
     expect(CreateRunRequestSchema.parse(request)).toEqual(request);
     expect(() => CreateRunRequestSchema.parse({ taskPrompt: 'no profile' })).toThrow();
     expect(CreateRunResponseSchema.parse({ runId: 'run_01' })).toEqual({ runId: 'run_01' });
+  });
+
+  // v2.1 (T6.3): an optional model rides along with a create-run request.
+  it('round-trips an optional model on create-run', () => {
+    const request = { taskPrompt: 'Bring up BME280', boardProfileId: 'bp_01', model: 'mock-model' };
+    expect(CreateRunRequestSchema.parse(request)).toEqual(request);
+  });
+
+  // v2.1 (T6.3): GET /documents/{id}/meta returns a BoardDocument descriptor.
+  it('round-trips a document meta response and rejects an unknown kind', () => {
+    expect(GetDocumentMetaResponseSchema.parse(sampleBoardDocument)).toEqual(sampleBoardDocument);
+    expect(() =>
+      GetDocumentMetaResponseSchema.parse({ ...sampleBoardDocument, kind: 'firmware' }),
+    ).toThrow();
   });
 
   it('parses run summaries', () => {

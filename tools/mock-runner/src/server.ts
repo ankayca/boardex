@@ -14,7 +14,7 @@ import {
   type Event,
   type HealthResponse,
 } from '@boardex/contract';
-import { buildBenchStatus, NUCLEO_F303RE_PROFILE } from './data';
+import { buildBenchStatus, DOCUMENT_CATALOG, NUCLEO_F303RE_PROFILE } from './data';
 import { buildArtifactCatalog, loadFixture, type ArtifactFile } from './fixture';
 import { RunSession, type CommandResult } from './session';
 
@@ -38,6 +38,10 @@ export interface MockRunner {
 }
 
 const DEFAULT_PORT = 4319;
+
+// v2.1 (T6.3, riding along for T6.6): the mock advertises one model so the
+// composer's feature-detected model select has something to render (§5.3).
+const MOCK_CAPABILITIES: { models: string[] } = { models: ['mock-model'] };
 
 export async function createMockRunner(options: MockRunnerOptions = {}): Promise<MockRunner> {
   const speed = options.speed ?? 1;
@@ -99,13 +103,15 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
     return `run_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  function createRun(): string {
+  function createRun(model?: string): string {
     const id = newRunId();
     const session = new RunSession({
       id,
       entries: fixture,
       speed,
       validateOutbound,
+      // v2.1 (T6.3): echo the chosen model onto the run.created Run (§4 Run.model).
+      model,
       onEvent: (event) => dispatch(session, event),
     });
     sessions.set(id, session);
@@ -133,7 +139,12 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
 
     // GET /health
     if (method === 'GET' && seg.length === 1 && seg[0] === 'health') {
-      const body: HealthResponse = { ok: true, contractVersion: CONTRACT_VERSION, runnerKind: 'mock' };
+      const body: HealthResponse = {
+        ok: true,
+        contractVersion: CONTRACT_VERSION,
+        runnerKind: 'mock',
+        capabilities: MOCK_CAPABILITIES,
+      };
       return sendJson(res, 200, body);
     }
 
@@ -165,8 +176,9 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
         const parsed = CreateRunRequestSchema.safeParse(await readBody(req));
         if (!parsed.success) return sendError(res, 400, 'invalid create-run request');
         // The mock replays the canned BME280 story re-keyed with a fresh runId
-        // (§5.6); the request's taskPrompt/boardProfileId are not substituted.
-        return sendJson(res, 200, { runId: createRun() });
+        // (§5.6); the request's taskPrompt/boardProfileId are not substituted. The
+        // chosen model (v2.1) IS honored — echoed onto the run.created Run.
+        return sendJson(res, 200, { runId: createRun(parsed.data.model) });
       }
 
       const runId = seg[1];
@@ -211,6 +223,24 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
       }
       if (seg.length === 2) {
         return sendArtifact(res, id, artifactCatalog.get(id));
+      }
+    }
+
+    // v2.1 (T6.3) — /documents/{id} and /documents/{id}/meta. Content is served
+    // with Content-Type per BoardDocument.mimeType, mirroring /artifacts.
+    if (seg[0] === 'documents' && seg.length >= 2 && method === 'GET') {
+      const id = seg[1] as string;
+      const doc = DOCUMENT_CATALOG.get(id);
+      if (seg.length === 3 && seg[2] === 'meta') {
+        if (!doc) return sendError(res, 404, 'document not found');
+        return sendJson(res, 200, doc.meta);
+      }
+      if (seg.length === 2) {
+        if (!doc) return sendError(res, 404, `document "${id}" not found`);
+        const content = Buffer.from(doc.content, 'utf8');
+        res.writeHead(200, { 'Content-Type': doc.meta.mimeType, 'Content-Length': content.length });
+        res.end(content);
+        return;
       }
     }
 

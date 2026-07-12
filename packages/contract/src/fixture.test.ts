@@ -98,6 +98,25 @@ describe('bme280_run_001 fixture', () => {
     expect(view.run.plan).toHaveLength(6);
   });
 
+  it('carries v2.1 sourceDoc on the i2c_clock and device_ack checks, at datasheet locators', () => {
+    // T6.3: both citing checks resolve to the profile's datasheet excerpt, each at
+    // the heading the Sources tab deep-links to. serial_output has no datasheet
+    // citation, so it carries no sourceDoc.
+    const view = reduceRun(events)!;
+    const byReq = new Map(view.checks.map((check) => [check.requirementId, check]));
+    expect(byReq.get('i2c_clock')?.sourceDoc).toEqual({
+      documentId: 'doc_bme280_datasheet',
+      locator: 'timing-specifications',
+    });
+    expect(byReq.get('device_ack')?.sourceDoc).toEqual({
+      documentId: 'doc_bme280_datasheet',
+      locator: 'i2c-device-addressing',
+    });
+    expect(byReq.get('serial_output')?.sourceDoc).toBeUndefined();
+    // The free-text sourceRef stays as the fallback rendering, beside sourceDoc.
+    expect(byReq.get('device_ack')?.sourceRef).toBe('BME280 datasheet §5.4.1');
+  });
+
   it('links every check to a real artifact and every artifact to a real fixture file with matching size', () => {
     const view = reduceRun(events)!;
     const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
@@ -200,6 +219,12 @@ describe('bme280_run_001_fail fixture (T5.0/F9 — the fail variant)', () => {
     expect(verdicts.get('i2c_clock')).toBe('pass');
     expect(verdicts.get('device_ack')).toBe('fail');
     expect(verdicts.get('serial_output')).toBe('fail');
+
+    // T6.3: the fail variant carries the same v2.1 sourceDoc citations (payload-only
+    // edits — the failed device_ack still points at the addressing section).
+    const byReq = new Map(view.checks.map((check) => [check.requirementId, check]));
+    expect(byReq.get('i2c_clock')?.sourceDoc?.locator).toBe('timing-specifications');
+    expect(byReq.get('device_ack')?.sourceDoc?.locator).toBe('i2c-device-addressing');
   });
 
   it('iter2f serial log carries the strings the evidenced firmware actually prints (T5.0 FIX_FIRST F2)', () => {

@@ -4,6 +4,7 @@ import type {
   Approval,
   Artifact,
   BenchStatus,
+  BoardDocument,
   BoardProfile,
   Diagnosis,
   MeasurementCheck,
@@ -67,6 +68,15 @@ export const sampleCheck: MeasurementCheck = {
   verdict: 'pass',
   artifactId: 'art_01',
   sourceRef: 'BME280 datasheet §6.2',
+  // v2.1 (T6.3): the resolvable citation beside the free-text sourceRef.
+  sourceDoc: { documentId: 'doc_bme280_datasheet', locator: 'timing-specifications' },
+};
+
+export const sampleBoardDocument: BoardDocument = {
+  id: 'doc_bme280_datasheet',
+  label: 'BME280 datasheet (excerpt)',
+  kind: 'datasheet',
+  mimeType: 'text/markdown',
 };
 
 export const sampleApproval: Approval = {
@@ -120,6 +130,11 @@ export const sampleBoardProfile: BoardProfile = {
   },
   connectionChecklist: [{ label: 'SDA', detail: 'PB9 to BME280 SDI' }],
   knownQuirks: ['On-board LD2 shares PA5 with SPI1 SCK'],
+  // v2.1 (T6.3): reference material the runner serves by id.
+  documents: [
+    { id: 'doc_bme280_datasheet', label: 'BME280 datasheet (excerpt)', kind: 'datasheet', mimeType: 'text/markdown' },
+    { id: 'doc_schematic_notes', label: 'Schematic notes', kind: 'schematic', mimeType: 'text/markdown' },
+  ],
 };
 
 export const sampleBench: BenchStatus = {

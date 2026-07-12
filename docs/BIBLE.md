@@ -2,6 +2,8 @@
 ## Master Build Document for the Boardex Desktop MVP — UI, Contracts, and Claude Code Execution Plan
 
 Version 2.0 · July 2026 — v1.2 contract amendments per §10.5: added `run.iteration_started` event (fix-loop iteration was unrepresentable); removed `nextAction` from RunSummary (UI-derived per T1.2); BenchStatus devices carry the backend registry's stable `id`. v1.3: RunView gains `riskSummary?` populated from `run.plan_generated` (reducer-only change; wire contract unchanged). v1.4: RunView's `logsByStep` values carry the `step.log` stream per line (`{stream, line}[]`), and RunView gains `iterations[]` (`{iteration, reason, firstStepIndex}` from `run.iteration_started`) — both reducer-only; wire contract unchanged (needed by T2.1's per-stream log tabs and iteration divider). v1.5: RunView gains `endedAt?` from the terminal event's envelope `ts` (reducer-only; wire contract unchanged — needed by T2.2's frozen terminal duration). v1.6: RunView's `diagnosis` gains `fixApprovalId?` — the id of the first `approval.requested` following `diagnosis.created` — so the UI binds the Diagnosis Card to exactly its fix approval (reducer-only; wire contract unchanged; T2.2 review F1/F3). **v2.0 (T5.0 conformance hardening — wire changes)**: envelope-first parse rule made normative in §5.1 (an unknown-typed, well-formed envelope still counts toward seq continuity); `ts` accepts naive ISO 8601 (§5.1); the three structured artifact content schemas (protocol_decode — reconciled to the boardex-logic parsers' actual shapes — code_diff, timing_measurement) are contract-owned and emitted to `json-schema/artifacts.schema.json` (§4); the global stream carries the dedicated terminal events `run.completed`/`run.failed`/`run.stopped` (§5.3); §5.7 adds the normative run-status transition graph; §7.1's next-action label for `awaiting_approval` is "Review approval"; the §7.2 bench-degraded warning repeats at hardware-action approvals (§7.3). Reducer-only, same release: legal-ordering reconciliation (§5.4 — early `step.completed`/`approval.resolved` buffered until their entity arrives; a check downgraded by the evidence law upgrades when its artifact lands; only what the stream never reconciles remains a warning), `reduceRun` takes `WireEvent[]` and returns `RunView | null` (§5.4 — ignored envelopes may legally precede `run.created`; a stream with no known event yet is the valid, empty view), and `RunView.warnings` surfaces in the workspace status card. Same release, fixtures: the fail-variant fixture `bme280_run_001_fail.jsonl` (§5.5) and the mock runner's `--fail-variant`/`FIXTURE=fail` switch (§5.6) exercise the `failed` terminal.
+
+**v2.1 (T6.3 Documents & Sources — additive wire changes; proposed to the backend owner by PR). All fields are optional, so a v2.0 consumer that ignores them still conforms; the wire `contractVersion` stays `boardex-contract/0.1`.** (1) `BoardProfile` gains `documents?: BoardDocument[]` where `BoardDocument = { id, label, kind: 'datasheet'|'schematic'|'reference', mimeType }` — profile-attached reference material the runner owns and serves (§4). (2) Two new routes serve documents by reference: `GET /documents/{id}` (content, Content-Type per the document's `mimeType`) and `GET /documents/{id}/meta` (the `BoardDocument`) (§5.3). (3) `MeasurementCheck` gains `sourceDoc?: { documentId, locator? }` — the resolvable form of a citation, beside the existing free-text `sourceRef` (which stays as the fallback rendering) (§4). (4) Runner capabilities, riding along for T6.6: `GET /health` gains `capabilities?: { models?: string[] }`; `POST /runs` (CreateRun) gains `model?: string`; `Run` gains `model?: string` (echoed) (§4/§5.3). Reducer unchanged (optional fields pass through RunView on their entities). Mock, same release: the canned Nucleo-F303RE profile carries two authored documents (a BME280 datasheet excerpt — §5.4.1 addressing + the §6.2 timing spec — and schematic pin-mapping notes), serves them per the new routes, and `/health` advertises `capabilities.models: ['mock-model']`; both fixtures' `i2c_clock`/`device_ack` `check.evaluated` payloads gain `sourceDoc` pointing at the datasheet excerpt with heading locators (payload-only — no new events, no seq changes). Documents-tab/deep-link/model-select UI is T6.3 stage 2.
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -152,6 +154,7 @@ Run = {
   plan?: PlanStep[],            // plain-language, 5-8 steps
   createdAt, updatedAt: string, // ISO 8601
   iteration: number,            // fix-loop counter, starts at 1
+  model?: string,               // v2.1: the runner model this run used (echoed from CreateRun.model)
 }
 
 PlanStep = { index: number, title: string, detail: string,
@@ -178,8 +181,17 @@ MeasurementCheck = { id, runId, requirementId: string,
   actual: { value: number|boolean|string, unit?: string },
   verdict: 'pass' | 'fail' | 'needs_review',
   artifactId: string,                      // REQUIRED — evidence linking is law
-  sourceRef?: string                       // e.g. "BME280 datasheet §6.2"
+  sourceRef?: string,                      // e.g. "BME280 datasheet §6.2" (free-text; fallback rendering)
+  sourceDoc?: { documentId: string,        // v2.1: the resolvable form of the citation — a
+                locator?: string }         // BoardProfile.documents[] id + optional in-document locator
+                                           // (a markdown heading slug/anchor, or best-effort text)
 }
+
+// v2.1: profile-attached reference material. The runner owns the bytes and serves
+// them by reference (§5.3 GET /documents/{id}); the builder edits metadata only.
+BoardDocument = { id: string, label: string,
+  kind: 'datasheet' | 'schematic' | 'reference',
+  mimeType: string }                       // e.g. "text/markdown", "application/pdf"
 
 Approval = { id, runId,
   proposal: { title: string, reason: string, riskLevel: RiskLevel,
@@ -199,7 +211,8 @@ BoardProfile = { id, name, mcu: string,
   safety: { maxIterations: number, flashRequiresApproval: boolean,
             powerNote: string },          // manual power mode text
   connectionChecklist: { label: string, detail: string }[],  // D12
-  knownQuirks: string[] }
+  knownQuirks: string[],
+  documents?: BoardDocument[] }               // v2.1: reference material served by the runner (§5.3)
 
 BenchStatus = { runnerOnline: boolean, contractVersion: string,
   devices: { id: string,    // backend registry's stable device_id, e.g. "sigrok:kingst-la2016:conn=3.12"
@@ -260,12 +273,15 @@ Rules: `seq` is per-run and gapless — the UI treats a gap as a protocol error 
 ## 5.3 Command API (HTTP, JSON)
 
 ```
-GET  /health                         -> { ok, contractVersion, runnerKind: 'mock'|'real' }
+GET  /health                         -> { ok, contractVersion, runnerKind: 'mock'|'real',
+                                          capabilities?: { models?: string[] } }  // v2.1 (feature-detected)
 GET  /bench                          -> BenchStatus
 GET  /board-profiles                 -> BoardProfile[]
 POST /board-profiles                 -> create/update BoardProfile
+GET  /documents/{id}                 -> content (Content-Type per BoardDocument.mimeType)   // v2.1
+GET  /documents/{id}/meta            -> BoardDocument                                        // v2.1
 GET  /runs                           -> RunSummary[]  (id, title, status, boardProfileId, updatedAt)
-POST /runs                           { taskPrompt, boardProfileId }        -> { runId }
+POST /runs                           { taskPrompt, boardProfileId, model? } -> { runId }   // model? v2.1
 POST /runs/{id}/plan/approve         {}                                     -> 204
 POST /runs/{id}/approvals/{aid}      { status: 'approved'|'rejected' }      -> 204
 POST /runs/{id}/stop                 {}                                     -> 204
@@ -616,7 +632,7 @@ Evolved type scale and rhythm; an elevation + focus-state system; motion tokens 
 Timeline motion on step transitions; active-step live treatment; LogViewer upgrades (timestamps, per-stream accents within token law, find-in-log); Progress wired into the StatusCard (steps completed); artifact chips animating in as evidence lands; the evidence-band verdict-flip moment.
 
 ### T6.3 — Documents & Sources (full protocol; contract v2.1 via PR to the backend owner)
-`BoardProfile.documents[]`; `GET /documents/{id}` by reference; a `source_excerpt` artifact kind; resolvable `sourceRef`. The mock serves a real datasheet excerpt + schematic PDF. UI: a Sources tab in the evidence drawer + a reference panel in the workspace rail; citations deep-link to the exact section.
+`BoardProfile.documents?: BoardDocument[]`; `GET /documents/{id}` (+ `/meta`) by reference; `MeasurementCheck.sourceDoc?: { documentId, locator? }` — the resolvable form of a citation beside the free-text `sourceRef` (the fallback). Runner-capabilities fields ride along for T6.6 (`/health.capabilities.models`, `CreateRun.model`, `Run.model`). The mock serves a real datasheet excerpt + schematic notes and advertises `capabilities.models`. UI (stage 2): a Sources tab in the evidence drawer rendering the profile's documents; check citations deep-link to the exact document at the locator; a Documents section in the Board Profile Builder (metadata only); a composer model select (feature-detected). (Design settled during T6.3: `sourceDoc` on the check supersedes the originally-sketched `source_excerpt` artifact kind — a citation is a pointer into profile-owned reference material, not per-run evidence; see decisions.md.)
 
 ### T6.4 — Command palette & keyboard-first
 ⌘K palette (navigate runs/boards/evidence; actions navigate to their surface — approvals still require their card); global shortcuts; visible focus order.

@@ -58,6 +58,21 @@ changes the contract.
    loosely. No binary `.sr` file is authored; the recorded fixture should add a real
    `logic_capture` artifact alongside.
 
+## v2.1 (T6.3) — sourceDoc citations
+
+- The `i2c_clock` and `device_ack` `check.evaluated` payloads carry `sourceDoc`
+  (`{ documentId: "doc_bme280_datasheet", locator }`) beside the existing free-text
+  `sourceRef` — a **payload-only** edit in both fixtures (no new events, no seq
+  changes, event counts unchanged; the fail variant's shared prefix through seq 68
+  stays byte-identical). The locators (`i2c-device-addressing`, `timing-specifications`)
+  are the GitHub-style heading slugs of the mock's authored datasheet excerpt
+  (`tools/mock-runner/src/data.ts`), so a check deep-links to the exact section.
+  `serial_output` carries no `sourceDoc` (no datasheet citation).
+- The mock's authored documents (datasheet excerpt + schematic notes) are held in
+  the mock, not the fixture — they are profile-attached reference material the
+  runner serves, not per-run evidence. A recorded fixture inherits whatever
+  documents the real profile carries.
+
 ## Shape decisions for downstream tasks
 
 - **code_diff artifacts are structured JSON** (`{ files: [{ path, reason, diff }] }`)

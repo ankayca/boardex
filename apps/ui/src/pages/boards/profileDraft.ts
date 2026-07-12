@@ -5,7 +5,7 @@
 // The refinements never change the shape — the contract stays the authority on fields,
 // this module only decides which of them a human may leave blank.
 import { z } from 'zod';
-import { BoardProfileSchema, type BoardProfile } from '@boardex/contract';
+import { BoardProfileSchema, type BoardDocument, type BoardProfile } from '@boardex/contract';
 
 /** One connection-checklist row (D12). `key` is client-only, for React + reorder. */
 export interface ChecklistRow {
@@ -37,6 +37,13 @@ export interface ProfileDraft {
    * profile would blank a field the user never saw.
    */
   knownQuirks: string[];
+  /**
+   * v2.1 (T6.3): documents have no editing section in Stage 1, so — like
+   * knownQuirks — the form carries them untouched instead of blanking a field the
+   * user never saw. (The Documents editing section lands in T6.3 stage 2.)
+   * Undefined for a profile that carries none.
+   */
+  documents?: BoardDocument[];
 }
 
 let rowSeq = 0;
@@ -95,6 +102,7 @@ export function fromProfile(profile: BoardProfile): ProfileDraft {
     powerNote: profile.safety.powerNote,
     checklist: profile.connectionChecklist.map((row) => ({ ...newChecklistRow(), ...row })),
     knownQuirks: [...profile.knownQuirks],
+    documents: profile.documents ? [...profile.documents] : undefined,
   };
 }
 
@@ -210,6 +218,9 @@ function draftToProfile(draft: ProfileDraft, baud: number, maxIterations: number
       detail: row.detail.trim(),
     })),
     knownQuirks: draft.knownQuirks,
+    // Carried untouched (v2.1, T6.3) — omit the key entirely when the profile has
+    // no documents, so a documents-less profile round-trips without the field.
+    ...(draft.documents ? { documents: draft.documents } : {}),
   };
 }
 
