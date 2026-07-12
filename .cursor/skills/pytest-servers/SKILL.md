@@ -1,6 +1,6 @@
 ---
 name: pytest-servers
-description: Set up the Python venv and run the Boardex server test suites (boardex-core, boardex-target, boardex-logic). Use when changing anything under servers/, when asked to run server tests, or when pytest/imports fail for the Python packages.
+description: Set up the Python venv and run the Boardex server test suites (boardex-core, boardex-target, boardex-logic, boardex-runner). Use when changing anything under servers/, when asked to run server tests, or when pytest/imports fail for the Python packages.
 ---
 
 # Running the Boardex server tests
@@ -19,6 +19,7 @@ source .venv/bin/activate
 pip install -e "servers/boardex-core[dev]"
 pip install -e "servers/boardex-target[dev]"
 pip install -e "servers/boardex-logic[dev]"
+pip install -e "servers/boardex-runner[dev]"
 ```
 
 The editable installs matter: `boardex-target` and `boardex-logic` depend on
@@ -30,7 +31,8 @@ The editable installs matter: `boardex-target` and `boardex-logic` depend on
 Full suite (what must be green before any commit touching `servers/`):
 
 ```bash
-pytest servers/boardex-core/tests servers/boardex-target/tests servers/boardex-logic/tests
+pytest servers/boardex-core/tests servers/boardex-target/tests \
+       servers/boardex-logic/tests servers/boardex-runner/tests
 ```
 
 Targeted, when the change is scoped:
@@ -40,14 +42,17 @@ pytest servers/boardex-target/tests/test_session.py -q
 pytest servers/boardex-core/tests -q -k registry
 ```
 
-Changing `boardex-core` requires running all three suites — the other two
-packages consume its interfaces, results, and conformance kit.
+Changing `boardex-core` requires running all four suites — the other packages
+consume its interfaces, results, and conformance kit. `boardex-runner` also
+reads `packages/contract/json-schema/` at test time (read-only), so its suite
+must be re-run after pulling any contract change.
 
 ## Invariants
 
 - **All tests are hardware-free and must stay that way.** Never write a test that
   needs a USB probe or analyzer attached. Use `boardex_core.testing` fakes
-  (`FakeTargetController`, etc.) and the conformance suites.
+  (`FakeTargetController`, etc.) and the conformance suites. The runner suite
+  runs entirely on `boardex_runner.fake_bench.FakeBench` + `VirtualClock`.
 - New adapters prove conformance by subclassing
   `boardex_core.testing.TargetControllerConformance` or `LogicAnalyzerConformance`.
 - Never run `npm run lint` / eslint to "fix" server code — eslint ignores

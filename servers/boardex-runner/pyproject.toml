@@ -1,0 +1,31 @@
+[project]
+name = "boardex-runner"
+version = "0.1.0"
+description = "Boardex orchestrator: scripted run engine over the MCP tool layer, exposing the BIBLE §5 event stream + command API (runnerKind: real)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "TBD" }
+authors = [{ name = "Boardex contributors" }]
+dependencies = [
+    "boardex-core",
+    "boardex-target",
+    "boardex-logic",
+    # HTTP + WebSocket server in one dependency (§5.3 command API + /ws streams).
+    "aiohttp>=3.9",
+    # Outbound events are validated against packages/contract/json-schema/ at
+    # emit time, exactly as the mock runner does (BIBLE §10.1).
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+boardex-runner = "boardex_runner.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["boardex_runner"]

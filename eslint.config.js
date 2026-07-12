@@ -16,6 +16,8 @@ export default tseslint.config(
       '**/*.config.ts',
       'servers/**',
       'examples/**',
+      // Python virtualenv (backend-land): vendored JS inside pip must not lint.
+      '.venv/**',
       'packages/contract/json-schema/**',
       'packages/contract/fixtures/**',
     ],
