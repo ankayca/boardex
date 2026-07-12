@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import type { Event, MeasurementCheck, RunView } from '@boardex/contract';
 import { reduceRun } from '@boardex/contract';
 import { api } from '../../lib/api';
@@ -350,15 +350,18 @@ describe('EvidenceDrawer Sources tab (T6.3)', () => {
     kind: 'datasheet' as const,
     mimeType: 'text/markdown',
   };
-  const DOC_MD = '# BME280\n\n## Timing specifications\n\nStandard mode 100 kHz.\n';
+  // Two headings so a second citation can target a DIFFERENT locator in the SAME
+  // document (the review F1 probe).
+  const DOC_MD =
+    '# BME280\n\n## I2C device addressing\n\nSDO to GND selects 0x76.\n\n## Timing specifications\n\nStandard mode 100 kHz.\n';
 
-  function renderWithDocs(search: string) {
+  function renderWithDocs(search: string, view: RunView = buildView()) {
     vi.spyOn(api, 'getDocumentText').mockResolvedValue(DOC_MD);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence${search}`]}>
-          <EvidenceDrawer view={buildView()} documents={[datasheet]} onClose={() => {}} />
+          <EvidenceDrawer view={view} documents={[datasheet]} onClose={() => {}} />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -376,5 +379,95 @@ describe('EvidenceDrawer Sources tab (T6.3)', () => {
     expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
     const located = await screen.findByRole('heading', { name: 'Timing specifications' });
     expect(located).toHaveAttribute('data-located', 'true');
+  });
+
+  // Review F1 probe: navigate ?doc=X&loc=A, switch to Checks, navigate ?doc=X&loc=B
+  // (same document, different locator) — Sources must re-select and re-highlight.
+  it('re-selects Sources and re-highlights on a second citation to the same doc, different locator', async () => {
+    vi.spyOn(api, 'getDocumentText').mockResolvedValue(DOC_MD);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function Harness() {
+      const navigate = useNavigate();
+      return (
+        <>
+          <button onClick={() => navigate(`/runs/${RUN_ID}/evidence?doc=doc_bme280_datasheet&loc=timing-specifications`)}>
+            cite-timing
+          </button>
+          <EvidenceDrawer view={buildView()} documents={[datasheet]} onClose={() => {}} />
+        </>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter
+          initialEntries={[`/runs/${RUN_ID}/evidence?doc=doc_bme280_datasheet&loc=i2c-device-addressing`]}
+        >
+          <Harness />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'I2C device addressing' })).toHaveAttribute(
+      'data-located',
+      'true',
+    );
+
+    // The user browses away to Checks.
+    await user.click(screen.getByRole('tab', { name: 'Checks' }));
+    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'false');
+
+    // A second citation arrives: same document, a different locator.
+    await user.click(screen.getByRole('button', { name: 'cite-timing' }));
+    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Timing specifications' })).toHaveAttribute(
+      'data-located',
+      'true',
+    );
+    // The prior locator is no longer highlighted.
+    expect(screen.getByRole('heading', { name: 'I2C device addressing' })).not.toHaveAttribute(
+      'data-located',
+    );
+  });
+
+  // Fixture-shaped: two checks cite the SAME document at different locators; clicking
+  // each check's Source link in turn lands the Sources tab highlighted at each.
+  it('lands both of two same-document citations highlighted, via the Checks source links', async () => {
+    const clockCheck: MeasurementCheck = {
+      id: 'chk_clock',
+      runId: RUN_ID,
+      requirementId: 'i2c_clock',
+      description: 'clock',
+      measurement: 'm',
+      expected: { min: 90000, max: 110000 },
+      actual: { value: 99600, unit: 'Hz' },
+      verdict: 'pass',
+      artifactId: 'art_timing',
+      sourceRef: 'BME280 datasheet §6.2',
+      sourceDoc: { documentId: 'doc_bme280_datasheet', locator: 'timing-specifications' },
+    };
+    const ackCited: MeasurementCheck = {
+      ...ackCheck,
+      sourceRef: 'BME280 datasheet §5.4.1',
+      sourceDoc: { documentId: 'doc_bme280_datasheet', locator: 'i2c-device-addressing' },
+    };
+    const view = buildView([
+      envelope(11, 'check.evaluated', { check: clockCheck }),
+      envelope(12, 'check.evaluated', { check: ackCited }),
+    ]);
+    const user = userEvent.setup();
+    renderWithDocs('', view);
+
+    // Citation 1: i2c_clock → timing spec.
+    await user.click(screen.getByRole('link', { name: 'BME280 datasheet §6.2' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Timing specifications' }),
+    ).toHaveAttribute('data-located', 'true');
+
+    // Back to Checks, then citation 2: device_ack → addressing, same document.
+    await user.click(screen.getByRole('tab', { name: 'Checks' }));
+    await user.click(screen.getByRole('link', { name: 'BME280 datasheet §5.4.1' }));
+    expect(
+      await screen.findByRole('heading', { name: 'I2C device addressing' }),
+    ).toHaveAttribute('data-located', 'true');
   });
 });

@@ -102,7 +102,8 @@ first byte and the R/W flag in bit 0 — the wire byte is \`(0x76 << 1) | rw\`, 
 A frequent bring-up error is passing the 7-bit value \`0x76\` straight into an 8-bit
 address field that already expects the shift: the peripheral then drives \`0x76\` as
 the address byte, addressing 7-bit \`0x3B\`, which nothing answers — every transaction
-NACKs at the address phase. Correcting the shift to \`0xEC\` is the fix the run applies.
+NACKs at the address phase. Composing the address as \`(0x76 << 1) = 0xEC\` is the
+standard correction for this class of fault.
 
 Chip identification: a read of register \`0xD0\` returns \`0x60\` for a genuine BME280.
 

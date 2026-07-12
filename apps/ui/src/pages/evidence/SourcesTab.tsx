@@ -27,19 +27,23 @@ export interface SourcesTabProps {
 
 export function SourcesTab({ documents, initialDocId, locator }: SourcesTabProps) {
   // Selection is local: the deep link seeds it, the user can switch freely after.
-  // Derived-state reset (the useRunStream pattern): when the deep-linked doc changes,
-  // re-seed before painting. A seed that names no known document falls back to the
-  // first document, so the panel is never empty when documents exist.
+  // Derived-state reset (the useRunStream pattern): re-seed before painting whenever
+  // the deep link changes. The seed key is doc|loc, not doc alone — a second citation
+  // into the SAME document at a different locator must re-select it even if the user
+  // had navigated to another document by hand (review F1); keying on doc only would
+  // read that as unchanged and leave the wrong document showing. A seed that names no
+  // known document falls back to the first, so the panel is never empty.
+  const seedKey = `${initialDocId ?? ''}|${locator ?? ''}`;
   const seededId =
     (initialDocId && documents.some((doc) => doc.id === initialDocId) ? initialDocId : null) ??
     documents[0]?.id ??
     null;
-  const [selection, setSelection] = useState<{ seed: string | null; id: string | null }>({
-    seed: initialDocId,
+  const [selection, setSelection] = useState<{ seed: string; id: string | null }>({
+    seed: seedKey,
     id: seededId,
   });
-  if (selection.seed !== initialDocId) {
-    setSelection({ seed: initialDocId, id: seededId });
+  if (selection.seed !== seedKey) {
+    setSelection({ seed: seedKey, id: seededId });
   }
   const selectedId = selection.id;
   const selected = documents.find((doc) => doc.id === selectedId) ?? null;
@@ -64,7 +68,7 @@ export function SourcesTab({ documents, initialDocId, locator }: SourcesTabProps
               key={doc.id}
               type="button"
               aria-current={active ? 'true' : undefined}
-              onClick={() => setSelection({ seed: initialDocId, id: doc.id })}
+              onClick={() => setSelection({ seed: seedKey, id: doc.id })}
               className={`flex w-full flex-col items-start gap-1 rounded-button border px-3 py-2 text-left transition-colors ${
                 active
                   ? 'border-accent bg-neutral-badge-bg'

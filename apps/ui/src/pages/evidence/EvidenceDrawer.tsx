@@ -37,13 +37,16 @@ export function EvidenceDrawer({ view, documents, onClose }: EvidenceDrawerProps
 
   // The deep link picks the tab; the user can still switch tabs freely afterwards.
   // Derived-state reset (same pattern as useRunStream): re-derive before painting
-  // when the ?artifact/?doc param changes — a check row, band chip, or citation was
-  // clicked — OR when the artifact param's resolution changes: a link can reference
-  // an artifact whose artifact.created hasn't streamed in yet, in which case the
-  // drawer shows the fail-closed notice on Checks and must route to the artifact's
-  // own tab the moment it lands in RunView.artifacts.
+  // when the ?artifact/?doc/?loc param changes — a check row, band chip, or citation
+  // was clicked — OR when the artifact param's resolution changes: a link can
+  // reference an artifact whose artifact.created hasn't streamed in yet, in which
+  // case the drawer shows the fail-closed notice on Checks and must route to the
+  // artifact's own tab the moment it lands in RunView.artifacts. locParam is part of
+  // the key so a SECOND citation into the same document at a different locator
+  // re-opens Sources and re-highlights — without it, doc-unchanged reads as no-op and
+  // the second citation looks dead (review F1).
   const resolvedId = target.artifact?.id ?? null;
-  const paramKey = `${artifactParam ?? ''}|${docParam ?? ''}`;
+  const paramKey = `${artifactParam ?? ''}|${docParam ?? ''}|${locParam ?? ''}`;
   const [tabState, setTabState] = useState<{
     paramKey: string;
     resolvedId: string | null;
