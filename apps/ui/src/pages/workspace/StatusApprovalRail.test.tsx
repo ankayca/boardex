@@ -433,3 +433,18 @@ describe('contract warnings line (T5.0/F5)', () => {
     expect(screen.queryByText(/contract warning/)).not.toBeInTheDocument();
   });
 });
+
+// T6.3/T6.6: the run's model (echoed from CreateRun.model) renders in the status
+// card meta — only when present, feature-detected end to end.
+describe('run model attribution (T6.3)', () => {
+  it('renders the model when the run carries one', () => {
+    renderRail(viewFrom([envelope(1, 'run.created', { run: { ...run, model: 'mock-model' } })]));
+    const meta = screen.getByText('Model');
+    expect(meta.parentElement).toHaveTextContent('mock-model');
+  });
+
+  it('renders no model line when the run carries none', () => {
+    renderRail(runningView());
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+  });
+});

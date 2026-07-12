@@ -339,3 +339,42 @@ describe('EvidenceDrawer rollback affordance (§7.4)', () => {
     );
   });
 });
+
+// T6.3: the Sources tab is part of the drawer, and a ?doc=…&loc=… deep link opens
+// it at that document with the locator highlighted. documents come from the run's
+// board profile (RunPage passes profile.documents).
+describe('EvidenceDrawer Sources tab (T6.3)', () => {
+  const datasheet = {
+    id: 'doc_bme280_datasheet',
+    label: 'BME280 datasheet (excerpt)',
+    kind: 'datasheet' as const,
+    mimeType: 'text/markdown',
+  };
+  const DOC_MD = '# BME280\n\n## Timing specifications\n\nStandard mode 100 kHz.\n';
+
+  function renderWithDocs(search: string) {
+    vi.spyOn(api, 'getDocumentText').mockResolvedValue(DOC_MD);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[`/runs/${RUN_ID}/evidence${search}`]}>
+          <EvidenceDrawer view={buildView()} documents={[datasheet]} onClose={() => {}} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('renders a Sources tab that lists the profile documents', async () => {
+    const user = userEvent.setup();
+    renderWithDocs('');
+    await user.click(screen.getByRole('tab', { name: 'Sources' }));
+    expect(await screen.findByRole('heading', { name: 'Timing specifications' })).toBeInTheDocument();
+  });
+
+  it('a ?doc deep link opens the Sources tab at the located section', async () => {
+    renderWithDocs('?doc=doc_bme280_datasheet&loc=timing-specifications');
+    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+    const located = await screen.findByRole('heading', { name: 'Timing specifications' });
+    expect(located).toHaveAttribute('data-located', 'true');
+  });
+});

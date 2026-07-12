@@ -12,7 +12,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { WireEvent } from '@boardex/contract';
+import type { Run, WireEvent } from '@boardex/contract';
 
 const getArtifactText = vi.fn<(id: string) => Promise<string>>();
 const getArtifactBlob = vi.fn<(id: string, mimeType: string) => Promise<Blob>>();
@@ -21,6 +21,8 @@ vi.mock('../../lib/api', () => ({
   api: {
     getArtifactText: (id: string) => getArtifactText(id),
     getArtifactBlob: (id: string, mimeType: string) => getArtifactBlob(id, mimeType),
+    // Documents back the report's sourceRef → Sources links (T6.3); none in these tests.
+    listBoardProfiles: () => Promise.resolve([]),
   },
 }));
 vi.mock('../../lib/useRunStream', () => ({ useRunStream: () => 'open' }));
@@ -140,5 +142,27 @@ describe('ReportPage — fail-variant run with no report', () => {
     // Fail-closed: no report fetch is even attempted, and no export actions appear.
     expect(getArtifactText).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Copy Markdown' })).not.toBeInTheDocument();
+  });
+});
+
+// T6.3/T6.6: model attribution renders in the report header when the run echoed one.
+describe('ReportPage — model attribution (T6.3)', () => {
+  it('renders the run model in the header when echoed', async () => {
+    const events = fixtureFile('bme280_run_001.jsonl')
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map((line) => JSON.parse(line).event as WireEvent)
+      .map((event): WireEvent =>
+        event.type === 'run.created'
+          ? {
+              ...event,
+              payload: { run: { ...(event.payload as { run: Run }).run, model: 'mock-model' } },
+            }
+          : event,
+      );
+    useRunStore.getState().ingestMany(RUN_ID, events);
+    getArtifactText.mockResolvedValue(REPORT_MD);
+    renderPage();
+    expect(await screen.findByText(/Model: mock-model/)).toBeInTheDocument();
   });
 });

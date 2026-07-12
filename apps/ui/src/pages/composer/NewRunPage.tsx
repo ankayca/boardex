@@ -38,8 +38,17 @@ export default function NewRunPage() {
 
   const bench = useBenchStatus();
 
+  // Model selection (T6.3/T6.6) is feature-detected — never assumed. The picker
+  // appears only when the runner advertises MORE THAN ONE model; with zero or one
+  // there is nothing to choose, so no UI and no model rides along. Default = first.
+  const healthQuery = useQuery({ queryKey: ['health'], queryFn: () => api.getHealth() });
+  const models = healthQuery.data?.capabilities?.models ?? [];
+  const showModelSelect = models.length > 1;
+  const [modelChoice, setModelChoice] = useState<string | null>(null);
+  const model = showModelSelect ? (modelChoice ?? models[0]) : undefined;
+
   const create = useMutation({
-    mutationFn: (request: { taskPrompt: string; boardProfileId: string }) =>
+    mutationFn: (request: { taskPrompt: string; boardProfileId: string; model?: string }) =>
       api.createRun(request),
     onSuccess: ({ runId }) => navigate(`/runs/${runId}`),
   });
@@ -86,6 +95,24 @@ export default function NewRunPage() {
           {profile && <ContextChips profile={profile} />}
         </div>
 
+        {showModelSelect && (
+          <label className="flex items-center gap-2 text-meta text-text-secondary">
+            Model
+            <select
+              aria-label="Model"
+              value={model ?? ''}
+              onChange={(event) => setModelChoice(event.target.value)}
+              className="rounded-button border border-border bg-bg-panel px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <BenchReadiness bench={bench} instruments={profile?.instruments ?? null} />
 
         {create.isError && (
@@ -99,7 +126,11 @@ export default function NewRunPage() {
           disabled={!canCreate}
           onClick={() => {
             if (!profile) return;
-            create.mutate({ taskPrompt: taskPrompt.trim(), boardProfileId: profile.id });
+            create.mutate({
+              taskPrompt: taskPrompt.trim(),
+              boardProfileId: profile.id,
+              ...(model ? { model } : {}),
+            });
           }}
         >
           {create.isPending ? 'Creating…' : 'Create Run Plan'}

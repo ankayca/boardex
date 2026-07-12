@@ -5,7 +5,12 @@
 // The refinements never change the shape — the contract stays the authority on fields,
 // this module only decides which of them a human may leave blank.
 import { z } from 'zod';
-import { BoardProfileSchema, type BoardDocument, type BoardProfile } from '@boardex/contract';
+import {
+  BoardProfileSchema,
+  DocumentKindSchema,
+  type BoardProfile,
+  type DocumentKind,
+} from '@boardex/contract';
 
 /** One connection-checklist row (D12). `key` is client-only, for React + reorder. */
 export interface ChecklistRow {
@@ -13,6 +18,21 @@ export interface ChecklistRow {
   label: string;
   detail: string;
 }
+
+/**
+ * One Documents row (v2.1, T6.3). `key` is client-only. The builder edits document
+ * METADATA only — the runner owns the file content (§5.3), so there is no upload
+ * here. kind/mimeType describe the runner-served file.
+ */
+export interface DocumentRow {
+  key: string;
+  id: string;
+  label: string;
+  kind: DocumentKind;
+  mimeType: string;
+}
+
+export const DOCUMENT_KINDS: readonly DocumentKind[] = DocumentKindSchema.options;
 
 export interface ProfileDraft {
   id: string;
@@ -37,13 +57,8 @@ export interface ProfileDraft {
    * profile would blank a field the user never saw.
    */
   knownQuirks: string[];
-  /**
-   * v2.1 (T6.3): documents have no editing section in Stage 1, so — like
-   * knownQuirks — the form carries them untouched instead of blanking a field the
-   * user never saw. (The Documents editing section lands in T6.3 stage 2.)
-   * Undefined for a profile that carries none.
-   */
-  documents?: BoardDocument[];
+  /** v2.1 (T6.3): editable document metadata rows (§7.5 Documents section). */
+  documents: DocumentRow[];
 }
 
 let rowSeq = 0;
@@ -51,6 +66,21 @@ let rowSeq = 0;
 export function newChecklistRow(): ChecklistRow {
   rowSeq += 1;
   return { key: `row_${rowSeq}`, label: '', detail: '' };
+}
+
+// A new document row: id/label/mimeType blank for the human to fill, kind defaulting
+// to the most common case (a datasheet). mimeType is metadata about the runner's file.
+export function newDocumentRow(): DocumentRow {
+  rowSeq += 1;
+  return { key: `doc_${rowSeq}`, id: '', label: '', kind: 'datasheet', mimeType: '' };
+}
+
+export function addDocumentRow(rows: readonly DocumentRow[]): DocumentRow[] {
+  return [...rows, newDocumentRow()];
+}
+
+export function removeDocumentRow(rows: readonly DocumentRow[], key: string): DocumentRow[] {
+  return rows.filter((row) => row.key !== key);
 }
 
 /**
@@ -81,6 +111,7 @@ export function blankDraft(id: string = newBoardProfileId()): ProfileDraft {
     powerNote: '',
     checklist: [],
     knownQuirks: [],
+    documents: [],
   };
 }
 
@@ -102,7 +133,7 @@ export function fromProfile(profile: BoardProfile): ProfileDraft {
     powerNote: profile.safety.powerNote,
     checklist: profile.connectionChecklist.map((row) => ({ ...newChecklistRow(), ...row })),
     knownQuirks: [...profile.knownQuirks],
-    documents: profile.documents ? [...profile.documents] : undefined,
+    documents: (profile.documents ?? []).map((doc) => ({ ...newDocumentRow(), ...doc })),
   };
 }
 
@@ -184,6 +215,15 @@ export const ProfileFormSchema = BoardProfileSchema.superRefine((profile, ctx) =
     requireText(ctx, row.label, ['connectionChecklist', index, 'label']);
     requireText(ctx, row.detail, ['connectionChecklist', index, 'detail']);
   });
+
+  // v2.1 (T6.3): every document row must carry the metadata the runner needs to
+  // serve and label the file. kind is a select (always valid); id/label/mimeType
+  // are the human-entered metadata.
+  (profile.documents ?? []).forEach((doc, index) => {
+    requireText(ctx, doc.id, ['documents', index, 'id']);
+    requireText(ctx, doc.label, ['documents', index, 'label']);
+    requireText(ctx, doc.mimeType, ['documents', index, 'mimeType']);
+  });
 });
 
 // Whole integers only: a baud rate or iteration cap typed as "115.2k" is a mistake,
@@ -218,9 +258,18 @@ function draftToProfile(draft: ProfileDraft, baud: number, maxIterations: number
       detail: row.detail.trim(),
     })),
     knownQuirks: draft.knownQuirks,
-    // Carried untouched (v2.1, T6.3) — omit the key entirely when the profile has
-    // no documents, so a documents-less profile round-trips without the field.
-    ...(draft.documents ? { documents: draft.documents } : {}),
+    // v2.1 (T6.3): metadata rows → BoardDocument[]; omit the key entirely when there
+    // are no rows, so a documents-less profile round-trips without the field.
+    ...(draft.documents.length > 0
+      ? {
+          documents: draft.documents.map((row) => ({
+            id: row.id.trim(),
+            label: row.label.trim(),
+            kind: row.kind,
+            mimeType: row.mimeType.trim(),
+          })),
+        }
+      : {}),
   };
 }
 

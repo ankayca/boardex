@@ -5,7 +5,7 @@
 // crash. A known id always lands on its kind's own tab with the exact content.
 import type { Artifact, ArtifactKind } from '@boardex/contract';
 
-export type EvidenceTabId = 'checks' | 'decode' | 'logs' | 'diff' | 'raw';
+export type EvidenceTabId = 'checks' | 'sources' | 'decode' | 'logs' | 'diff' | 'raw';
 
 export interface EvidenceTab {
   id: EvidenceTabId;
@@ -15,6 +15,8 @@ export interface EvidenceTab {
 // §7.4 tab order. Labels follow the bible's naming.
 export const EVIDENCE_TABS: readonly EvidenceTab[] = [
   { id: 'checks', label: 'Checks' },
+  // Sources (T6.3) sits beside Checks — a check's citation deep-links straight here.
+  { id: 'sources', label: 'Sources' },
   { id: 'decode', label: 'Protocol Decode' },
   { id: 'logs', label: 'Logs' },
   { id: 'diff', label: 'Code Diff' },

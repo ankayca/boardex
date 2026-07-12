@@ -98,6 +98,12 @@ export function StatusCard({
           Elapsed <span className="font-mono text-text-primary">{elapsed}</span>
         </p>
       )}
+      {/* Model attribution (T6.3/T6.6) — only when the runner echoed one onto the run. */}
+      {run.model && (
+        <p className="mt-1 text-meta text-text-secondary">
+          Model <span className="font-mono text-text-primary">{run.model}</span>
+        </p>
+      )}
       {progress.total > 0 && (
         // "Verified" (not "plan progress") per the latest-execution-wins rider: the
         // count is plan steps whose latest execution succeeded — steps proven, not

@@ -6,8 +6,8 @@
 // deep link; anything unresolvable stays plain text — fail-closed, never a dead href.
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { Artifact } from '@boardex/contract';
-import { evidenceHref } from '../workspace/evidence';
+import type { Artifact, BoardDocument, MeasurementCheck } from '@boardex/contract';
+import { evidenceDocHref, evidenceHref } from '../workspace/evidence';
 import { parseMarkdown, type Block, type Inline, type TableAlign } from './markdown';
 
 export interface ReportViewProps {
@@ -15,6 +15,10 @@ export interface ReportViewProps {
   runId: string;
   /** RunView.artifacts — the authority for which label references resolve (§4). */
   artifacts: readonly Artifact[];
+  /** RunView.checks (T6.3): a check's sourceRef text deep-links to its sourceDoc. */
+  checks?: readonly MeasurementCheck[];
+  /** Profile documents (T6.3): a sourceRef link resolves only to a known document. */
+  documents?: readonly BoardDocument[];
 }
 
 const LINK_CLASS = 'text-accent underline underline-offset-2 hover:text-accent-hover';
@@ -44,39 +48,42 @@ function classifyHref(normalized: string): LinkSafety {
   return 'unsafe';
 }
 
-// A label may map to more than one artifact only if the runner reused a label; the
-// last write wins, matching how the evidence band resolves "latest of kind".
-function labelIndex(artifacts: readonly Artifact[]): Map<string, string> {
+// An index from resolvable link text → app-internal href. Two currencies feed it:
+// an artifact LABEL → its evidence deep link (§4, the existing behavior), and a
+// check's sourceRef TEXT → its sourceDoc's Sources deep link (T6.3), but only when
+// that sourceDoc resolves to a known profile document. Artifact labels win a tie
+// (added last), matching the evidence band's "latest of kind" precedence. Nothing
+// unresolvable enters the map, so a miss is always a plain-text fallback — never a
+// dead link.
+function linkIndex(
+  runId: string,
+  artifacts: readonly Artifact[],
+  checks: readonly MeasurementCheck[],
+  documents: readonly BoardDocument[],
+): Map<string, string> {
   const map = new Map<string, string>();
-  for (const artifact of artifacts) map.set(artifact.label, artifact.id);
+  const documentIds = new Set(documents.map((doc) => doc.id));
+  for (const check of checks) {
+    if (check.sourceRef && check.sourceDoc && documentIds.has(check.sourceDoc.documentId)) {
+      map.set(check.sourceRef, evidenceDocHref(runId, check.sourceDoc.documentId, check.sourceDoc.locator));
+    }
+  }
+  for (const artifact of artifacts) map.set(artifact.label, evidenceHref(runId, artifact.id));
   return map;
 }
 
-// Resolvable label text → evidence deep link; otherwise the caller's plain node.
-function labelLink(
-  value: string,
-  runId: string,
-  labels: Map<string, string>,
-  fallback: ReactNode,
-): ReactNode {
-  const artifactId = labels.get(value.trim());
-  if (artifactId === undefined) return fallback;
+// Resolvable link text → its deep link; otherwise the caller's plain node.
+function labelLink(value: string, hrefs: Map<string, string>, fallback: ReactNode): ReactNode {
+  const href = hrefs.get(value.trim());
+  if (href === undefined) return fallback;
   return (
-    <Link to={evidenceHref(runId, artifactId)} className={LINK_CLASS}>
+    <Link to={href} className={LINK_CLASS}>
       {value}
     </Link>
   );
 }
 
-function InlineRun({
-  inline,
-  runId,
-  labels,
-}: {
-  inline: Inline[];
-  runId: string;
-  labels: Map<string, string>;
-}) {
+function InlineRun({ inline, hrefs }: { inline: Inline[]; hrefs: Map<string, string> }) {
   return (
     <>
       {inline.map((seg, index) => {
@@ -93,8 +100,7 @@ function InlineRun({
               <span key={key}>
                 {labelLink(
                   seg.value,
-                  runId,
-                  labels,
+                  hrefs,
                   <strong className="font-semibold text-text-primary">{seg.value}</strong>,
                 )}
               </span>
@@ -126,25 +132,15 @@ function InlineRun({
           }
           case 'text':
           default:
-            return (
-              <span key={key}>{labelLink(seg.value, runId, labels, seg.value)}</span>
-            );
+            return <span key={key}>{labelLink(seg.value, hrefs, seg.value)}</span>;
         }
       })}
     </>
   );
 }
 
-function BlockNode({
-  block,
-  runId,
-  labels,
-}: {
-  block: Block;
-  runId: string;
-  labels: Map<string, string>;
-}) {
-  const run = (inline: Inline[]) => <InlineRun inline={inline} runId={runId} labels={labels} />;
+function BlockNode({ block, hrefs }: { block: Block; hrefs: Map<string, string> }) {
+  const run = (inline: Inline[]) => <InlineRun inline={inline} hrefs={hrefs} />;
 
   switch (block.type) {
     case 'heading': {
@@ -218,13 +214,13 @@ function BlockNode({
   }
 }
 
-export function ReportView({ markdown, runId, artifacts }: ReportViewProps) {
+export function ReportView({ markdown, runId, artifacts, checks, documents }: ReportViewProps) {
   const blocks = parseMarkdown(markdown);
-  const labels = labelIndex(artifacts);
+  const hrefs = linkIndex(runId, artifacts, checks ?? [], documents ?? []);
   return (
     <article className="rounded-card border border-border bg-bg-panel p-8 shadow-subtle">
       {blocks.map((block, index) => (
-        <BlockNode key={index} block={block} runId={runId} labels={labels} />
+        <BlockNode key={index} block={block} hrefs={hrefs} />
       ))}
     </article>
   );

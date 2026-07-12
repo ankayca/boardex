@@ -221,3 +221,54 @@ describe('ReportView deep-link resolution (fail-closed)', () => {
     expect(screen.getByText('Ghost log')).toBeInTheDocument();
   });
 });
+
+// T6.3: a check's sourceRef text becomes a Sources deep link when its sourceDoc
+// resolves to a known profile document — the same exact-match currency as artifact
+// labels. Unresolvable sourceRefs stay plain text (fail-closed, no dead href).
+describe('ReportView sourceRef → Sources deep link (T6.3)', () => {
+  const datasheet = {
+    id: 'doc_bme280_datasheet',
+    label: 'BME280 datasheet (excerpt)',
+    kind: 'datasheet' as const,
+    mimeType: 'text/markdown',
+  };
+  const check = {
+    id: 'chk_clock',
+    runId: 'run_1',
+    requirementId: 'i2c_clock',
+    description: 'clock',
+    measurement: 'm',
+    expected: { min: 90000, max: 110000 },
+    actual: { value: 99600, unit: 'Hz' },
+    verdict: 'pass' as const,
+    artifactId: 'art_timing',
+    sourceRef: 'BME280 datasheet §6.2',
+    sourceDoc: { documentId: 'doc_bme280_datasheet', locator: 'timing-specifications' },
+  };
+  // A reference links when it appears as its own inline run (bold or a standalone
+  // text run) — the same whole-run exact-match currency the report uses for artifact
+  // labels. A sourceRef buried mid-sentence stays plain (fail-closed).
+  const MD = 'Clock target per **BME280 datasheet §6.2** (standard mode).\n';
+
+  it('links the sourceRef text to the Sources tab at the document + locator', () => {
+    render(
+      <MemoryRouter>
+        <ReportView markdown={MD} runId="run_1" artifacts={[]} checks={[check]} documents={[datasheet]} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'BME280 datasheet §6.2' })).toHaveAttribute(
+      'href',
+      '/runs/run_1/evidence?doc=doc_bme280_datasheet&loc=timing-specifications',
+    );
+  });
+
+  it('leaves the sourceRef plain when its document is not among the profile documents', () => {
+    render(
+      <MemoryRouter>
+        <ReportView markdown={MD} runId="run_1" artifacts={[]} checks={[check]} documents={[]} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: 'BME280 datasheet §6.2' })).not.toBeInTheDocument();
+    expect(screen.getByText(/BME280 datasheet §6.2/)).toBeInTheDocument();
+  });
+});

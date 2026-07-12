@@ -6,10 +6,17 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { Event, MeasurementCheck, RunView } from '@boardex/contract';
+import type { BoardDocument, Event, MeasurementCheck, RunView } from '@boardex/contract';
 import { ChecksTab } from './ChecksTab';
 import { artifactOf, envelope, run, RUN_ID } from '../workspace/test-events';
 import { reduceRun } from '@boardex/contract';
+
+const datasheet: BoardDocument = {
+  id: 'doc_bme280_datasheet',
+  label: 'BME280 datasheet (excerpt)',
+  kind: 'datasheet',
+  mimeType: 'text/markdown',
+};
 
 const clockCheck: MeasurementCheck = {
   id: 'chk_clock',
@@ -121,5 +128,66 @@ describe('ChecksTab', () => {
     renderTab(view);
     expect(screen.getByRole('status')).toHaveTextContent('No checks have been evaluated yet.');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+});
+
+// T6.3: a check's sourceDoc turns the Source cell into a deep link to the Sources
+// tab at the document + locator — but ONLY when the document is resolvable among the
+// profile's documents. Both branches, and the never-a-dead-link guarantee.
+describe('ChecksTab sourceDoc deep link (T6.3)', () => {
+  const citedCheck: MeasurementCheck = {
+    ...clockCheck,
+    sourceDoc: { documentId: 'doc_bme280_datasheet', locator: 'timing-specifications' },
+  };
+
+  function viewWith(check: MeasurementCheck): RunView {
+    return reduceRun([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'artifact.created', { artifact: artifactOf('art_timing', 'timing_measurement') }),
+      envelope(3, 'check.evaluated', { check }),
+    ])!;
+  }
+
+  it('links the source cell to the Sources tab at the document + locator when resolvable', () => {
+    render(
+      <MemoryRouter>
+        <ChecksTab view={viewWith(citedCheck)} documents={[datasheet]} />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: 'BME280 datasheet §6.2' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/runs/${RUN_ID}/evidence?doc=doc_bme280_datasheet&loc=timing-specifications`,
+    );
+  });
+
+  it('falls back to plain sourceRef text when the sourceDoc names no known document', () => {
+    // sourceDoc present, but the profile carries no documents → not a dead link.
+    render(
+      <MemoryRouter>
+        <ChecksTab view={viewWith(citedCheck)} documents={[]} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: 'BME280 datasheet §6.2' })).not.toBeInTheDocument();
+    const sourceCell = within(
+      within(screen.getByRole('table', { name: 'Measurement checks' })).getAllByRole('row')[1]!,
+    ).getAllByRole('cell')[4];
+    expect(sourceCell).toHaveTextContent('BME280 datasheet §6.2');
+  });
+
+  it('omits the loc param when the sourceDoc carries no locator', () => {
+    const noLocator: MeasurementCheck = {
+      ...clockCheck,
+      sourceDoc: { documentId: 'doc_bme280_datasheet' },
+    };
+    render(
+      <MemoryRouter>
+        <ChecksTab view={viewWith(noLocator)} documents={[datasheet]} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'BME280 datasheet §6.2' })).toHaveAttribute(
+      'href',
+      `/runs/${RUN_ID}/evidence?doc=doc_bme280_datasheet`,
+    );
   });
 });

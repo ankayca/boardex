@@ -8,6 +8,7 @@
 // blank or a crash.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import type { Artifact } from '@boardex/contract';
 import { Button, EmptyState } from '../../design';
 import { api } from '../../lib/api';
@@ -103,6 +104,17 @@ export default function ReportPage() {
   const artifact = view && reportId ? view.artifacts.find((a) => a.id === reportId) : undefined;
   const content = useArtifactContent(artifact?.id);
 
+  // The run's profile documents back the report's sourceRef → Sources deep links
+  // (T6.3): a sourceRef only resolves when its check's sourceDoc names a real
+  // document. Same ['board-profiles'] query key as the composer/workspace.
+  const profilesQuery = useQuery({
+    queryKey: ['board-profiles'],
+    queryFn: () => api.listBoardProfiles(),
+  });
+  const documents = view
+    ? profilesQuery.data?.find((p) => p.id === view.run.boardProfileId)?.documents
+    : undefined;
+
   if (!view) {
     return (
       <main className={PAGE}>
@@ -152,7 +164,16 @@ export default function ReportPage() {
         <div>
           <BackLink runId={run.id} />
           <h1 className="mt-2 text-page font-semibold text-text-primary">Validation Report</h1>
-          <p className="mt-1 text-meta text-text-secondary">{run.title}</p>
+          <p className="mt-1 text-meta text-text-secondary">
+            {run.title}
+            {/* Model attribution (T6.3/T6.6) — only when the runner echoed one. */}
+            {run.model && (
+              <>
+                {' · '}
+                <span className="font-mono">Model: {run.model}</span>
+              </>
+            )}
+          </p>
         </div>
         {content.isSuccess && content.data.trim() !== '' && (
           <div className="flex items-center gap-2">
@@ -189,7 +210,13 @@ export default function ReportPage() {
             </p>
           </div>
         ) : (
-          <ReportView markdown={content.data} runId={run.id} artifacts={view.artifacts} />
+          <ReportView
+            markdown={content.data}
+            runId={run.id}
+            artifacts={view.artifacts}
+            checks={view.checks}
+            documents={documents}
+          />
         ))}
     </main>
   );
