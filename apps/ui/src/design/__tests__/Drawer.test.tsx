@@ -58,4 +58,30 @@ describe('Drawer', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // Regression (T6.3 stage 0): the profile-details drawer is mounted inside the
+  // `position: sticky` board rail, which establishes a stacking context; rendered
+  // inline the overlay's z-50 would be scoped to that rail and the sibling sticky
+  // status rail could paint over it. Portaling to <body> lifts the overlay out of
+  // every sticky ancestor so nothing underneath can bleed through.
+  it('portals the overlay to document.body, escaping a sticky ancestor', () => {
+    const sticky = document.createElement('div');
+    sticky.style.position = 'sticky';
+    sticky.setAttribute('data-sticky-rail', '');
+    document.body.appendChild(sticky);
+
+    render(
+      <Drawer open title="Board profile" onClose={vi.fn()}>
+        <p>Drawer body</p>
+      </Drawer>,
+      { container: sticky },
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Board profile' });
+    // The dialog is NOT a descendant of the sticky rail — it lives at body level.
+    expect(sticky.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+
+    document.body.removeChild(sticky);
+  });
 });
