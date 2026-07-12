@@ -1,12 +1,12 @@
 // The thin amber reconnecting bar (BIBLE §7.3): shown while the run's WebSocket is
 // dropped and retrying, gone the moment it resumes. Amber is reserved for
-// warning states (D14); a reconnect is exactly that. Wired to the ws client's
+// warning states (D14); a reconnect is exactly that. Wired to the stream client's
 // connection state — it renders only for 'reconnecting'; 'connecting' (initial),
-// 'open', and 'closed' show nothing. On resume the reducer replays from lastSeq, so
-// no data is lost while this bar is up.
-import type { WsConnectionStatus } from '../../lib/ws';
+// 'open', 'closed', and the fail-closed 'not_found' show nothing. On resume the
+// reducer replays from lastSeq, so no data is lost while this bar is up.
+import type { RunStreamStatus } from '../../lib/runStream';
 
-export function ReconnectingBar({ status }: { status: WsConnectionStatus }) {
+export function ReconnectingBar({ status }: { status: RunStreamStatus }) {
   if (status !== 'reconnecting') return null;
   return (
     <div

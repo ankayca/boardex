@@ -169,4 +169,20 @@ describe('run history cold-loads (T5.2, integration)', () => {
     expect(screen.queryByRole('link', { name: 'Open Report' })).not.toBeInTheDocument();
     expect(within(band).getByText('Open Report')).toBeInTheDocument();
   }, 60000);
+
+  it('fails closed on an unknown run id: honest not-found state, no amber bar, no run socket (T5.2/F2)', async () => {
+    // The runner genuinely 404s this id — the deterministic answer the stream
+    // client must not retry into a reconnecting loop.
+    renderColdWorkspace('run_does_not_exist');
+
+    expect(
+      await screen.findByText('Run not found on the runner', {}, { timeout: 20000 }),
+    ).toBeInTheDocument();
+    const back = screen.getByRole('link', { name: 'Back to Runs' });
+    expect(back).toHaveAttribute('href', '/');
+
+    expect(screen.queryByText(/Reconnecting to the runner/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Connecting to run/)).not.toBeInTheDocument();
+    expect(socketUrls.filter((url) => url.includes('runId='))).toEqual([]);
+  }, 60000);
 });

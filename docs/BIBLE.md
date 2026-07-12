@@ -279,7 +279,7 @@ WS   /ws?global=1                    -> runner.status + run.created + run.status
                                         dashboard without a redundant run.status_changed riding along)
 ```
 
-Command errors: HTTP 409 with `{ error, currentStatus }` when a command is invalid for the run's state (e.g. approving an already-resolved approval). The UI must render 409s as state refresh, not as crashes.
+Command errors: HTTP 409 with `{ error, currentStatus }` when a command is invalid for the run's state (e.g. approving an already-resolved approval). The UI must render 409s as state refresh, not as crashes. `GET /runs/{id}/events` with an unknown run id answers 404, and the UI treats that 404 as deterministic and fails closed — a distinct not-found state (honest copy, a way back to Runs), never a retry loop or the reconnecting treatment (T5.2).
 
 ## 5.4 The reducer (contract-owned, UI-consumed)
 

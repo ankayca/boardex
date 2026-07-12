@@ -6,7 +6,7 @@
 // right rail stacks under center.
 import type { BenchStatus, BoardProfile, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
-import type { WsConnectionStatus } from '../../lib/ws';
+import type { RunStreamStatus } from '../../lib/runStream';
 import { BoardContextRail } from './BoardContextRail';
 import { EvidenceBand } from './EvidenceBand';
 import { PlanTimeline } from './PlanTimeline';
@@ -18,7 +18,7 @@ export interface WorkspacePageProps {
   profile: BoardProfile | null;
   profileLoading: boolean;
   bench: BenchStatus | null;
-  connection: WsConnectionStatus;
+  connection: RunStreamStatus;
 }
 
 export function WorkspacePage({

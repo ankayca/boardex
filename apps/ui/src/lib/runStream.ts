@@ -8,10 +8,15 @@
 // live stream delivers the terminal event, the socket is detached — the same
 // invariant maintained over time: sockets exist only for runs that can still emit.
 import { RUNNER_WS_BASE } from './config';
-import type { ApiClient } from './api';
+import { ApiError, type ApiClient } from './api';
 import type { RunStore } from './runStore';
 import { isTerminalStatus } from './runStatus';
 import { WsClient, type WebSocketCtor, type WsConnectionStatus } from './ws';
+
+// The stream's own status vocabulary: the socket states, plus the fail-closed
+// 'not_found' — GET /runs/{id}/events answered 404, the runner does not know this
+// run (§5.3), and no amount of retrying changes a deterministic answer.
+export type RunStreamStatus = WsConnectionStatus | 'not_found';
 
 export interface ConnectRunStreamParams {
   runId: string;
@@ -20,7 +25,7 @@ export interface ConnectRunStreamParams {
   wsBase?: string;
   WebSocketImpl?: WebSocketCtor;
   heartbeatTimeoutMs?: number;
-  onStatusChange?: (status: WsConnectionStatus) => void;
+  onStatusChange?: (status: RunStreamStatus) => void;
 }
 
 // Retry pacing for the primary replay, mirroring WsClient's reconnect backoff so a
@@ -34,7 +39,7 @@ const isDedicatedTerminalEvent = (type: string): boolean => DEDICATED_TERMINAL_E
 export class RunStreamClient {
   private readonly params: ConnectRunStreamParams;
   private ws: WsClient | null = null;
-  private status: WsConnectionStatus = 'closed';
+  private status: RunStreamStatus = 'closed';
   private disposed = false;
   private attempt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -61,7 +66,7 @@ export class RunStreamClient {
     this.setStatus('closed');
   }
 
-  getStatus(): WsConnectionStatus {
+  getStatus(): RunStreamStatus {
     return this.status;
   }
 
@@ -83,8 +88,24 @@ export class RunStreamClient {
     let events;
     try {
       events = await api.getRunEvents(runId, store.getState().lastContiguousSeq(runId));
-    } catch {
+    } catch (error) {
       if (this.disposed) return;
+      // Error classes differ (T5.2 review F2): a 404 is a deterministic answer —
+      // the runner does not know this run id (§5.3) — so the stream fails closed
+      // as 'not_found': no retry loop, no socket, and the route renders an honest
+      // not-found state instead of an amber bar. Network errors and 5xx are
+      // transient runner trouble and keep the backoff + 'reconnecting' treatment.
+      if (error instanceof ApiError && error.status === 404) {
+        this.setStatus('not_found');
+        return;
+      }
+      // A terminal view never surfaces 'reconnecting' (F1's invariant): whatever
+      // the store already holds is terminal-correct, so settle instead of retrying
+      // a replay that could only fetch an already-ended run's tail best-effort.
+      if (this.isTerminal()) {
+        this.setStatus('closed');
+        return;
+      }
       this.setStatus('reconnecting');
       const exp = Math.min(REPLAY_BACKOFF.maxMs, REPLAY_BACKOFF.baseMs * 2 ** this.attempt);
       this.attempt++;
@@ -125,7 +146,20 @@ export class RunStreamClient {
       fetchReplay: () => api.getRunEvents(runId, store.getState().lastContiguousSeq(runId)),
       WebSocketImpl: this.params.WebSocketImpl,
       heartbeatTimeoutMs: this.params.heartbeatTimeoutMs,
-      onStatusChange: (next) => this.setStatus(next),
+      onStatusChange: (next) => {
+        // Fallback release (T5.2 review F1): a stream that turned terminal via
+        // run.status_changed alone — no dedicated terminal event, so the fast
+        // detach above never fired — must not ride the reconnect loop. The moment
+        // the socket would go 'reconnecting' (a drop, or the heartbeat cycling a
+        // now-silent connection) while the view is terminal, release it instead:
+        // one final HTTP replay catches any stranded tail, and the status settles
+        // to 'closed'. A terminal view never surfaces 'reconnecting'.
+        if (next === 'reconnecting' && this.isTerminal()) {
+          this.releaseTerminalSocket();
+          return;
+        }
+        this.setStatus(next);
+      },
     });
     this.ws.connect();
   }
@@ -138,7 +172,30 @@ export class RunStreamClient {
     this.setStatus('closed');
   }
 
-  private setStatus(next: WsConnectionStatus): void {
+  // F1: detach a terminal run's socket without reconnecting, then fetch the log's
+  // tail once over HTTP — e.g. a dedicated terminal event that was still in flight
+  // when the socket dropped — so the stored view converges on the full log.
+  private releaseTerminalSocket(): void {
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close(); // also cancels the reconnect the inner client just scheduled
+    void this.finalReplay();
+  }
+
+  private async finalReplay(): Promise<void> {
+    const { runId, api, store } = this.params;
+    try {
+      const events = await api.getRunEvents(runId, store.getState().lastContiguousSeq(runId));
+      if (this.disposed) return;
+      store.getState().ingestMany(runId, events);
+    } catch {
+      // Best effort: the view is already terminal-correct, and a failed tail
+      // fetch must not resurrect a connection for a finished run.
+    }
+    this.setStatus('closed');
+  }
+
+  private setStatus(next: RunStreamStatus): void {
     if (this.status === next) return;
     this.status = next;
     this.params.onStatusChange?.(next);

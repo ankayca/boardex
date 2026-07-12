@@ -14,9 +14,9 @@ import { WebSocket } from 'ws';
 import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
 import type { RunView } from '@boardex/contract';
 import { createApiClient, type ApiClient } from './api';
-import { connectRunStream } from './runStream';
+import { connectRunStream, type RunStreamStatus } from './runStream';
 import { createRunStore, type RunStore } from './runStore';
-import type { WebSocketCtor, WsConnectionStatus } from './ws';
+import type { WebSocketCtor } from './ws';
 
 const WS_IMPL = WebSocket as unknown as WebSocketCtor;
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
@@ -71,9 +71,9 @@ async function coldLoad(
   api: ApiClient,
   runId: string,
   wsBase: string,
-): Promise<{ view: RunView; statuses: WsConnectionStatus[] }> {
+): Promise<{ view: RunView; statuses: RunStreamStatus[] }> {
   const store = createRunStore();
-  const statuses: WsConnectionStatus[] = [];
+  const statuses: RunStreamStatus[] = [];
   socketConstructions = 0;
   const client = connectRunStream({
     runId,

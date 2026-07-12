@@ -11,8 +11,8 @@
 import { describe, expect, it } from 'vitest';
 import { GetRunEventsResponseSchema, type Run, type WireEvent } from '@boardex/contract';
 import { createRunStore } from './runStore';
-import { connectRunStream } from './runStream';
-import type { WebSocketCtor, WebSocketLike, WsConnectionStatus } from './ws';
+import { connectRunStream, type RunStreamStatus } from './runStream';
+import type { WebSocketCtor, WebSocketLike } from './ws';
 
 const RUN_ID = 'run_unknown_f1';
 const at = (s: number): string => `2026-07-07T14:00:0${s}.000Z`;
@@ -94,7 +94,7 @@ describe('unknown event mid-stream (audit F1 mutation)', () => {
   it('live over WS: the view stays live past the unknown seq, with no reconnect', async () => {
     FakeSocket.instances = [];
     const store = createRunStore();
-    const statuses: WsConnectionStatus[] = [];
+    const statuses: RunStreamStatus[] = [];
     const client = connectRunStream({
       runId: RUN_ID,
       api: replayApi(() => []),
@@ -127,7 +127,7 @@ describe('unknown event mid-stream (audit F1 mutation)', () => {
   it('in replay: a reload recovers the identical view from the doctored log', async () => {
     FakeSocket.instances = [];
     const store = createRunStore();
-    const statuses: WsConnectionStatus[] = [];
+    const statuses: RunStreamStatus[] = [];
     const client = connectRunStream({
       runId: RUN_ID,
       api: replayApi(() => rawEvents),

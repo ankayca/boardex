@@ -8,9 +8,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
 import { createApiClient, StateConflict, type ApiClient } from './api';
-import { connectRunStream } from './runStream';
+import { connectRunStream, type RunStreamStatus } from './runStream';
 import { createRunStore, type RunStore } from './runStore';
-import { WsClient, type WebSocketCtor, type WsConnectionStatus } from './ws';
+import { WsClient, type WebSocketCtor } from './ws';
 
 const WS_IMPL = WebSocket as unknown as WebSocketCtor;
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
@@ -78,7 +78,7 @@ describe('transport integration', () => {
   it('reconnects after a mid-run WS drop and replays to an identical completed view', async () => {
     const { runId } = await api.createRun({ taskPrompt: 'bring up BME280', boardProfileId: BOARD });
     const store = createRunStore();
-    const statuses: WsConnectionStatus[] = [];
+    const statuses: RunStreamStatus[] = [];
     const client = connectRunStream({
       runId,
       api,
@@ -123,7 +123,7 @@ describe('transport integration', () => {
   it('cycles a silent socket via the heartbeat watchdog and recovers the run', async () => {
     const { runId } = await api.createRun({ taskPrompt: 'bring up BME280', boardProfileId: BOARD });
     const store = createRunStore();
-    const statuses: WsConnectionStatus[] = [];
+    const statuses: RunStreamStatus[] = [];
     const client = connectRunStream({
       runId,
       api,

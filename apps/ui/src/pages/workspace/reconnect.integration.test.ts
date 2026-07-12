@@ -12,9 +12,9 @@ import { WebSocket } from 'ws';
 import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
 import { reduceRun } from '@boardex/contract';
 import { createApiClient, type ApiClient } from '../../lib/api';
-import { connectRunStream } from '../../lib/runStream';
+import { connectRunStream, type RunStreamStatus } from '../../lib/runStream';
 import { createRunStore, type RunStore } from '../../lib/runStore';
-import type { WebSocketCtor, WsConnectionStatus } from '../../lib/ws';
+import type { WebSocketCtor } from '../../lib/ws';
 
 const WS_IMPL = WebSocket as unknown as WebSocketCtor;
 const BOARD = 'bp_nucleo_f303re';
@@ -46,7 +46,7 @@ afterAll(async () => {
 describe('workspace reconnect mid-run (ws drop → reconnect → replay)', () => {
   it('recovers a dropped socket with no data loss and drives the bar status open → reconnecting → open', async () => {
     const store: RunStore = createRunStore();
-    const statuses: WsConnectionStatus[] = [];
+    const statuses: RunStreamStatus[] = [];
     const { runId } = await api.createRun({ taskPrompt: 'bring up BME280', boardProfileId: BOARD });
 
     const client = connectRunStream({

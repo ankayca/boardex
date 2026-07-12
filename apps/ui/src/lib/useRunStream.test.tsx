@@ -6,11 +6,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { useEffect } from 'react';
-import type { WsConnectionStatus } from './ws';
+import type { RunStreamStatus } from './runStream';
 
 interface FakeConnection {
   runId: string;
-  onStatusChange?: (status: WsConnectionStatus) => void;
+  onStatusChange?: (status: RunStreamStatus) => void;
   close: () => void;
 }
 const connections: FakeConnection[] = [];
@@ -18,7 +18,7 @@ const connections: FakeConnection[] = [];
 vi.mock('./runStream', () => ({
   connectRunStream: (params: {
     runId: string;
-    onStatusChange?: (status: WsConnectionStatus) => void;
+    onStatusChange?: (status: RunStreamStatus) => void;
   }) => {
     const connection: FakeConnection = {
       runId: params.runId,
@@ -34,7 +34,7 @@ import { useRunStream } from './useRunStream';
 
 // Records the status of every COMMITTED frame — a render-phase reset that repaints
 // before commit leaves no trace here, which is exactly the guarantee under test.
-function Probe({ runId, committed }: { runId: string; committed: WsConnectionStatus[] }) {
+function Probe({ runId, committed }: { runId: string; committed: RunStreamStatus[] }) {
   const status = useRunStream(runId);
   useEffect(() => {
     committed.push(status);
@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe('useRunStream status across runId changes', () => {
   it("resets to 'connecting' before the new run's first paint — never the previous run's last status", () => {
-    const committed: WsConnectionStatus[] = [];
+    const committed: RunStreamStatus[] = [];
     const { rerender } = render(<Probe runId="run_a" committed={committed} />);
     expect(committed[0]).toBe('connecting');
 

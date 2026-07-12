@@ -5,7 +5,7 @@
 // connection checklist. Any later status hands over to the Run Workspace (T2.1).
 // State comes exclusively from the run store's reduced view (D5), fed by the run WS
 // + HTTP replay.
-import { useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
 import { Button } from '../../design';
@@ -66,6 +66,28 @@ export default function RunPage() {
   });
 
   if (!view) {
+    // Fail-closed not-found (T5.2 review F2): GET /runs/{id}/events answered 404 —
+    // the runner does not know this run id (§5.3), the stream stopped retrying,
+    // and pretending to connect would be a lie. Honest state, way back out.
+    if (connection === 'not_found') {
+      return (
+        <main className="mx-auto max-w-3xl px-6 py-16">
+          <h1 className="text-page font-semibold text-text-primary">
+            Run not found on the runner
+          </h1>
+          <p className="mt-2 text-body text-text-secondary">
+            The runner has no run with this id. It may belong to a different runner instance,
+            or the runner&rsquo;s history may have been cleared.
+          </p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-body font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
+          >
+            Back to Runs
+          </Link>
+        </main>
+      );
+    }
     return (
       <main className="mx-auto max-w-3xl px-6 py-16">
         <p className="text-body text-text-secondary">Connecting to run…</p>

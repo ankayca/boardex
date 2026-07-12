@@ -14,15 +14,14 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useRunStore } from './runStore';
-import { connectRunStream } from './runStream';
-import type { WsConnectionStatus } from './ws';
+import { connectRunStream, type RunStreamStatus } from './runStream';
 
 interface StreamStatus {
   runId: string | undefined;
-  status: WsConnectionStatus;
+  status: RunStreamStatus;
 }
 
-export function useRunStream(runId: string | undefined): WsConnectionStatus {
+export function useRunStream(runId: string | undefined): RunStreamStatus {
   const [state, setState] = useState<StreamStatus>({ runId, status: 'connecting' });
   // Derived-state reset in render: React re-renders with the fresh state before
   // committing, so the stale status is discarded without ever painting.
