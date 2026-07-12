@@ -13,6 +13,7 @@ import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
 import { evidenceHref, evidenceTargets } from './evidence';
+import { deriveProgress } from './progress';
 import { StatusCard } from './StatusCard';
 
 export function StatusApprovalRail({ view }: { view: RunView }) {
@@ -84,6 +85,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
         run={run}
         endedAt={view.endedAt}
         warnings={view.warnings}
+        progress={deriveProgress(view)}
         stopping={stopping}
         stopError={commandError(
           stop.error,
