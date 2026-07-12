@@ -2,11 +2,40 @@
 // and expandable, then the plan as a vertical timeline. Executed steps expand to
 // summary, artifact chips, and the per-stream log pane; the active step is
 // auto-expanded; iteration >= 2 renders a divider driven by run.iteration_started.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Artifact, RunStep, RunView, StepLogLine, StepStatus } from '@boardex/contract';
 import { StepStatusIcon } from '../../design';
 import { deriveTimeline } from './timeline';
 import { StepLogTabs } from './StepLogTabs';
+
+// Last-render value of `value`, for detecting a state transition across renders.
+function usePrevious<T>(value: T): T | undefined {
+  const ref = useRef<T | undefined>(undefined);
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
+// Height-animated open (T6.2): grid-template-rows 0fr→1fr transitions on the
+// medium token. Mounting with the row at 0fr and flipping to 1fr in an effect
+// makes the active step's auto-expand animate open instead of popping; the global
+// reduced-motion rule collapses the transition so the final open state still lands.
+function Collapsible({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    setShown(true);
+  }, []);
+  return (
+    <div
+      className="grid transition-[grid-template-rows] duration-medium ease-motion"
+      style={{ gridTemplateRows: shown ? '1fr' : '0fr' }}
+    >
+      <div className="overflow-hidden">{children}</div>
+    </div>
+  );
+}
 
 const statusLabels: Record<StepStatus, string> = {
   pending: 'Pending',
@@ -31,17 +60,23 @@ const statusTextClasses: Record<StepStatus, string> = {
 // T6.1 iconography: status glyphs (StepStatusIcon) replace bare dots so the
 // timeline scans by shape, not color alone — D14 mapping lives in the icon.
 // The wrapping span is opaque so the glyph masks the timeline rule beneath it.
-function TimelineMarker({ status }: { status: StepStatus }) {
+// T6.2: when a step just settled from active into a terminal status, the marker
+// plays a one-shot settle (scale) so the outcome lands rather than snaps.
+function TimelineMarker({ status, settling }: { status: StepStatus; settling: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className="absolute -left-[7px] top-1.5 inline-flex rounded-full bg-bg-app"
+      className={`absolute -left-[7px] top-1.5 inline-flex rounded-full bg-bg-app ${
+        settling ? 'animate-icon-settle' : ''
+      }`}
     >
       <StepStatusIcon status={status} />
     </span>
   );
 }
 
+// T6.2: each chip rises + fades in as its artifact.created lands (fast token).
+// The animation runs once per chip on mount, so already-present chips are still.
 function ArtifactChips({ artifacts }: { artifacts: readonly Artifact[] }) {
   if (artifacts.length === 0) return null;
   return (
@@ -49,7 +84,7 @@ function ArtifactChips({ artifacts }: { artifacts: readonly Artifact[] }) {
       {artifacts.map((artifact) => (
         <li
           key={artifact.id}
-          className="rounded-full border border-border bg-bg-app px-2.5 py-0.5 text-meta text-text-secondary"
+          className="animate-chip-in rounded-full border border-border bg-bg-app px-2.5 py-0.5 text-meta text-text-secondary"
         >
           {artifact.label}
         </li>
@@ -67,28 +102,44 @@ interface ExecutedStepRowProps {
 }
 
 function ExecutedStepRow({ step, logs, artifacts, expanded, onToggle }: ExecutedStepRowProps) {
+  // Settle moment: prev active → now terminal, detected across renders on the same
+  // persistent (keyed by id) row. pending→active is a node swap (planned→executed),
+  // so that transition reads through the row's mount, not here.
+  const prevStatus = usePrevious(step.status);
+  const settling =
+    prevStatus === 'active' && (step.status === 'succeeded' || step.status === 'failed');
+  const active = step.status === 'active';
   return (
     <li className="relative pb-6 pl-6">
-      <TimelineMarker status={step.status} />
+      <TimelineMarker status={step.status} settling={settling} />
       {/* T6.1b: the status label sits adjacent to the title (icon · title · status),
-          not orphaned at the row's right edge. */}
+          not orphaned at the row's right edge. T6.2: the active step's title carries
+          extra weight — the run's live focus. */}
       <button
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
         className="flex w-full items-baseline gap-2.5 text-left"
       >
-        <span className="text-body font-medium text-text-primary">{step.title}</span>
+        <span
+          className={`text-body text-text-primary transition-[font-weight] duration-fast ${
+            active ? 'font-semibold' : 'font-medium'
+          }`}
+        >
+          {step.title}
+        </span>
         <span className={`shrink-0 text-meta font-medium ${statusTextClasses[step.status]}`}>
           {statusLabels[step.status]}
         </span>
       </button>
       {expanded && (
-        <div className="mt-2 space-y-3">
-          {step.summary && <p className="text-meta text-text-secondary">{step.summary}</p>}
-          <ArtifactChips artifacts={artifacts} />
-          <StepLogTabs stepTitle={step.title} logs={logs} />
-        </div>
+        <Collapsible>
+          <div className="mt-2 space-y-3">
+            {step.summary && <p className="text-meta text-text-secondary">{step.summary}</p>}
+            <ArtifactChips artifacts={artifacts} />
+            <StepLogTabs stepTitle={step.title} logs={logs} />
+          </div>
+        </Collapsible>
       )}
     </li>
   );
@@ -97,7 +148,7 @@ function ExecutedStepRow({ step, logs, artifacts, expanded, onToggle }: Executed
 function PlannedStepRow({ title, detail }: { title: string; detail: string }) {
   return (
     <li className="relative pb-6 pl-6">
-      <TimelineMarker status="pending" />
+      <TimelineMarker status="pending" settling={false} />
       <div className="flex items-baseline gap-2.5">
         <span className="text-body font-medium text-text-primary">{title}</span>
         <span className="shrink-0 text-meta font-medium text-text-secondary">Pending</span>
@@ -107,9 +158,11 @@ function PlannedStepRow({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+// T6.2: a newly-arriving iteration divider slides in (medium, entrance ease) —
+// the fix loop announcing itself, one-shot on mount.
 function IterationDivider({ iteration, reason }: { iteration: number; reason: string }) {
   return (
-    <li aria-label={`Iteration ${iteration}`} className="relative pb-6 pl-6">
+    <li aria-label={`Iteration ${iteration}`} className="animate-iteration-in relative pb-6 pl-6">
       <div className="-ml-6 flex items-center gap-3">
         <span className="whitespace-nowrap rounded-full border border-border bg-bg-app px-3 py-0.5 text-meta font-medium text-text-primary">
           Iteration {iteration} — applying fix

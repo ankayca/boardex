@@ -105,6 +105,40 @@ body {
     opacity: 0.4;
   }
 }
+/* T6.2 workspace theater — all reuse the §6.1 duration/easing tokens; no new
+   durations or easings are introduced (the constraint), only new keyframes. */
+/* A chip arriving as its evidence/artifact lands: a subtle rise + fade (fast). */
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+/* A new iteration divider sliding in (medium, entrance ease). */
+@keyframes iteration-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+/* A step's terminal glyph settling into place — active → succeeded/failed. */
+@keyframes icon-settle {
+  0% {
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+}
+/* The deliberate iteration-2 verdict-flip moment: the badge pulses once. */
+@keyframes verdict-flip {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+}
 
 .animate-drawer-in {
   animation: drawer-in var(--motion-medium) var(--ease-entrance);
@@ -123,6 +157,18 @@ body {
 }
 .animate-step-pulse {
   animation: step-active-pulse 2s var(--ease-standard) infinite;
+}
+.animate-chip-in {
+  animation: chip-in var(--motion-fast) var(--ease-entrance);
+}
+.animate-iteration-in {
+  animation: iteration-in var(--motion-medium) var(--ease-entrance);
+}
+.animate-icon-settle {
+  animation: icon-settle var(--motion-medium) var(--ease-standard);
+}
+.animate-verdict-flip {
+  animation: verdict-flip var(--motion-gentle) var(--ease-standard);
 }
 
 /* Sidebar height (T6.1c): dvh where supported so the runner pill can never sit
