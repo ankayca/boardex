@@ -10,6 +10,7 @@ import {
   type Event,
   type RunView,
 } from '@boardex/contract';
+import { loadFixture } from './fixture';
 import { createMockRunner, type MockRunner } from './server';
 
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
@@ -427,6 +428,37 @@ describe('mock runner', () => {
     } finally {
       await degraded.close();
     }
+  });
+
+  // §5.6 (T6.1b): replayed timestamps rebase to replay start — run.created ≈ the
+  // POST /runs moment, authored inter-event deltas preserved — so elapsed reads
+  // true during demos. The fixture file itself stays authored-time.
+  it('rebases replayed timestamps to replay start, preserving deltas', async () => {
+    const before = Date.now();
+    const runId = await createRun();
+    const { events } = await waitForView(
+      runId,
+      (v) => v.run.status === 'plan_ready',
+      'plan_ready',
+    );
+
+    const created = events.find((e) => e.type === 'run.created');
+    expect(created).toBeDefined();
+    // ≈ now: within the window between POST and this assertion, plus slack for
+    // the first entry's (speed-scaled) delay.
+    expect(Date.parse(created!.ts)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(created!.ts)).toBeLessThanOrEqual(Date.now() + 1000);
+    // Payload timestamps shift with the envelope — elapsed reads run.createdAt.
+    const createdAt = created!.type === 'run.created' ? created!.payload.run.createdAt : '';
+    expect(Date.parse(createdAt)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(createdAt)).toBeLessThanOrEqual(Date.now() + 1000);
+
+    // Deltas between replayed fixture events match the authored fixture exactly.
+    const authored = loadFixture();
+    const authoredDelta =
+      Date.parse(authored[1]!.event.ts) - Date.parse(authored[0]!.event.ts);
+    const replayedDelta = Date.parse(events[1]!.ts) - Date.parse(events[0]!.ts);
+    expect(replayedDelta).toBe(authoredDelta);
   });
 
   it('serves fixture artifacts with the declared MIME type', async () => {
