@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from 'react';
 import type { StepLogLine, StepLogStream } from '@boardex/contract';
 import { LogViewer } from '../../design';
-import { groupLogsByStream, LOG_STREAMS, STREAM_LABELS } from './logStreams';
+import { formatLogTime, groupLogsByStream, LOG_STREAMS, STREAM_LABELS } from './logStreams';
 
 export interface StepLogTabsProps {
   stepTitle: string;
@@ -18,7 +18,9 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
     () => LOG_STREAMS.find((stream) => grouped.has(stream)) ?? 'agent',
   );
   const baseId = useId();
-  const activeLines = grouped.get(active) ?? [];
+  const activeEntries = grouped.get(active) ?? [];
+  const activeLines = activeEntries.map((entry) => entry.line);
+  const activeTimestamps = activeEntries.map((entry) => formatLogTime(entry.ts));
 
   return (
     <div>
@@ -35,9 +37,12 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
               aria-selected={selected}
               aria-controls={`${baseId}-panel-${stream}`}
               onClick={() => setActive(stream)}
+              // T6.2 per-stream accent: the selected tab carries a 2px accent
+              // underline at the seam (accent = the interactive selection, not a
+              // verdict); the log text itself is never color-coded (D14).
               className={`rounded-t-lg border border-b-0 px-3 py-1.5 text-meta font-medium ${
                 selected
-                  ? 'border-border bg-bg-panel text-text-primary'
+                  ? 'border-border bg-bg-panel text-text-primary shadow-[inset_0_-2px_0_0_var(--color-accent)]'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
             >
@@ -59,6 +64,7 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
       >
         <LogViewer
           lines={activeLines}
+          timestamps={activeTimestamps}
           maxHeightPx={320}
           label={`${stepTitle} — ${STREAM_LABELS[active]} log`}
         />

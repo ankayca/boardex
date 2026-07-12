@@ -88,6 +88,16 @@ export default function DesignGalleryPage() {
       `[${String(prev.length).padStart(4, '0')}] appended line ${prev.length}`,
     ]);
 
+  // Synthetic per-line timestamps (14:03:00 + one second per line) so the gallery
+  // exercises the T6.2 timestamp toggle and find-in-log header.
+  const logTimestamps = logLines.map((_, i) => {
+    const t = 3 * 60 + 22 + i;
+    const hh = 14 + Math.floor(t / 3600);
+    const mm = Math.floor((t % 3600) / 60);
+    const ss = t % 60;
+    return [hh, mm, ss].map((n) => String(n).padStart(2, '0')).join(':');
+  });
+
   return (
     <main className="min-h-screen bg-bg-app font-sans text-text-primary">
       <div className="mx-auto max-w-5xl space-y-8 px-8 py-10">
@@ -282,7 +292,13 @@ export default function DesignGalleryPage() {
         </GallerySection>
 
         <GallerySection title="LogViewer">
-          <LogViewer lines={logLines} maxHeightPx={240} label="Build log" />
+          {/* T6.2: header hosts find-in-log; timestamps prop enables the toggle. */}
+          <LogViewer
+            lines={logLines}
+            timestamps={logTimestamps}
+            maxHeightPx={240}
+            label="Build log"
+          />
           <Button variant="secondary" onClick={appendLogLine}>
             Append line (auto-follow demo)
           </Button>

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { StepLogLine } from '@boardex/contract';
-import { groupLogsByStream } from './logStreams';
+import { formatLogTime, groupLogsByStream } from './logStreams';
 import { StepLogTabs } from './StepLogTabs';
 
 // jsdom reports zero offset sizes, so the virtualizer would render no log rows at
@@ -20,24 +20,37 @@ beforeAll(() => {
   });
 });
 
+const TS = '2026-07-07T14:03:22Z';
 const LOGS: readonly StepLogLine[] = [
-  { stream: 'agent', line: 'Flashing firmware via pyOCD…' },
-  { stream: 'flash', line: '[pyocd] erased 2 sectors' },
-  { stream: 'agent', line: 'Flash complete, resetting target.' },
-  { stream: 'serial', line: 'TEMP=24.3 HUM=41.2' },
+  { stream: 'agent', line: 'Flashing firmware via pyOCD…', ts: TS },
+  { stream: 'flash', line: '[pyocd] erased 2 sectors', ts: TS },
+  { stream: 'agent', line: 'Flash complete, resetting target.', ts: TS },
+  { stream: 'serial', line: 'TEMP=24.3 HUM=41.2', ts: TS },
 ];
 
 describe('groupLogsByStream', () => {
-  it('routes each line to its stream, preserving arrival order', () => {
+  it('routes each entry to its stream, preserving arrival order and ts', () => {
     const grouped = groupLogsByStream(LOGS);
     expect(grouped.get('agent')).toEqual([
-      'Flashing firmware via pyOCD…',
-      'Flash complete, resetting target.',
+      { stream: 'agent', line: 'Flashing firmware via pyOCD…', ts: TS },
+      { stream: 'agent', line: 'Flash complete, resetting target.', ts: TS },
     ]);
-    expect(grouped.get('flash')).toEqual(['[pyocd] erased 2 sectors']);
-    expect(grouped.get('serial')).toEqual(['TEMP=24.3 HUM=41.2']);
+    expect(grouped.get('flash')).toEqual([{ stream: 'flash', line: '[pyocd] erased 2 sectors', ts: TS }]);
+    expect(grouped.get('serial')).toEqual([{ stream: 'serial', line: 'TEMP=24.3 HUM=41.2', ts: TS }]);
     expect(grouped.has('build')).toBe(false);
     expect(grouped.has('rtt')).toBe(false);
+  });
+});
+
+describe('formatLogTime', () => {
+  it('reads the HH:MM:SS token literally, across zone forms, with no re-interpretation', () => {
+    expect(formatLogTime('2026-07-07T14:03:22.114Z')).toBe('14:03:22');
+    expect(formatLogTime('2026-07-07T09:31:05-05:00')).toBe('09:31:05');
+    expect(formatLogTime('2026-07-07T14:03:22')).toBe('14:03:22'); // naive (§4)
+  });
+
+  it('falls back to the raw string when there is no recognizable time', () => {
+    expect(formatLogTime('2026-07-07')).toBe('2026-07-07');
   });
 });
 
@@ -79,8 +92,8 @@ describe('StepLogTabs', () => {
       <StepLogTabs
         stepTitle="Build firmware"
         logs={[
-          { stream: 'build', line: 'CC main.o' },
-          { stream: 'build', line: 'LD firmware.elf' },
+          { stream: 'build', line: 'CC main.o', ts: TS },
+          { stream: 'build', line: 'LD firmware.elf', ts: TS },
         ]}
       />,
     );
