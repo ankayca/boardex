@@ -106,6 +106,37 @@ describe('EvidenceBand actions', () => {
       '/runs/run_t21/report',
     );
   });
+
+  // The report gate must key on report_md SPECIFICALLY — the fail-variant run ends
+  // with diffs and logs but no report, and its Open Report must be inert (§7.6:
+  // never a live link into the "No report" dead end). These two views are chosen so
+  // a gate reading any other artifact kind (targets.diff, targets.logs) fails one
+  // of them — the T5.1 review showed the all-kinds view above cannot tell them apart.
+  it('keeps Open Report inert when diffs and logs exist but no report_md does (fail-variant shape)', () => {
+    renderBand(
+      buildView([
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_diff', 'code_diff') } },
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_serial', 'serial_log') } },
+      ]),
+    );
+    expect(screen.getByRole('link', { name: 'Open Logs' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Diff' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Report' })).not.toBeInTheDocument();
+    expect(screen.getByText('Open Report')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('enables Open Report from a report_md artifact alone', () => {
+    renderBand(
+      buildView([
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_report', 'report_md') } },
+      ]),
+    );
+    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(
+      `/runs/${RUN_ID}/report`,
+    );
+    expect(screen.getByText('Open Logs')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Open Diff')).toHaveAttribute('aria-disabled', 'true');
+  });
 });
 
 describe('EvidenceBand empty state', () => {

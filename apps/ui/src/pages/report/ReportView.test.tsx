@@ -88,6 +88,75 @@ describe('ReportView against the real fixture', () => {
   });
 });
 
+describe('ReportView verdict column stays uncolored (D14 — reserved colors never decorate)', () => {
+  it('renders PASS verdicts in the measurement table with house text tokens, no pass/fail color anywhere', () => {
+    const view = fixtureView();
+    const { container } = renderView(REPORT_MD, view.artifacts);
+
+    // The fixture's Verdict column is **PASS** — bold, but never green.
+    const verdicts = screen.getAllByText('PASS');
+    expect(verdicts.length).toBeGreaterThan(0);
+    for (const verdict of verdicts) {
+      expect(verdict.className).not.toMatch(/pass|fail|warn/);
+    }
+    // Nothing in the whole rendered report borrows the reserved status colors.
+    expect(
+      container.querySelector('.text-pass, .text-fail, .text-warn, .bg-pass-bg, .bg-fail-bg, .bg-warn-bg'),
+    ).toBeNull();
+  });
+});
+
+describe('ReportView table alignment (GFM hints)', () => {
+  it('applies left/center/right alignment per column on header and body cells', () => {
+    renderView('| L | C | R |\n|:---|:---:|---:|\n| a | b | c |', []);
+    const table = screen.getByRole('table');
+    const headers = within(table).getAllByRole('columnheader');
+    expect(headers[0]!.className).toContain('text-left');
+    expect(headers[1]!.className).toContain('text-center');
+    expect(headers[2]!.className).toContain('text-right');
+    const cells = within(table).getAllByRole('cell');
+    expect(cells[0]!.className).toContain('text-left');
+    expect(cells[1]!.className).toContain('text-center');
+    expect(cells[2]!.className).toContain('text-right');
+  });
+});
+
+describe('ReportView link scheme allowlist (fail-closed XSS surface)', () => {
+  it.each([
+    ['javascript:', 'javascript:alert(document.cookie)'],
+    ['data:', 'data:text/html,<script>alert(1)</script>'],
+    ['vbscript:', 'vbscript:msgbox(1)'],
+    ['protocol-relative //', '//evil.example/phish'],
+  ])('renders a %s href as plain text — no anchor, text still visible', (_name, href) => {
+    renderView(`See [the details](${href}) here.`, [], 'run_x');
+    expect(screen.queryByRole('link', { name: 'the details' })).not.toBeInTheDocument();
+    // Fail-closed but never silent: the link text stays visible as plain text.
+    expect(screen.getByText('the details')).toBeInTheDocument();
+  });
+
+  it('renders http(s) URLs and app-internal absolute paths as live links', () => {
+    renderView(
+      '[docs](https://x.dev) and [evidence](/runs/run_x/evidence?artifact=art_1)',
+      [],
+      'run_x',
+    );
+    const external = screen.getByRole('link', { name: 'docs' });
+    expect(external).toHaveAttribute('href', 'https://x.dev');
+    expect(external).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getByRole('link', { name: 'evidence' })).toHaveAttribute(
+      'href',
+      '/runs/run_x/evidence?artifact=art_1',
+    );
+  });
+
+  it('never uses dangerouslySetInnerHTML: raw HTML in the markdown renders escaped as text', () => {
+    renderView('<img src=x onerror=alert(1)> plain **bold**', [], 'run_x');
+    // The tag arrives as inert text content, not as a parsed element.
+    expect(screen.getByText(/<img src=x onerror=alert\(1\)> plain/)).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+});
+
 describe('ReportView deep-link resolution (fail-closed)', () => {
   const present: Artifact = {
     id: 'art_build_1',

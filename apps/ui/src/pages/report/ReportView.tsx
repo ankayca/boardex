@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Artifact } from '@boardex/contract';
 import { evidenceHref } from '../workspace/evidence';
-import { parseMarkdown, type Block, type Inline } from './markdown';
+import { parseMarkdown, type Block, type Inline, type TableAlign } from './markdown';
 
 export interface ReportViewProps {
   markdown: string;
@@ -17,8 +17,21 @@ export interface ReportViewProps {
   artifacts: readonly Artifact[];
 }
 
-const LINK_CLASS = 'text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent';
-const CODE_CLASS = 'rounded bg-neutral-badge-bg px-1 py-0.5 font-mono text-[0.9em] text-text-primary';
+const LINK_CLASS = 'text-accent underline underline-offset-2 hover:text-accent-hover';
+const CODE_CLASS = 'rounded bg-neutral-badge-bg px-1 py-0.5 font-mono text-meta text-text-primary';
+
+// The report_md is fetched runner (later: model) output — its link hrefs are as
+// untrusted as any user input. Only http(s) URLs and app-internal absolute paths
+// (the evidence deep links) render as anchors; every other scheme — javascript:,
+// data:, vbscript:, protocol-relative //host — degrades to the link text as plain
+// text. Fail-closed: no live script-scheme anchor, and no dead anchor either.
+type LinkSafety = 'external' | 'internal' | 'unsafe';
+function classifyHref(href: string): LinkSafety {
+  const trimmed = href.trim();
+  if (/^https?:/i.test(trimmed)) return 'external';
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return 'internal';
+  return 'unsafe';
+}
 
 // A label may map to more than one artifact only if the runner reused a label; the
 // last write wins, matching how the evidence band resolves "latest of kind".
@@ -75,18 +88,30 @@ function InlineRun({
                 )}
               </span>
             );
-          case 'link':
-            return (
-              <a
-                key={key}
-                href={seg.href}
-                target="_blank"
-                rel="noreferrer"
-                className={LINK_CLASS}
-              >
-                {seg.text}
-              </a>
-            );
+          case 'link': {
+            const safety = classifyHref(seg.href);
+            if (safety === 'external') {
+              return (
+                <a
+                  key={key}
+                  href={seg.href.trim()}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={LINK_CLASS}
+                >
+                  {seg.text}
+                </a>
+              );
+            }
+            if (safety === 'internal') {
+              return (
+                <Link key={key} to={seg.href.trim()} className={LINK_CLASS}>
+                  {seg.text}
+                </Link>
+              );
+            }
+            return <span key={key}>{seg.text}</span>;
+          }
           case 'text':
           default:
             return (
@@ -137,14 +162,18 @@ function BlockNode({
           ))}
         </ul>
       );
-    case 'table':
+    case 'table': {
+      // GFM alignment hints apply per column; an unspecified column reads left,
+      // matching the browser td default and overriding the th centering default.
+      const alignClass = (align: TableAlign | null | undefined): string =>
+        align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
       return (
         <div className="my-4 overflow-x-auto">
           <table className="w-full border-collapse text-body">
             <thead>
-              <tr className="border-b border-border-strong text-left text-text-secondary">
+              <tr className="border-b border-border-strong text-text-secondary">
                 {block.header.map((cell, index) => (
-                  <th key={index} className="px-3 py-2 font-medium">
+                  <th key={index} className={`px-3 py-2 font-medium ${alignClass(block.align[index])}`}>
                     {run(cell)}
                   </th>
                 ))}
@@ -154,7 +183,7 @@ function BlockNode({
               {block.rows.map((cells, rowIndex) => (
                 <tr key={rowIndex} className="border-b border-border align-top">
                   {cells.map((cell, cellIndex) => (
-                    <td key={cellIndex} className="px-3 py-2 text-text-primary">
+                    <td key={cellIndex} className={`px-3 py-2 text-text-primary ${alignClass(block.align[cellIndex])}`}>
                       {run(cell)}
                     </td>
                   ))}
@@ -164,6 +193,7 @@ function BlockNode({
           </table>
         </div>
       );
+    }
     case 'code':
       return (
         <pre className="my-4 overflow-x-auto rounded-card border border-border bg-bg-app p-4">
