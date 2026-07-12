@@ -390,6 +390,7 @@ class RealBench:
         wait = session.wait_for_rtt(
             self.config.rtt_pattern,
             timeout_s=self.config.rtt_timeout_s,
+            regex=True,
             since_last_flash=True,
         )
         text = str(wait.data.get("text", "") or "")
