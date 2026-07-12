@@ -134,6 +134,45 @@ describe('ReportView link scheme allowlist (fail-closed XSS surface)', () => {
     expect(screen.getByText('the details')).toBeInTheDocument();
   });
 
+  // WHATWG URL parsing strips tab/LF/CR anywhere and folds \ into /, so these
+  // "internal-looking" hrefs actually resolve protocol-relative (verified:
+  // new URL('/\\evil.com', origin) === 'https://evil.com/'). Classification must
+  // see the normalized form, not the raw text.
+  it.each([
+    ['backslash /\\', '/\\evil.com'],
+    ['tab-obfuscated', '/\t/evil.com'],
+    ['CR-obfuscated', '/\r//evil.com'],
+  ])('renders a WHATWG-foldable %s href as plain text', (_name, href) => {
+    renderView(`See [the details](${href}) here.`, [], 'run_x');
+    expect(screen.queryByRole('link', { name: 'the details' })).not.toBeInTheDocument();
+    expect(screen.getByText('the details')).toBeInTheDocument();
+  });
+
+  it('an LF-obfuscated href never survives to a protocol-relative anchor: the block pass splits lines first', () => {
+    // '[x](/\n//evil.com)' cannot parse as one link — parseMarkdown line-splits
+    // before inline parsing, and the soft-wrap join yields the href '/ //evil.com':
+    // a same-origin path (space, not slash, in second position), which the router
+    // then renders with the empty segment collapsed. The \n strip in normalizeHref
+    // is defensive depth; the CR case above exercises the identical WHATWG
+    // control-char strip directly.
+    renderView('See [the details](/\n//evil.com) here.', [], 'run_x');
+    const href = screen.getByRole('link', { name: 'the details' }).getAttribute('href') ?? '';
+    expect(href).toBe('/ /evil.com');
+    expect(href.startsWith('//')).toBe(false);
+  });
+
+  it('does not treat percent-escapes as foldable: /%5Cevil.com stays a literal same-origin path', () => {
+    // Out of scope for normalization by design: percent-escapes are path DATA,
+    // decoded only after URL parsing (verified: new URL('/%5Cevil.com', origin)
+    // stays on origin), and react-router does not pre-decode hrefs either — so
+    // this renders as an ordinary internal link, not a protocol-relative one.
+    renderView('See [the details](/%5Cevil.com) here.', [], 'run_x');
+    expect(screen.getByRole('link', { name: 'the details' })).toHaveAttribute(
+      'href',
+      '/%5Cevil.com',
+    );
+  });
+
   it('renders http(s) URLs and app-internal absolute paths as live links', () => {
     renderView(
       '[docs](https://x.dev) and [evidence](/runs/run_x/evidence?artifact=art_1)',

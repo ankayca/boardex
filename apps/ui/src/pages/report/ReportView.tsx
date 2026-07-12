@@ -25,11 +25,22 @@ const CODE_CLASS = 'rounded bg-neutral-badge-bg px-1 py-0.5 font-mono text-meta 
 // (the evidence deep links) render as anchors; every other scheme — javascript:,
 // data:, vbscript:, protocol-relative //host — degrades to the link text as plain
 // text. Fail-closed: no live script-scheme anchor, and no dead anchor either.
+//
+// Classification runs on the WHATWG-normalized href, because that is what the
+// browser acts on: URL parsing strips ASCII tab/LF/CR anywhere in the input and
+// folds \ into / for special schemes, so the raw text /\evil.com or /\t/evil.com
+// reads "internal" while actually resolving protocol-relative to evil.com. The
+// normalized form is also what gets rendered, so the classified href and the live
+// href can never diverge. (%5C needs no handling: percent-escapes are path data,
+// decoded only after parsing — /%5Cevil.com stays a same-origin path.)
+function normalizeHref(href: string): string {
+  return href.trim().replace(/[\t\n\r]/g, '').replace(/\\/g, '/');
+}
+
 type LinkSafety = 'external' | 'internal' | 'unsafe';
-function classifyHref(href: string): LinkSafety {
-  const trimmed = href.trim();
-  if (/^https?:/i.test(trimmed)) return 'external';
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return 'internal';
+function classifyHref(normalized: string): LinkSafety {
+  if (/^https?:/i.test(normalized)) return 'external';
+  if (normalized.startsWith('/') && !normalized.startsWith('//')) return 'internal';
   return 'unsafe';
 }
 
@@ -89,12 +100,13 @@ function InlineRun({
               </span>
             );
           case 'link': {
-            const safety = classifyHref(seg.href);
+            const href = normalizeHref(seg.href);
+            const safety = classifyHref(href);
             if (safety === 'external') {
               return (
                 <a
                   key={key}
-                  href={seg.href.trim()}
+                  href={href}
                   target="_blank"
                   rel="noreferrer"
                   className={LINK_CLASS}
@@ -105,7 +117,7 @@ function InlineRun({
             }
             if (safety === 'internal') {
               return (
-                <Link key={key} to={seg.href.trim()} className={LINK_CLASS}>
+                <Link key={key} to={href} className={LINK_CLASS}>
                   {seg.text}
                 </Link>
               );
