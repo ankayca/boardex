@@ -79,20 +79,24 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
   const commandError = (error: unknown, message: string): string | null =>
     error && !(error instanceof StateConflict) ? message : null;
 
+  // h-full lets the sticky status card travel the full height of the (stretched)
+  // rail grid area, so Stop Run stays reachable down a long timeline (T6.2b).
   return (
-    <div className="space-y-4">
-      <StatusCard
-        run={run}
-        endedAt={view.endedAt}
-        warnings={view.warnings}
-        progress={deriveProgress(view)}
-        stopping={stopping}
-        stopError={commandError(
-          stop.error,
-          'Could not stop the run — check that the runner is online, then try again.',
-        )}
-        onStop={() => stop.mutate()}
-      />
+    <div className="h-full space-y-4">
+      <div className="rail-sticky">
+        <StatusCard
+          run={run}
+          endedAt={view.endedAt}
+          warnings={view.warnings}
+          progress={deriveProgress(view)}
+          stopping={stopping}
+          stopError={commandError(
+            stop.error,
+            'Could not stop the run — check that the runner is online, then try again.',
+          )}
+          onStop={() => stop.mutate()}
+        />
+      </div>
       {reportTarget && (
         <Link
           to={`/runs/${run.id}/report`}

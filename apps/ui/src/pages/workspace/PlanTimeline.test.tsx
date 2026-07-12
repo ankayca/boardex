@@ -86,6 +86,14 @@ describe('PlanTimeline', () => {
     ).toHaveTextContent('Evaluating checks…');
   });
 
+  it('renders a step summary even while the step is collapsed (T6.2b)', () => {
+    render(<PlanTimeline view={viewFrom(iterationTwoEvents())} />);
+    // The failed iteration-1 step is collapsed, but its summary reads inline.
+    const failedToggle = screen.getByRole('button', { name: /Validate measurements/ });
+    expect(failedToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('device_ack failed')).toBeInTheDocument();
+  });
+
   it('collapses the task prompt to two lines and expands on demand', async () => {
     const user = userEvent.setup();
     render(<PlanTimeline view={viewFrom(iterationTwoEvents())} />);

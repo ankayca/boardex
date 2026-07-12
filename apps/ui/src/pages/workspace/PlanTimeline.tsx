@@ -132,10 +132,13 @@ function ExecutedStepRow({ step, logs, artifacts, expanded, onToggle }: Executed
           {statusLabels[step.status]}
         </span>
       </button>
+      {/* T6.2b: the step's one-line summary shows for every step that has one, on the
+          same line rhythm as a planned step's detail — so a collapsed executed step
+          reads as fully as a pending one, not as a bare title. */}
+      {step.summary && <p className="mt-0.5 text-meta text-text-secondary">{step.summary}</p>}
       {expanded && (
         <Collapsible>
           <div className="mt-2 space-y-3">
-            {step.summary && <p className="text-meta text-text-secondary">{step.summary}</p>}
             <ArtifactChips artifacts={artifacts} />
             <StepLogTabs stepTitle={step.title} logs={logs} />
           </div>

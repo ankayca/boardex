@@ -19,12 +19,18 @@ function useGlobalRunnerFeed(): void {
 
 export default function Layout() {
   useGlobalRunnerFeed();
+  // Internal-scroll app shell (T6.2b): the sidebar and top bar are non-scrolling
+  // frame elements; only the content region scrolls. The top bar can never be
+  // offset by a sticky-vs-document-scroll interaction, and page-level sticky
+  // (the workspace rails) anchors cleanly to this scroll container.
   return (
-    <div className="flex min-h-screen bg-bg-app font-sans text-text-primary">
+    <div className="flex h-screen overflow-hidden bg-bg-app font-sans text-text-primary">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-        <Outlet />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Outlet />
+        </div>
       </div>
     </div>
   );

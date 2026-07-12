@@ -96,6 +96,17 @@ describe('LogViewer', () => {
     expect((find as HTMLInputElement).value).toBe('');
   });
 
+  it('shows a clear (✕) button while searching that empties the query', () => {
+    render(<LogViewer lines={makeLines(50)} label="Clearable" />);
+    const find = screen.getByRole('textbox', { name: 'Find in Clearable' });
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    fireEvent.change(find, { target: { value: 'line 2' } });
+    const clear = screen.getByRole('button', { name: 'Clear search' });
+    fireEvent.click(clear);
+    expect((find as HTMLInputElement).value).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
   it('find-in-log cycles matches on Enter and shows "No matches" when none', () => {
     render(<LogViewer lines={makeLines(50)} label="Cyclable" />);
     const find = screen.getByRole('textbox', { name: 'Find in Cyclable' });

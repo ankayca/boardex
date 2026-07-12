@@ -99,16 +99,19 @@ export function StatusCard({
         </p>
       )}
       {progress.total > 0 && (
+        // "Verified" (not "plan progress") per the latest-execution-wins rider: the
+        // count is plan steps whose latest execution succeeded — steps proven, not
+        // merely attempted.
         <div className="mt-4">
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-label uppercase text-text-secondary">Plan progress</span>
+            <span className="text-label uppercase text-text-secondary">Verified</span>
             <span className="font-mono text-meta text-text-primary">
               {progress.completed} / {progress.total}
             </span>
           </div>
           <Progress
             value={percent}
-            label={`Plan progress: ${progress.completed} of ${progress.total} steps complete`}
+            label={`Verified: ${progress.completed} of ${progress.total} plan steps`}
           />
         </div>
       )}

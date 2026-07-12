@@ -171,14 +171,6 @@ body {
   animation: verdict-flip var(--motion-gentle) var(--ease-standard);
 }
 
-/* Sidebar height (T6.1c): dvh where supported so the runner pill can never sit
-   below the visible viewport edge (100vh overshoots when browser UI eats into
-   the window); plain vh is the fallback. */
-.sidebar-height {
-  height: 100vh;
-  height: 100dvh;
-}
-
 /* Workspace three-zone grid (§6.3) under the frame (T6.1b): the 3-column split
    keys on CONTENT width via container query, not the viewport — the sidebar
    (240px expanded, 56px collapsed) participates automatically, where a viewport
@@ -202,6 +194,17 @@ body {
   }
   .workspace-rail {
     grid-column: 3;
+  }
+  /* Sticky rails (T6.2b): the board card and the status card follow the scroll on
+     long timelines (Stop Run stays reachable), pinned just below the frame's top
+     bar. Only in the three-zone layout — when the right rail stacks under center
+     (< 1240px content), sticky is off so a pinned card can't cover the timeline.
+     `align-self: start` keeps the card content-height inside its stretched grid
+     area, so it has room to travel. */
+  .rail-sticky {
+    position: sticky;
+    top: 24px;
+    align-self: start;
   }
 }
 

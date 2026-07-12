@@ -166,11 +166,28 @@ export function LogViewer({
               className="min-w-0 flex-1 rounded-button border border-border bg-bg-app px-2 py-1 font-mono text-meta text-text-primary placeholder:font-sans placeholder:text-text-secondary focus:border-accent focus:outline-none"
             />
             {searching && (
-              <span role="status" className="shrink-0 text-meta text-text-secondary">
-                {matches.length === 0
-                  ? 'No matches'
-                  : `${Math.min(activeMatch, matches.length - 1) + 1}/${matches.length}`}
-              </span>
+              <>
+                <span role="status" className="shrink-0 text-meta text-text-secondary">
+                  {matches.length === 0
+                    ? 'No matches'
+                    : `${Math.min(activeMatch, matches.length - 1) + 1}/${matches.length}`}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => changeQuery('')}
+                  className="shrink-0 rounded-button p-1 text-text-secondary transition-colors duration-fast ease-motion hover:text-text-primary"
+                >
+                  <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none">
+                    <path
+                      d="M3.5 3.5l7 7M10.5 3.5l-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </>
             )}
           </div>
           {timestamps && (
