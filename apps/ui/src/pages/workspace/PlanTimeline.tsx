@@ -4,18 +4,9 @@
 // auto-expanded; iteration >= 2 renders a divider driven by run.iteration_started.
 import { useState } from 'react';
 import type { Artifact, RunStep, RunView, StepLogLine, StepStatus } from '@boardex/contract';
+import { StepStatusIcon } from '../../design';
 import { deriveTimeline } from './timeline';
 import { StepLogTabs } from './StepLogTabs';
-
-// D14: green marks the succeeded step only, red the failed step only. The active
-// marker uses the accent; pending/skipped stay neutral.
-const markerClasses: Record<StepStatus, string> = {
-  pending: 'border-border-strong bg-bg-panel',
-  active: 'border-accent bg-accent',
-  succeeded: 'border-pass bg-pass',
-  failed: 'border-fail bg-fail',
-  skipped: 'border-border-strong bg-neutral-badge-bg',
-};
 
 const statusLabels: Record<StepStatus, string> = {
   pending: 'Pending',
@@ -37,12 +28,17 @@ const statusTextClasses: Record<StepStatus, string> = {
   skipped: 'text-text-secondary',
 };
 
+// T6.1 iconography: status glyphs (StepStatusIcon) replace bare dots so the
+// timeline scans by shape, not color alone — D14 mapping lives in the icon.
+// The wrapping span is opaque so the glyph masks the timeline rule beneath it.
 function TimelineMarker({ status }: { status: StepStatus }) {
   return (
     <span
       aria-hidden="true"
-      className={`absolute -left-[7px] top-1.5 h-3.5 w-3.5 rounded-full border-2 ${markerClasses[status]}`}
-    />
+      className="absolute -left-[7px] top-1.5 inline-flex rounded-full bg-bg-app"
+    >
+      <StepStatusIcon status={status} />
+    </span>
   );
 }
 

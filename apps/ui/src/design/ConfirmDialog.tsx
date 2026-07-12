@@ -45,14 +45,16 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Scrim: text-primary at reduced opacity — no colors outside §6.1. */}
-      <div className="absolute inset-0 bg-text-primary opacity-40" onClick={onCancel} aria-hidden="true" />
+      {/* Scrim: text-primary at 40% alpha — no colors outside §6.1. Entrance
+          animates at motion-fast; dismissal is instant — a confirm should get
+          out of the way, not perform. */}
+      <div className="absolute inset-0 animate-overlay-in bg-scrim" onClick={onCancel} aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="relative w-full max-w-md rounded-card border border-border bg-bg-panel p-6 shadow-subtle"
+        className="relative w-full max-w-md animate-dialog-in rounded-card border border-border bg-bg-panel p-6 shadow-overlay"
       >
         <h2 id={titleId} className="text-section font-semibold text-text-primary">
           {title}

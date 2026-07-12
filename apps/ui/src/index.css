@@ -24,11 +24,33 @@
   --color-warn-bg: #fffbeb;
   --color-neutral-badge: #78716c;
   --color-neutral-badge-bg: #f5f5f4;
+  /* Overlay scrim — text-primary at 40% alpha, not a new hue. */
+  --color-scrim: rgba(28, 25, 23, 0.4);
 
   --radius-card: 10px;
   --radius-button: 8px;
 
+  /*
+   * Elevation (T6.1) — three levels, borders-first per §6.1: shadows stay faint
+   * and depth still reads primarily from the 1px border + whitespace.
+   *   1 subtle:  resting cards and panels
+   *   2 raised:  elements floating over content (popovers, "jump to latest")
+   *   3 overlay: modal surfaces (dialogs, drawers)
+   */
   --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 10px rgba(0, 0, 0, 0.06);
+  --shadow-overlay: 0 2px 8px rgba(0, 0, 0, 0.07), 0 16px 40px rgba(0, 0, 0, 0.12);
+
+  /*
+   * Motion (T6.1) — fast for state flips (badge/dot/button color), medium for
+   * surface transitions (drawer, dialog), gentle for continuous feedback
+   * (progress). prefers-reduced-motion collapses all of it (see below).
+   */
+  --motion-fast: 120ms;
+  --motion-medium: 200ms;
+  --motion-gentle: 360ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
@@ -36,5 +58,81 @@ body {
   background-color: var(--color-bg-app);
   color: var(--color-text-primary);
   font-family: 'Inter', system-ui, sans-serif;
+  /* Lab-instrument numerals: every measurement, duration, and seq lines up in
+     columns whether set in Inter or JetBrains Mono. */
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+}
+
+/* One focus treatment for the whole product: a 2px accent ring, offset so it
+   never fights the element's own border. Text fields opt out via their
+   focus:border-accent treatment (higher specificity), which is intentional. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Overlay + timeline animations. Applied via the .animate-* classes below;
+   the exit-presence hook (design/motion.ts) unmounts overlays on animationend. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes overlay-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+@keyframes step-active-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-drawer-in {
+  animation: drawer-in var(--motion-medium) var(--ease-entrance);
+}
+.animate-drawer-out {
+  animation: drawer-out var(--motion-medium) var(--ease-standard) forwards;
+}
+.animate-overlay-in {
+  animation: overlay-fade-in var(--motion-medium) var(--ease-standard);
+}
+.animate-overlay-out {
+  animation: overlay-fade-out var(--motion-medium) var(--ease-standard) forwards;
+}
+.animate-dialog-in {
+  animation: dialog-in var(--motion-fast) var(--ease-entrance);
+}
+.animate-step-pulse {
+  animation: step-active-pulse 2s var(--ease-standard) infinite;
+}
+
+/* Reduced motion: state changes still land (final frames apply), they just
+   stop travelling. iteration-count 1 also halts the active-step pulse. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

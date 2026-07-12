@@ -8,7 +8,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 // at reduced opacity, not a different variant.
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-white enabled:hover:bg-accent-hover',
-  secondary: 'border border-border bg-bg-panel text-text-primary enabled:hover:bg-bg-app',
+  secondary:
+    'border border-border bg-bg-panel text-text-primary enabled:hover:border-border-strong enabled:hover:bg-bg-app',
   danger: 'bg-fail text-white enabled:hover:opacity-90',
   ghost: 'text-text-secondary enabled:hover:bg-neutral-badge-bg enabled:hover:text-text-primary',
 };
@@ -21,7 +22,7 @@ export function Button({ variant = 'primary', className = '', type = 'button', .
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-button px-4 py-2 text-body font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-button px-4 py-2 text-body font-medium transition-colors duration-fast ease-motion disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
       {...rest}
     />
   );

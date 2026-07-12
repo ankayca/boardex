@@ -9,3 +9,4 @@ export { KeyValue, type KeyValueProps } from './KeyValue';
 export { LogViewer, type LogViewerProps } from './LogViewer';
 export { Progress, type ProgressProps } from './Progress';
 export { StatusDot, type StatusDotProps } from './StatusDot';
+export { StepStatusIcon, type StepStatusIconProps } from './StepStatusIcon';

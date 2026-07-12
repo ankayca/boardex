@@ -17,7 +17,10 @@ export interface StatusDotProps {
 export function StatusDot({ state, label }: StatusDotProps) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${stateClasses[state]}`} />
+      <span
+        aria-hidden="true"
+        className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-fast ease-motion ${stateClasses[state]}`}
+      />
       <span className={label ? 'text-meta text-text-secondary' : 'sr-only'}>{label ?? state}</span>
     </span>
   );

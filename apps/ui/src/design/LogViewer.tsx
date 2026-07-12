@@ -91,7 +91,7 @@ export function LogViewer({ lines, height = 320, label = 'Log output' }: LogView
         <button
           type="button"
           onClick={jumpToLatest}
-          className="absolute bottom-3 right-3 rounded-button border border-border bg-bg-panel px-3 py-1 text-meta font-medium text-accent shadow-subtle hover:text-accent-hover"
+          className="absolute bottom-3 right-3 rounded-button border border-border bg-bg-panel px-3 py-1 text-meta font-medium text-accent shadow-raised transition-colors duration-fast ease-motion hover:text-accent-hover"
         >
           Jump to latest
         </button>
