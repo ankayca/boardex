@@ -3,7 +3,7 @@
 // real artifacts; a quiet neutral line before any check is evaluated. Views are the
 // real reduceRun output (D5).
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { Event, RunView } from '@boardex/contract';
 import { EvidenceBand } from './EvidenceBand';
@@ -64,6 +64,46 @@ describe('EvidenceBand chips', () => {
   });
 });
 
+describe('EvidenceBand verdict-flip (T6.2)', () => {
+  // The badge wrapper is the parent of the verdict badge span.
+  const flipWrapper = () =>
+    screen
+      .getByRole('list', { name: 'Evidence checks' })
+      .querySelector('[data-kind="verdict"]')!.parentElement!;
+
+  const ackView = (verdict: 'pass' | 'fail') =>
+    buildView([
+      { type: 'artifact.created', payload: { artifact: artifactOf('art_ack', 'protocol_decode') } },
+      { type: 'check.evaluated', payload: { check: checkOf('chk_ack', 'device_ack', 'art_ack', verdict) } },
+    ]);
+
+  it('plays the emphasis only when a check re-evaluates FAIL → PASS', async () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('fail')} />
+      </MemoryRouter>,
+    );
+    // Initial fail render: no emphasis.
+    expect(flipWrapper().className).not.toContain('animate-verdict-flip');
+
+    rerender(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('pass')} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(flipWrapper().className).toContain('animate-verdict-flip'));
+  });
+
+  it('does not flip a check that is PASS from the first render (reloaded run)', () => {
+    render(
+      <MemoryRouter>
+        <EvidenceBand view={ackView('pass')} />
+      </MemoryRouter>,
+    );
+    expect(flipWrapper().className).not.toContain('animate-verdict-flip');
+  });
+});
+
 describe('EvidenceBand geometry (§6.3)', () => {
   it('holds the 88px collapsed strip: fixed height, chips overflow horizontally instead of wrapping taller', () => {
     // Enough chips that a wrapping layout would need multiple rows.
@@ -90,7 +130,7 @@ describe('EvidenceBand geometry (§6.3)', () => {
 });
 
 describe('EvidenceBand actions', () => {
-  it('deep-links Open Logs / Open Diff / Open Report to real artifact ids from RunView', () => {
+  it('deep-links Open Logs / Open Diff to real artifact ids, Open Report to the §7.6 report screen', () => {
     const view = buildView([
       { type: 'artifact.created', payload: { artifact: artifactOf('art_diff', 'code_diff') } },
       { type: 'artifact.created', payload: { artifact: artifactOf('art_serial', 'serial_log') } },
@@ -101,7 +141,41 @@ describe('EvidenceBand actions', () => {
 
     expect(screen.getByRole('link', { name: 'Open Logs' }).getAttribute('href')).toBe(href('art_serial'));
     expect(screen.getByRole('link', { name: 'Open Diff' }).getAttribute('href')).toBe(href('art_diff'));
-    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(href('art_report'));
+    // Open Report leaves the evidence drawer for the dedicated Validation Report view.
+    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(
+      '/runs/run_t21/report',
+    );
+  });
+
+  // The report gate must key on report_md SPECIFICALLY — the fail-variant run ends
+  // with diffs and logs but no report, and its Open Report must be inert (§7.6:
+  // never a live link into the "No report" dead end). These two views are chosen so
+  // a gate reading any other artifact kind (targets.diff, targets.logs) fails one
+  // of them — the T5.1 review showed the all-kinds view above cannot tell them apart.
+  it('keeps Open Report inert when diffs and logs exist but no report_md does (fail-variant shape)', () => {
+    renderBand(
+      buildView([
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_diff', 'code_diff') } },
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_serial', 'serial_log') } },
+      ]),
+    );
+    expect(screen.getByRole('link', { name: 'Open Logs' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Diff' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Report' })).not.toBeInTheDocument();
+    expect(screen.getByText('Open Report')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('enables Open Report from a report_md artifact alone', () => {
+    renderBand(
+      buildView([
+        { type: 'artifact.created', payload: { artifact: artifactOf('art_report', 'report_md') } },
+      ]),
+    );
+    expect(screen.getByRole('link', { name: 'Open Report' }).getAttribute('href')).toBe(
+      `/runs/${RUN_ID}/report`,
+    );
+    expect(screen.getByText('Open Logs')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Open Diff')).toHaveAttribute('aria-disabled', 'true');
   });
 });
 

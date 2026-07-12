@@ -1,6 +1,7 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
+import { useExitPresence } from './motion';
 
 export interface DrawerProps {
   open: boolean;
@@ -13,6 +14,10 @@ export interface DrawerProps {
 
 export function Drawer({ open, title, onClose, widthPx = 480, children }: DrawerProps) {
   const titleId = useId();
+  const panelRef = useRef<HTMLElement>(null);
+  // T6.1 motion: slide in/out at motion-medium; the hook keeps the panel
+  // mounted through the exit animation (instant under reduced motion).
+  const { mounted, closing } = useExitPresence(open, panelRef);
 
   useEffect(() => {
     if (!open) {
@@ -27,19 +32,24 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
-  if (!open) {
+  if (!mounted) {
     return null;
   }
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* Scrim: text-primary at reduced opacity — no colors outside §6.1. */}
-      <div className="absolute inset-0 bg-text-primary opacity-40" onClick={onClose} aria-hidden="true" />
+      {/* Scrim: text-primary at 40% alpha — no colors outside §6.1. */}
+      <div
+        className={`absolute inset-0 bg-scrim ${closing ? 'animate-overlay-out' : 'animate-overlay-in'}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-bg-panel"
+        className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-bg-panel shadow-overlay ${closing ? 'animate-drawer-out' : 'animate-drawer-in'}`}
         style={{ maxWidth: widthPx }}
       >
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">

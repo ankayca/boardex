@@ -3,6 +3,7 @@
 // until the confirming event lands in the reduced view, and a 409 StateConflict is
 // state refresh, not an error — the event stream reconciles the view (§5.3).
 import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { Approval, RunView } from '@boardex/contract';
 import { api, StateConflict } from '../../lib/api';
 import { benchIssues } from '../../lib/benchReadiness';
@@ -12,6 +13,7 @@ import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
 import { evidenceHref, evidenceTargets } from './evidence';
+import { deriveProgress } from './progress';
 import { StatusCard } from './StatusCard';
 
 export function StatusApprovalRail({ view }: { view: RunView }) {
@@ -34,6 +36,11 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       if (error instanceof StateConflict) resolve.reset();
     },
   });
+
+  // The completed run's deliverable (§7.6): a prominent link to the Validation
+  // Report, shown only once the report_md artifact exists — a failed run that never
+  // produced one renders no link, no dead end.
+  const reportTarget = evidenceTargets(view).report;
 
   const awaiting = run.status === 'awaiting_approval';
   const gate = awaiting ? deriveApprovalGate(view) : null;
@@ -72,19 +79,32 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
   const commandError = (error: unknown, message: string): string | null =>
     error && !(error instanceof StateConflict) ? message : null;
 
+  // h-full lets the sticky status card travel the full height of the (stretched)
+  // rail grid area, so Stop Run stays reachable down a long timeline (T6.2b).
   return (
-    <div className="space-y-4">
-      <StatusCard
-        run={run}
-        endedAt={view.endedAt}
-        warnings={view.warnings}
-        stopping={stopping}
-        stopError={commandError(
-          stop.error,
-          'Could not stop the run — check that the runner is online, then try again.',
-        )}
-        onStop={() => stop.mutate()}
-      />
+    <div className="h-full space-y-4">
+      <div className="rail-sticky">
+        <StatusCard
+          run={run}
+          endedAt={view.endedAt}
+          warnings={view.warnings}
+          progress={deriveProgress(view)}
+          stopping={stopping}
+          stopError={commandError(
+            stop.error,
+            'Could not stop the run — check that the runner is online, then try again.',
+          )}
+          onStop={() => stop.mutate()}
+        />
+      </div>
+      {reportTarget && (
+        <Link
+          to={`/runs/${run.id}/report`}
+          className="flex w-full items-center justify-center rounded-button bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+        >
+          Open Validation Report
+        </Link>
+      )}
       {hardwareApprovalIssues.length > 0 && <BenchWarning issues={hardwareApprovalIssues} />}
       {gate && fixApproval === null && (
         <ApprovalCard

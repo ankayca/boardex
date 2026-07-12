@@ -2,17 +2,10 @@
 // run.createdAt and ticks only while the run is non-terminal. A terminal run shows
 // the frozen total duration to RunView.endedAt (§5.4 v1.5) — no wall clock involved,
 // so it is identical live and after a reload.
-import type { RunStatus } from '@boardex/contract';
-
-export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
-  'completed',
-  'failed',
-  'stopped',
-]);
-
-export function isTerminalStatus(status: RunStatus): boolean {
-  return TERMINAL_RUN_STATUSES.has(status);
-}
+//
+// The terminal-status predicate moved to lib/runStatus (T5.2: the stream client
+// needs it too); re-exported here so workspace consumers keep one import site.
+export { TERMINAL_RUN_STATUSES, isTerminalStatus } from '../../lib/runStatus';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 

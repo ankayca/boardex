@@ -27,7 +27,8 @@ function mockScrollMetrics(el: HTMLElement, scrollHeight: number, clientHeight: 
 
 describe('LogViewer', () => {
   it('renders a monospace log region with only a virtualized window of lines', () => {
-    render(<LogViewer lines={makeLines(1000)} height={200} label="Build log" />);
+    // T6.1b: `height` became `maxHeightPx` — the pane sizes to content up to the cap.
+    render(<LogViewer lines={makeLines(1000)} maxHeightPx={200} label="Build log" />);
     const log = screen.getByRole('log', { name: 'Build log' });
     expect(log).toHaveClass('font-mono');
     expect(screen.getByText('line 0')).toBeInTheDocument();
@@ -75,8 +76,72 @@ describe('LogViewer', () => {
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).not.toBeInTheDocument();
   });
 
-  it('shows a placeholder when there are no lines', () => {
-    render(<LogViewer lines={[]} />);
+  it('shows a placeholder and no header when there are no lines', () => {
+    render(<LogViewer lines={[]} label="Empty" />);
     expect(screen.getByText('No output yet.')).toBeInTheDocument();
+    // The find/timestamp header only exists once there is output.
+    expect(screen.queryByRole('textbox', { name: /Find in/ })).not.toBeInTheDocument();
+  });
+
+  it('find-in-log reports the match count, highlights, and Escape clears it', () => {
+    render(<LogViewer lines={makeLines(50)} label="Findable" />);
+    const find = screen.getByRole('textbox', { name: 'Find in Findable' });
+    fireEvent.change(find, { target: { value: 'line 0' } });
+    // Exactly one line ("line 0") contains "line 0" — "line 10".."line 49" do not.
+    expect(screen.getByRole('status')).toHaveTextContent('1/1');
+    expect(screen.getByText('line 0', { selector: 'mark' })).toBeInTheDocument();
+    fireEvent.keyDown(find, { key: 'Escape' });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('line 0', { selector: 'mark' })).not.toBeInTheDocument();
+    expect((find as HTMLInputElement).value).toBe('');
+  });
+
+  it('shows a clear (✕) button while searching that empties the query', () => {
+    render(<LogViewer lines={makeLines(50)} label="Clearable" />);
+    const find = screen.getByRole('textbox', { name: 'Find in Clearable' });
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    fireEvent.change(find, { target: { value: 'line 2' } });
+    const clear = screen.getByRole('button', { name: 'Clear search' });
+    fireEvent.click(clear);
+    expect((find as HTMLInputElement).value).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  it('find-in-log cycles matches on Enter and shows "No matches" when none', () => {
+    render(<LogViewer lines={makeLines(50)} label="Cyclable" />);
+    const find = screen.getByRole('textbox', { name: 'Find in Cyclable' });
+    fireEvent.change(find, { target: { value: 'line' } }); // every line matches
+    expect(screen.getByRole('status')).toHaveTextContent('1/50');
+    fireEvent.keyDown(find, { key: 'Enter' });
+    expect(screen.getByRole('status')).toHaveTextContent('2/50');
+    fireEvent.change(find, { target: { value: 'zzz' } });
+    expect(screen.getByRole('status')).toHaveTextContent('No matches');
+  });
+
+  it('offers a timestamp toggle only when timestamps are supplied, and renders them when on', () => {
+    const lines = makeLines(3);
+    const timestamps = ['14:03:22', '14:03:23', '14:03:24'];
+    const { rerender } = render(<LogViewer lines={lines} label="Timed" />);
+    expect(screen.queryByRole('button', { name: 'Timestamps' })).not.toBeInTheDocument();
+
+    rerender(<LogViewer lines={lines} timestamps={timestamps} label="Timed" />);
+    const toggle = screen.getByRole('button', { name: 'Timestamps' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('14:03:22')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('14:03:22')).toBeInTheDocument();
+  });
+
+  // T6.1b: the pane sizes to its content — floor 96px, cap 320px by default.
+  it('sizes to content between the floor and the cap', () => {
+    const { rerender } = render(<LogViewer lines={makeLines(3)} label="Sized log" />);
+    const log = screen.getByRole('log', { name: 'Sized log' });
+    expect(log.style.height).toBe('96px'); // 3 lines fit under the floor
+    rerender(<LogViewer lines={makeLines(10)} label="Sized log" />);
+    expect(log.style.height).toBe('208px'); // 10 × 20px + 8px padding
+    rerender(<LogViewer lines={makeLines(1000)} label="Sized log" />);
+    expect(log.style.height).toBe('320px'); // capped
   });
 });

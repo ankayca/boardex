@@ -222,7 +222,14 @@ export class WsClient {
     this.epoch++; // supersede any onOpen continuation still awaiting on this socket
     this.clearHeartbeat();
     if (ws) {
-      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      ws.onopen = ws.onmessage = ws.onclose = null;
+      // Closing a still-CONNECTING socket makes the `ws` package emit an async
+      // 'error' ("closed before the connection was established"); with no error
+      // handler attached that is an uncaught exception in node hosts. A no-op
+      // handler stays on for the socket's afterlife. (Latent until T5.2: terminal
+      // cold-loads render instantly from replay, so a page can now legitimately
+      // unmount before its global socket finishes its handshake.)
+      ws.onerror = () => {};
       try {
         ws.close();
       } catch {

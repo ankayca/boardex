@@ -15,7 +15,10 @@ export function Progress({ value, label = 'Progress' }: ProgressProps) {
       aria-valuenow={clamped}
       className="h-1 w-full overflow-hidden rounded-full bg-border"
     >
-      <div className="h-full rounded-full bg-accent" style={{ width: `${clamped}%` }} />
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-gentle ease-motion"
+        style={{ width: `${clamped}%` }}
+      />
     </div>
   );
 }

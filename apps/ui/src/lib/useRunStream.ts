@@ -1,8 +1,9 @@
 // Subscribe a component to one run's event stream for its lifetime (BIBLE D5):
-// connectRunStream wires live WS events plus HTTP replay-from-lastSeq into the run
-// store, and the socket closes when the component unmounts. Store entries are kept
-// across unmounts — events are immutable and the store dedupes by seq, so remounting
-// simply replays the delta.
+// connectRunStream loads the run replay-first over HTTP and attaches the live WS
+// only while the run is non-terminal (T5.2 — a terminal run renders entirely from
+// replay, no socket); everything closes when the component unmounts. Store entries
+// are kept across unmounts — events are immutable and the store dedupes by seq, so
+// remounting simply replays the delta.
 //
 // Returns the live WS connection status so the workspace can raise the amber
 // reconnecting bar on a drop (§7.3). Status is keyed by runId and reset to
@@ -13,15 +14,14 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useRunStore } from './runStore';
-import { connectRunStream } from './runStream';
-import type { WsConnectionStatus } from './ws';
+import { connectRunStream, type RunStreamStatus } from './runStream';
 
 interface StreamStatus {
   runId: string | undefined;
-  status: WsConnectionStatus;
+  status: RunStreamStatus;
 }
 
-export function useRunStream(runId: string | undefined): WsConnectionStatus {
+export function useRunStream(runId: string | undefined): RunStreamStatus {
   const [state, setState] = useState<StreamStatus>({ runId, status: 'connecting' });
   // Derived-state reset in render: React re-renders with the fresh state before
   // committing, so the stale status is discarded without ever painting.

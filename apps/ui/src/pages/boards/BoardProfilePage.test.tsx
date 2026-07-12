@@ -172,7 +172,9 @@ describe('/boards — the profile list', () => {
       'href',
       '/boards/bp_nucleo_f303re',
     );
-    expect(screen.getByRole('button', { name: 'New Profile' })).toBeInTheDocument();
+    // T6.1b: the header New Profile action moved to the shell's top bar
+    // (Shell.test); the list page itself carries no header button.
+    expect(screen.queryByRole('button', { name: 'New Profile' })).not.toBeInTheDocument();
   });
 
   it('offers the empty state when the runner knows no profiles', async () => {
@@ -180,7 +182,9 @@ describe('/boards — the profile list', () => {
     renderAt('/boards');
 
     expect(await screen.findByText('No board profiles yet')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'New Profile' })).toHaveLength(2);
+    // T6.1b: exactly the empty-state hero's button — the header action lives in
+    // the shell's top bar now.
+    expect(screen.getAllByRole('button', { name: 'New Profile' })).toHaveLength(1);
   });
 
   it('surfaces a failed fetch with a retry, not an empty list', async () => {

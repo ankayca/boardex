@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type { BenchDeviceState, CheckVerdict, RiskLevel, RunStatus } from '@boardex/contract';
+import type {
+  BenchDeviceState,
+  CheckVerdict,
+  RiskLevel,
+  RunStatus,
+  StepStatus,
+} from '@boardex/contract';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -10,7 +16,9 @@ import { EmptyState } from './EmptyState';
 import { KeyValue } from './KeyValue';
 import { LogViewer } from './LogViewer';
 import { Progress } from './Progress';
+import { RunStatusIcon } from './RunStatusIcon';
 import { StatusDot } from './StatusDot';
+import { StepStatusIcon } from './StepStatusIcon';
 
 // Typed against the contract enums so a contract change breaks typecheck here.
 const RISK_LEVELS: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
@@ -27,6 +35,24 @@ const RUN_STATUSES: RunStatus[] = [
   'stopped',
 ];
 const DEVICE_STATES: BenchDeviceState[] = ['online', 'offline', 'error'];
+const STEP_STATUSES: StepStatus[] = ['pending', 'active', 'succeeded', 'failed', 'skipped'];
+
+// Motion demo cycles — status flips a human would actually watch happen.
+const MOTION_STATUSES = [
+  'running',
+  'awaiting_approval',
+  'diagnosing',
+  'completed',
+  'failed',
+] as const satisfies readonly RunStatus[];
+const MOTION_PROGRESS = [0, 33, 66, 100] as const;
+const MOTION_DEVICE_STATES = ['online', 'offline', 'error'] as const satisfies readonly BenchDeviceState[];
+
+function useCycle<T>(values: readonly [T, ...T[]]): [T, () => void] {
+  const [index, setIndex] = useState(0);
+  const value = values[index % values.length] ?? values[0];
+  return [value, () => setIndex((i) => (i + 1) % values.length)];
+}
 
 function makeSampleLines(): string[] {
   return Array.from(
@@ -52,12 +78,25 @@ export default function DesignGalleryPage() {
   const [dangerConfirmOpen, setDangerConfirmOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logLines, setLogLines] = useState<string[]>(makeSampleLines);
+  const [motionStatus, cycleStatus] = useCycle(MOTION_STATUSES);
+  const [motionDevice, cycleDevice] = useCycle(MOTION_DEVICE_STATES);
+  const [motionProgress, cycleProgress] = useCycle(MOTION_PROGRESS);
 
   const appendLogLine = () =>
     setLogLines((prev) => [
       ...prev,
       `[${String(prev.length).padStart(4, '0')}] appended line ${prev.length}`,
     ]);
+
+  // Synthetic per-line timestamps (14:03:00 + one second per line) so the gallery
+  // exercises the T6.2 timestamp toggle and find-in-log header.
+  const logTimestamps = logLines.map((_, i) => {
+    const t = 3 * 60 + 22 + i;
+    const hh = 14 + Math.floor(t / 3600);
+    const mm = Math.floor((t % 3600) / 60);
+    const ss = t % 60;
+    return [hh, mm, ss].map((n) => String(n).padStart(2, '0')).join(':');
+  });
 
   return (
     <main className="min-h-screen bg-bg-app font-sans text-text-primary">
@@ -70,11 +109,71 @@ export default function DesignGalleryPage() {
           </p>
         </header>
 
+        <GallerySection title="Type scale & rhythm">
+          <Card className="space-y-3">
+            <p className="text-page font-semibold">Page title — 20/26, −0.017em</p>
+            <p className="text-section font-semibold">Section title — 16/22, −0.01em</p>
+            <p className="text-body">Body — 14/20. The plan executes against the bench.</p>
+            <p className="text-meta text-text-secondary">Meta — 13/18. Updated 2 minutes ago.</p>
+            <p className="text-label font-medium uppercase text-text-secondary">
+              Label — 11/16, +0.05em, uppercase
+            </p>
+          </Card>
+          <Card heading="Tabular numerals" className="max-w-md">
+            <p className="mb-3 text-meta text-text-secondary">
+              All numerals are tabular app-wide — measurement columns align in Inter and in mono.
+            </p>
+            <KeyValue label="I2C clock" value="99.611 kHz" mono />
+            <KeyValue label="I2C clock (retry)" value="101.337 kHz" mono />
+            <KeyValue label="Boot to prompt" value="1.042 s" mono />
+            <KeyValue label="Last seq" value="141" mono />
+          </Card>
+        </GallerySection>
+
+        <GallerySection title="Elevation">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
+              <p className="text-body font-medium">1 · subtle</p>
+              <p className="mt-1 text-meta text-text-secondary">Resting cards and panels.</p>
+            </div>
+            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-raised">
+              <p className="text-body font-medium">2 · raised</p>
+              <p className="mt-1 text-meta text-text-secondary">
+                Floating over content — popovers, jump-to-latest.
+              </p>
+            </div>
+            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-overlay">
+              <p className="text-body font-medium">3 · overlay</p>
+              <p className="mt-1 text-meta text-text-secondary">
+                Modal surfaces — dialogs and drawers.
+              </p>
+            </div>
+          </div>
+          <p className="text-meta text-text-secondary">
+            Depth still reads borders-first (§6.1) — shadows only separate layers.
+          </p>
+        </GallerySection>
+
+        <GallerySection title="Focus">
+          <p className="text-meta text-text-secondary">
+            Tab through: every interactive element gets the same 2px accent ring, offset 2px
+            (focus-visible only — pointer clicks don&apos;t ring). Text fields keep their
+            accent-border focus instead.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="primary">Primary</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="danger">Danger</Button>
+            <Button variant="ghost">Ghost</Button>
+          </div>
+        </GallerySection>
+
         <GallerySection title="Button">
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="primary">Approve &amp; Continue</Button>
             <Button variant="secondary">Review Diff</Button>
             <Button variant="danger">Stop Run</Button>
+            <Button variant="outline-danger">Stop Run</Button>
             <Button variant="ghost">Edit task</Button>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -87,10 +186,18 @@ export default function DesignGalleryPage() {
             <Button variant="danger" disabled>
               Stop Run
             </Button>
+            <Button variant="outline-danger" disabled>
+              Stop Run
+            </Button>
             <Button variant="ghost" disabled>
               Edit task
             </Button>
           </div>
+          <p className="text-meta text-text-secondary">
+            outline-danger is the resting form for ever-present destructive controls (Stop
+            Run) — solid red only under hover intent. Disabled buttons keep 60% presence so
+            a gated CTA never vanishes.
+          </p>
         </GallerySection>
 
         <GallerySection title="Card">
@@ -137,6 +244,36 @@ export default function DesignGalleryPage() {
           </div>
         </GallerySection>
 
+        <GallerySection title="StepStatusIcon">
+          <div className="flex flex-wrap items-center gap-6">
+            {STEP_STATUSES.map((status) => (
+              <span key={status} className="inline-flex items-center gap-1.5">
+                <StepStatusIcon status={status} />
+                <span className="text-meta text-text-secondary">{status}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-meta text-text-secondary">
+            Timeline glyphs — scan by shape, not color alone. D14 absolute: green check =
+            succeeded only, red cross = failed only; active pulses on the accent.
+          </p>
+        </GallerySection>
+
+        <GallerySection title="RunStatusIcon">
+          <div className="flex flex-wrap items-center gap-5">
+            {RUN_STATUSES.map((status) => (
+              <span key={status} className="inline-flex items-center gap-1.5">
+                <RunStatusIcon status={status} />
+                <span className="text-meta text-text-secondary">{status}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-meta text-text-secondary">
+            Run-status glyphs for dense surfaces (sidebar, Home table) — Badge&apos;s D14
+            mapping as shape: amber attention exactly where a human action exists.
+          </p>
+        </GallerySection>
+
         <GallerySection title="KeyValue">
           <Card className="max-w-md">
             <KeyValue label="Board" value="Nucleo-F303RE" />
@@ -155,11 +292,17 @@ export default function DesignGalleryPage() {
         </GallerySection>
 
         <GallerySection title="LogViewer">
-          <LogViewer lines={logLines} height={240} label="Build log" />
+          {/* T6.2: header hosts find-in-log; timestamps prop enables the toggle. */}
+          <LogViewer
+            lines={logLines}
+            timestamps={logTimestamps}
+            maxHeightPx={240}
+            label="Build log"
+          />
           <Button variant="secondary" onClick={appendLogLine}>
             Append line (auto-follow demo)
           </Button>
-          <LogViewer lines={[]} height={96} label="Empty log" />
+          <LogViewer lines={[]} label="Empty log" />
         </GallerySection>
 
         <GallerySection title="EmptyState">
@@ -185,6 +328,43 @@ export default function DesignGalleryPage() {
           <Button variant="secondary" onClick={() => setDrawerOpen(true)}>
             Open drawer
           </Button>
+        </GallerySection>
+
+        <GallerySection title="Motion">
+          <p className="text-meta text-text-secondary">
+            Tokens: fast 120ms (state flips) · medium 200ms (drawer/dialog surfaces) · gentle
+            360ms (progress). All motion collapses under prefers-reduced-motion — final states
+            still land.
+          </p>
+          <Card heading="Badge state flip — fast" className="max-w-md">
+            <div className="flex items-center justify-between gap-4">
+              <Badge kind="status" value={motionStatus} />
+              <Button variant="secondary" onClick={cycleStatus}>
+                Advance state
+              </Button>
+            </div>
+          </Card>
+          <Card heading="StatusDot transition — fast" className="max-w-md">
+            <div className="flex items-center justify-between gap-4">
+              <StatusDot state={motionDevice} label={`Kingst LA2016 (${motionDevice})`} />
+              <Button variant="secondary" onClick={cycleDevice}>
+                Cycle device state
+              </Button>
+            </div>
+          </Card>
+          <Card heading="Progress — gentle" className="max-w-md">
+            <Progress value={motionProgress} label={`Progress ${motionProgress}%`} />
+            <div className="mt-4 flex items-center justify-between gap-4">
+              <span className="font-mono text-meta text-text-secondary">{motionProgress}%</span>
+              <Button variant="secondary" onClick={cycleProgress}>
+                Advance progress
+              </Button>
+            </div>
+          </Card>
+          <p className="text-meta text-text-secondary">
+            Drawer (medium slide) and ConfirmDialog (fast entrance) demo their transitions from
+            their sections above.
+          </p>
         </GallerySection>
       </div>
 

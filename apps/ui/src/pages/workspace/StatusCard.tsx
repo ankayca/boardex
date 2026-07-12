@@ -6,8 +6,9 @@
 // always visible while the run is non-terminal, behind a ConfirmDialog.
 import { useEffect, useState } from 'react';
 import type { Run } from '@boardex/contract';
-import { Badge, Button, ConfirmDialog } from '../../design';
+import { Badge, Button, ConfirmDialog, Progress } from '../../design';
 import { elapsedLabel, isTerminalStatus } from './elapsed';
+import type { PlanProgress } from './progress';
 
 export interface StatusCardProps {
   run: Run;
@@ -15,6 +16,8 @@ export interface StatusCardProps {
   endedAt: string | undefined;
   /** RunView.warnings — contract violations the reducer observed. */
   warnings: readonly string[];
+  /** Plan-step completion (T6.2); rendered only when the plan has steps. */
+  progress: PlanProgress;
   /** Stop command in flight, or accepted and awaiting the run.stopped event. */
   stopping: boolean;
   stopError: string | null;
@@ -63,7 +66,15 @@ function useNow(active: boolean): number {
   return now;
 }
 
-export function StatusCard({ run, endedAt, warnings, stopping, stopError, onStop }: StatusCardProps) {
+export function StatusCard({
+  run,
+  endedAt,
+  warnings,
+  progress,
+  stopping,
+  stopError,
+  onStop,
+}: StatusCardProps) {
   const terminal = isTerminalStatus(run.status);
   const now = useNow(!terminal);
   const [confirming, setConfirming] = useState(false);
@@ -72,9 +83,12 @@ export function StatusCard({ run, endedAt, warnings, stopping, stopError, onStop
       ? elapsedLabel(run.createdAt, Date.parse(endedAt))
       : null
     : elapsedLabel(run.createdAt, now);
+  const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
     <section aria-label="Run status" className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
+      {/* One instrument block (T6.2): status, elapsed, and plan progress read as a
+          single readout, with Stop as the block's escape hatch. */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-section font-semibold text-text-primary">Status</h2>
         <Badge kind="status" value={run.status} />
@@ -84,6 +98,23 @@ export function StatusCard({ run, endedAt, warnings, stopping, stopError, onStop
           Elapsed <span className="font-mono text-text-primary">{elapsed}</span>
         </p>
       )}
+      {progress.total > 0 && (
+        // "Verified" (not "plan progress") per the latest-execution-wins rider: the
+        // count is plan steps whose latest execution succeeded — steps proven, not
+        // merely attempted.
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="text-label uppercase text-text-secondary">Verified</span>
+            <span className="font-mono text-meta text-text-primary">
+              {progress.completed} / {progress.total}
+            </span>
+          </div>
+          <Progress
+            value={percent}
+            label={`Verified: ${progress.completed} of ${progress.total} plan steps`}
+          />
+        </div>
+      )}
       <ContractWarnings warnings={warnings} />
       {stopError && (
         <p role="alert" className="mt-3 rounded-card border border-warn bg-warn-bg px-3 py-2 text-meta text-warn">
@@ -91,14 +122,17 @@ export function StatusCard({ run, endedAt, warnings, stopping, stopError, onStop
         </p>
       )}
       {!terminal && (
-        <Button
-          variant="danger"
-          className="mt-4 w-full"
-          disabled={stopping}
-          onClick={() => setConfirming(true)}
-        >
-          {stopping ? 'Stopping…' : 'Stop Run'}
-        </Button>
+        // T6.1c: outline-danger at natural width, right-aligned — an ever-present
+        // escape hatch, not a full-width alarm bar. Red still means stop only (D14).
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="outline-danger"
+            disabled={stopping}
+            onClick={() => setConfirming(true)}
+          >
+            {stopping ? 'Stopping…' : 'Stop Run'}
+          </Button>
+        </div>
       )}
       <ConfirmDialog
         open={confirming}

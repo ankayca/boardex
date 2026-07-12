@@ -20,10 +20,14 @@ export interface DiagnosisView extends Diagnosis {
 }
 
 // One step.log line with the stream it arrived on (§5.2) — the per-stream log tabs
-// in the workspace route on this.
+// in the workspace route on this. `ts` is the emitting event's envelope ts (§5.1):
+// a batched step.log (payload.lines) shares one ts across its lines, since the
+// contract times events, not individual lines. The workspace LogViewer surfaces it
+// as the optional per-line timestamp column (T6.2).
 export interface StepLogLine {
   stream: StepLogStream;
   line: string;
+  ts: string;
 }
 
 // Where a fix-loop iteration begins in the step list (from run.iteration_started,
@@ -225,7 +229,7 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
       case 'step.log': {
         const { payload } = event;
         const rawLines = 'lines' in payload ? payload.lines : [payload.line];
-        const lines = rawLines.map((line) => ({ stream: payload.stream, line }));
+        const lines = rawLines.map((line) => ({ stream: payload.stream, line, ts: event.ts }));
         const existing = logsByStep.get(payload.stepId);
         if (existing) {
           existing.push(...lines);

@@ -30,8 +30,10 @@ async function waitFor(pred: () => boolean, timeoutMs = 20000): Promise<void> {
 
 // Materialize the per-step, per-stream log content of a view as plain data, so two
 // stores can be compared exactly.
-function logSnapshot(view: RunView): Record<string, { stream: StepLogStream; line: string }[]> {
-  const snapshot: Record<string, { stream: StepLogStream; line: string }[]> = {};
+function logSnapshot(
+  view: RunView,
+): Record<string, { stream: StepLogStream; line: string; ts: string }[]> {
+  const snapshot: Record<string, { stream: StepLogStream; line: string; ts: string }[]> = {};
   for (const [stepId, lines] of view.logsByStep) {
     snapshot[stepId] = lines.map((entry) => ({ ...entry }));
   }

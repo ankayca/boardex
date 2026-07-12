@@ -67,16 +67,36 @@ describe('reduceRun — happy transition sequence', () => {
     });
     expect(view.artifacts).toEqual([sampleArtifact]);
     expect(view.checks).toEqual([sampleCheck]);
-    // step.log lines keep their stream (§5.2) — the per-stream log tabs route on it.
+    // step.log lines keep their stream (§5.2) — the per-stream log tabs route on it —
+    // and carry the emitting event's envelope ts (T6.2, the LogViewer timestamp
+    // column). The batched event (seq 7) shares its ts across both of its lines.
     expect(view.logsByStep.get('step_01')).toEqual([
-      { stream: 'build', line: 'CC main.o' },
-      { stream: 'build', line: 'LD firmware.elf' },
-      { stream: 'build', line: 'text 9184 data 120 bss 1648' },
+      { stream: 'build', line: 'CC main.o', ts: TS },
+      { stream: 'build', line: 'LD firmware.elf', ts: TS },
+      { stream: 'build', line: 'text 9184 data 120 bss 1648', ts: TS },
     ]);
     expect(view.iterations).toEqual([]);
     expect(view.riskSummary).toBe('One medium-risk hardware action (flash).');
     expect(view.lastSeq).toBe(11);
     expect(view.warnings).toEqual([]);
+  });
+
+  it('stamps each log line with its emitting event ts; a batch shares one ts', () => {
+    // T6.2: the LogViewer timestamp column reads StepLogLine.ts. Distinct events
+    // carry distinct envelope ts; a batched step.log (payload.lines) shares one.
+    const T1 = '2026-07-07T14:03:22.000Z';
+    const T2 = '2026-07-07T14:03:25.500Z';
+    const view = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'step.started', { step: sampleRunStep }),
+      { ...envelope(3, 'step.log', { stepId: 'step_01', stream: 'serial', line: 'TEMP=24.3' }), ts: T1 },
+      { ...envelope(4, 'step.log', { stepId: 'step_01', stream: 'serial', lines: ['TEMP=24.4', 'HUM=41.2'] }), ts: T2 },
+    ]);
+    expect(view.logsByStep.get('step_01')).toEqual([
+      { stream: 'serial', line: 'TEMP=24.3', ts: T1 },
+      { stream: 'serial', line: 'TEMP=24.4', ts: T2 },
+      { stream: 'serial', line: 'HUM=41.2', ts: T2 },
+    ]);
   });
 
   it('marks a failed step failed', () => {
@@ -404,9 +424,9 @@ describe('reduceRun — per-stream logs (BIBLE v1.4 §5.4)', () => {
       envelope(5, 'step.log', { stepId: 'step_01', stream: 'serial', line: 'TEMP=24.3' }),
     ]);
     expect(view.logsByStep.get('step_01')).toEqual([
-      { stream: 'agent', line: 'Flashing…' },
-      { stream: 'flash', line: 'Erased 2 sectors' },
-      { stream: 'serial', line: 'TEMP=24.3' },
+      { stream: 'agent', line: 'Flashing…', ts: TS },
+      { stream: 'flash', line: 'Erased 2 sectors', ts: TS },
+      { stream: 'serial', line: 'TEMP=24.3', ts: TS },
     ]);
   });
 });

@@ -4,6 +4,7 @@ import Layout from './shell/Layout';
 import HomePage from './pages/home/HomePage';
 import NewRunPage from './pages/composer/NewRunPage';
 import RunPage from './pages/composer/RunPage';
+import ReportPage from './pages/report/ReportPage';
 import BoardsPage from './pages/boards/BoardsPage';
 import BoardProfilePage from './pages/boards/BoardProfilePage';
 
@@ -24,6 +25,9 @@ export default function App() {
         {/* Evidence Detail (§7.4) is a drawer over the run page, not its own screen:
             the same RunPage renders, with RunPage opening the drawer on this path. */}
         <Route path="/runs/:id/evidence" element={<RunPage />} />
+        {/* Validation Report (§7.6) is its own screen — a full RENDER of the run's
+            report_md artifact, not a drawer over the workspace. */}
+        <Route path="/runs/:id/report" element={<ReportPage />} />
         <Route path="/boards" element={<BoardsPage />} />
         {/* Ordered: /boards/new is the Board Profile Builder's new-profile state
             (§7.5), not a profile whose id happens to be "new". */}

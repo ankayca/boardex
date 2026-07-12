@@ -95,8 +95,9 @@ describe('HomePage (BIBLE §7.1)', () => {
     listRuns.mockResolvedValue([]);
     renderHome();
     expect(await screen.findByText('No runs yet')).toBeInTheDocument();
-    // Both the header and the hero point at New Run.
-    expect(screen.getAllByRole('button', { name: 'New Run' }).length).toBeGreaterThanOrEqual(2);
+    // T6.1b: the header New Run action moved to the shell's top bar (Shell.test),
+    // so the page itself carries exactly the hero's button.
+    expect(screen.getAllByRole('button', { name: 'New Run' })).toHaveLength(1);
   });
 
   it('orders needs-attention runs above active and terminal ones', async () => {
@@ -107,7 +108,10 @@ describe('HomePage (BIBLE §7.1)', () => {
     ]);
     renderHome();
 
-    const rows = await screen.findAllByRole('listitem');
+    // T6.1b: the run list is a real table now — rows live in the body rowgroup.
+    const table = await screen.findByRole('table');
+    const body = within(table).getAllByRole('rowgroup')[1]!;
+    const rows = within(body).getAllByRole('row');
     expect(rows.map((r) => within(r).getByText(/^Run /).textContent)).toEqual([
       'Run attn',
       'Run busy',

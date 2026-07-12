@@ -58,6 +58,9 @@ const statusLabels: Record<RunStatus, string> = {
   stopped: 'Stopped',
 };
 
+// T6.1 label discipline: badges set in the 11px uppercase label step with
+// positive tracking (the case transform is CSS-only — labels stay readable
+// text for tests and screen readers). Color flips transition at motion-fast.
 export type BadgeProps =
   | { kind: 'risk'; value: RiskLevel }
   | { kind: 'verdict'; value: CheckVerdict }
@@ -75,7 +78,7 @@ export function Badge(props: BadgeProps) {
     <span
       data-kind={props.kind}
       data-value={props.value}
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-meta font-medium ${classes}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-label font-medium uppercase transition-colors duration-fast ease-motion ${classes}`}
     >
       {label}
     </span>

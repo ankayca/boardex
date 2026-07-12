@@ -129,6 +129,30 @@ const healthyBench: BenchStatus = {
   })),
 };
 
+describe('completed-run report link (§7.6)', () => {
+  const completedWithReport = (): RunView =>
+    viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'artifact.created', {
+        artifact: { ...artifact('art_report'), kind: 'report_md', label: 'Validation report' },
+      }),
+      envelope(3, 'run.completed', { summary: 'All checks passed.', reportArtifactId: 'art_report' }),
+    ]);
+
+  it('links to the Validation Report screen once the report_md artifact exists', () => {
+    renderRail(completedWithReport());
+    expect(screen.getByRole('link', { name: 'Open Validation Report' })).toHaveAttribute(
+      'href',
+      `/runs/${RUN_ID}/report`,
+    );
+  });
+
+  it('renders no report link for a run that never produced one (fail-closed)', () => {
+    renderRail(stoppedView());
+    expect(screen.queryByRole('link', { name: 'Open Validation Report' })).not.toBeInTheDocument();
+  });
+});
+
 describe('stop with confirm + 409', () => {
   it('stops only after the ConfirmDialog confirms, then holds the button disabled', async () => {
     const user = userEvent.setup();

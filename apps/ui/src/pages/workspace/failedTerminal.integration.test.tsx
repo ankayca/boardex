@@ -2,7 +2,10 @@
 // (T5.0/F9+F10): the fix lands, iteration 2's checks fail again, the run ends in
 // run.failed with no further fix approval — and the workspace renders §7.3's
 // terminal state: muted summary (Failed badge, frozen elapsed, no Stop Run) with
-// the evidence retained (all three check chips, pass/fail/fail).
+// the evidence retained (all three check chips, pass/fail/fail). This is also the
+// failed leg of T5.2's cold-load matrix: the run is driven to terminal over pure
+// HTTP and opened cold, so the workspace must come entirely from event replay —
+// no run-socket construction, no reconnecting bar, duration frozen at endedAt.
 //
 // Everything that reads lib/config is imported dynamically AFTER the runner is up
 // and VITE_RUNNER_URL is stubbed, so the api singleton binds to the ephemeral port.
@@ -15,18 +18,29 @@ import { createMockRunner, type MockRunner } from '@boardex/mock-runner';
 import { reduceRun } from '@boardex/contract';
 import type { ComponentType } from 'react';
 import type { ApiClient } from '../../lib/api';
+import { elapsedLabel } from './elapsed';
 
 let runner: MockRunner;
 let App: ComponentType;
 let api: ApiClient;
 const hadWebSocket = 'WebSocket' in globalThis;
 
+// Every socket the app opens, by URL (T5.2): a terminal cold-load must never
+// construct a run socket (`?runId=`); the global dashboard stream is legitimate.
+const socketUrls: string[] = [];
+class RecordingWebSocket extends WebSocket {
+  constructor(url: string) {
+    socketUrls.push(String(url));
+    super(url);
+  }
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 beforeAll(async () => {
   runner = await createMockRunner({ port: 0, speed: 200, failVariant: true });
   vi.stubEnv('VITE_RUNNER_URL', runner.url);
-  (globalThis as Record<string, unknown>).WebSocket = WebSocket;
+  (globalThis as Record<string, unknown>).WebSocket = RecordingWebSocket;
   App = (await import('../../App')).default;
   api = (await import('../../lib/api')).api;
 });
@@ -80,7 +94,9 @@ describe('failed-terminal workspace (--fail-variant, integration)', () => {
       boardProfileId: 'bp_nucleo_f303re',
     });
     await driveToTerminal(runId);
+    const view = reduceRun(await api.getRunEvents(runId))!;
 
+    socketUrls.length = 0;
     renderWorkspace(runId);
 
     // Terminal status: the Failed badge in the status card, frozen elapsed, and —
@@ -92,6 +108,9 @@ describe('failed-terminal workspace (--fail-variant, integration)', () => {
     );
     expect(within(statusCard).getByText('Failed')).toBeInTheDocument();
     expect(within(statusCard).getByText(/Elapsed/)).toBeInTheDocument();
+    // Frozen duration (§5.4 v1.5): exactly createdAt → endedAt, no wall clock.
+    const frozen = elapsedLabel(view.run.createdAt, Date.parse(view.endedAt!))!;
+    expect(within(statusCard).getByText(frozen)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /stop run/i })).not.toBeInTheDocument();
 
     // A conforming stream produced zero contract warnings.
@@ -109,5 +128,16 @@ describe('failed-terminal workspace (--fail-variant, integration)', () => {
 
     // The timeline (the run's history) is still on screen, not blanked.
     expect(screen.getByRole('list', { name: 'Run timeline' })).toBeInTheDocument();
+
+    // The fail variant produces no report_md: Open Report degrades to an inert
+    // action, never a dead link.
+    expect(screen.queryByRole('link', { name: 'Open Report' })).not.toBeInTheDocument();
+    expect(within(band).getByText('Open Report')).toBeInTheDocument();
+
+    // T5.2: everything above rendered from HTTP replay alone — no run socket was
+    // attempted (D5; a runner refusing sockets for archived runs works perfectly),
+    // and a terminal load never shows the reconnecting bar.
+    expect(socketUrls.filter((url) => url.includes('runId='))).toEqual([]);
+    expect(screen.queryByText(/Reconnecting to the runner/)).not.toBeInTheDocument();
   }, 60000);
 });

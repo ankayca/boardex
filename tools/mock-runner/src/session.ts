@@ -43,6 +43,28 @@ function rekey(event: Event, toRunId: string): Event {
   return EventSchema.parse(JSON.parse(json));
 }
 
+// A string that IS an ISO 8601 datetime, entire — log lines and values that merely
+// contain digits never match, so only real timestamps shift.
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
+
+// Deep-shift every ISO timestamp in the event — the envelope ts AND the payload
+// ones (run.createdAt/updatedAt, approval requestedAt, artifact createdAt, …).
+// Elapsed reads payload.run.createdAt, so shifting the envelope alone would lie.
+function shiftTimestamps(value: unknown, offsetMs: number): unknown {
+  if (typeof value === 'string' && ISO_DATETIME.test(value)) {
+    return new Date(Date.parse(value) + offsetMs).toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => shiftTimestamps(item, offsetMs));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, shiftTimestamps(entry, offsetMs)]),
+    );
+  }
+  return value;
+}
+
 export class RunSession {
   readonly id: string;
   private readonly entries: readonly FixtureEntry[];
@@ -61,6 +83,10 @@ export class RunSession {
   private pendingGate: PendingGate | undefined;
   // Timers waiting on delayMs; woken early when the session terminates.
   private readonly wakeups = new Set<() => void>();
+  // §5.6 (T6.1b): replayed timestamps rebase to replay start — run.created ≈ the
+  // POST /runs moment, inter-event deltas preserved — so elapsed reads true
+  // during demos. The fixture files stay authored-time; only emission shifts.
+  private readonly tsOffsetMs: number;
 
   constructor(options: RunSessionOptions) {
     this.id = options.id;
@@ -78,6 +104,8 @@ export class RunSession {
     this.title = run?.title ?? 'Run';
     this.boardProfileId = run?.boardProfileId ?? 'bp_nucleo_f303re';
     this.updatedAt = new Date().toISOString();
+    const firstTs = this.entries[0] ? Date.parse(this.entries[0].event.ts) : NaN;
+    this.tsOffsetMs = Number.isFinite(firstTs) ? Date.now() - firstTs : 0;
   }
 
   // Kick off replay. Fire-and-forget: the loop drives itself off timers and gates.
@@ -136,7 +164,7 @@ export class RunSession {
     if (!this.log.some((event) => event.type === 'run.created')) {
       const created = this.entries.find((entry) => entry.event.type === 'run.created');
       if (created) {
-        this.emit(rekey(created.event, this.id));
+        this.emit(this.rebase(rekey(created.event, this.id)));
       }
     }
     this.emit(this.make('run.status_changed', { status: 'stopped', reason: 'Stopped by user' }));
@@ -147,13 +175,18 @@ export class RunSession {
 
   // --- internals -----------------------------------------------------------
 
+  // Shift a fixture event's authored timestamps into this replay's timeline (§5.6).
+  private rebase(event: Event): Event {
+    return EventSchema.parse(shiftTimestamps(event, this.tsOffsetMs));
+  }
+
   private async replay(): Promise<void> {
     for (const entry of this.entries) {
       if (this.terminated) return;
       await this.sleep(entry.delayMs / this.speed);
       if (this.terminated) return;
 
-      const event = rekey(entry.event, this.id);
+      const event = this.rebase(rekey(entry.event, this.id));
       this.emit(event);
 
       if (event.type === 'run.plan_generated') {
