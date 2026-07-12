@@ -78,6 +78,18 @@ async function settle(): Promise<void> {
   await sleep(10);
 }
 
+// T5.2 made the load replay-first: connectRunStream now attaches the socket only
+// AFTER the primary HTTP replay resolves (and only because these streams are
+// non-terminal), so the socket exists a microtask later, not synchronously.
+async function socketAttached(): Promise<FakeSocket> {
+  for (let waited = 0; waited < 1000; waited += 5) {
+    const socket = FakeSocket.instances[0];
+    if (socket) return socket;
+    await sleep(5);
+  }
+  throw new Error('socket was never constructed');
+}
+
 describe('unknown event mid-stream (audit F1 mutation)', () => {
   it('live over WS: the view stays live past the unknown seq, with no reconnect', async () => {
     FakeSocket.instances = [];
@@ -92,9 +104,9 @@ describe('unknown event mid-stream (audit F1 mutation)', () => {
       heartbeatTimeoutMs: 0,
       onStatusChange: (status) => statuses.push(status),
     });
-    const socket = FakeSocket.instances[0] as FakeSocket;
+    const socket = await socketAttached();
     socket.fireOpen();
-    await settle(); // let the (empty) initial replay flush
+    await settle(); // let the (empty) handshake replay flush
 
     for (const event of rawEvents) socket.fireMessage(JSON.stringify(event));
 
@@ -125,7 +137,7 @@ describe('unknown event mid-stream (audit F1 mutation)', () => {
       heartbeatTimeoutMs: 0,
       onStatusChange: (status) => statuses.push(status),
     });
-    (FakeSocket.instances[0] as FakeSocket).fireOpen();
+    (await socketAttached()).fireOpen();
     await settle();
 
     const view = store.getState().runs[RUN_ID]?.view;
