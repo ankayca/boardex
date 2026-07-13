@@ -7,6 +7,8 @@ import type {
   RunStatus,
   StepStatus,
 } from '@boardex/contract';
+import { CommandPalette } from '../shell/CommandPalette';
+import { ShortcutsHelp } from '../shell/ShortcutsHelp';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -77,6 +79,8 @@ export default function DesignGalleryPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dangerConfirmOpen, setDangerConfirmOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [logLines, setLogLines] = useState<string[]>(makeSampleLines);
   const [motionStatus, cycleStatus] = useCycle(MOTION_STATUSES);
   const [motionDevice, cycleDevice] = useCycle(MOTION_DEVICE_STATES);
@@ -330,6 +334,28 @@ export default function DesignGalleryPage() {
           </Button>
         </GallerySection>
 
+        <GallerySection title="Command palette">
+          <p className="text-meta text-text-secondary">
+            ⌘K / Ctrl+K app-wide (T6.4): a centered overlay — overlay elevation, medium motion
+            in, instant dismiss. Fuzzy search over navigation, recent runs, board profiles, and
+            in-run evidence; arrows + Enter to navigate, Esc to close. Entries navigate to their
+            surface and never execute an approval, stop, or any state-changing command.
+          </p>
+          <Button variant="secondary" onClick={() => setPaletteOpen(true)}>
+            Open command palette
+          </Button>
+        </GallerySection>
+
+        <GallerySection title="Keyboard shortcuts">
+          <p className="text-meta text-text-secondary">
+            The <code className="font-mono">?</code> help overlay (T6.4): every global and
+            in-palette shortcut in one place. Same overlay treatment as the palette.
+          </p>
+          <Button variant="secondary" onClick={() => setShortcutsOpen(true)}>
+            Open shortcuts help
+          </Button>
+        </GallerySection>
+
         <GallerySection title="Motion">
           <p className="text-meta text-text-secondary">
             Tokens: fast 120ms (state flips) · medium 200ms (drawer/dialog surfaces) · gentle
@@ -391,6 +417,8 @@ export default function DesignGalleryPage() {
         <KeyValue label="Flash command" value="pyocd flash build/firmware.elf" mono />
         <KeyValue label="Max iterations" value="3" />
       </Drawer>
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
     </main>
   );
 }
