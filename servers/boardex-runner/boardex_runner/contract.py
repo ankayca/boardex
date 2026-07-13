@@ -128,3 +128,18 @@ def validate_artifact_content(kind: str, content: Any) -> None:
 def validate_command_body(definition: str, body: Any) -> bool:
     """Check an inbound request body against a commands.schema.json definition."""
     return not any(_validator("commands.schema.json", definition).iter_errors(body))
+
+
+def definition_errors(definition: str, payload: Any) -> list[str]:
+    """Human-readable errors for one events.schema.json definition ([] = valid).
+
+    The agent bench validates model-authored entity payloads (PlanStep,
+    MeasurementCheck, Diagnosis) BEFORE building an event around them, so the
+    schema errors can be returned to the model as a retry instruction instead
+    of dying inside the emit path.
+    """
+    validator = _validator("events.schema.json", definition)
+    return [
+        f"{'/'.join(str(p) for p in err.absolute_path) or '<root>'}: {err.message}"
+        for err in sorted(validator.iter_errors(payload), key=str)
+    ]
