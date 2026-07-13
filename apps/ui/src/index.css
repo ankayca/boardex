@@ -155,6 +155,12 @@ body {
 .animate-dialog-in {
   animation: dialog-in var(--motion-fast) var(--ease-entrance);
 }
+/* T6.4 command palette + shortcuts overlays: the same dialog-in keyframe, at the
+   medium (surface) duration — "medium motion in" per the task; dismissal is instant
+   (no exit class), the ConfirmDialog precedent. No new keyframe/duration/easing. */
+.animate-palette-in {
+  animation: dialog-in var(--motion-medium) var(--ease-entrance);
+}
 .animate-step-pulse {
   animation: step-active-pulse 2s var(--ease-standard) infinite;
 }
