@@ -4,6 +4,16 @@ and no configuration path — board profile, bench config, or environment — ca
 remove it. A gated call parks on the engine's approval gate BEFORE the MCP
 invocation; rejection returns a refusal result to the model and ends the run
 as stopped.
+
+The floor's contract rests on two explicit dependencies:
+
+(a) The floor is destructive-only by design. Debug-control tools (halt, step,
+    breakpoints, register/memory reads) are ungated; whether ``halt_target``
+    on a live system counts as destructive is pending a backend-owner ruling.
+(b) The naming convention is load-bearing: any future destructive MCP tool
+    MUST either carry one of the risk name prefixes below or declare a
+    mutation verb on the first line of its description. A destructive tool
+    that does neither silently bypasses the floor.
 """
 
 from __future__ import annotations
@@ -37,8 +47,8 @@ def is_risk_gated(tool_name: str, description: str | None) -> bool:
         return True
     if tool_name in RISK_NAMES:
         return True
-    first_line = (description or "").strip().splitlines()[0] if description else ""
-    return bool(_MUTATION_VERBS.search(first_line))
+    first_line = (description or "").strip().splitlines()[:1]
+    return bool(first_line and _MUTATION_VERBS.search(first_line[0]))
 
 
 def risk_level_for(tool_name: str) -> str:

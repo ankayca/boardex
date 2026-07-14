@@ -56,6 +56,13 @@ def test_risk_gate_floor() -> None:
     )
     assert not is_risk_gated("build_firmware", BUILD_DESC)
     assert not is_risk_gated("read_memory", "Read ``length`` bytes from ``address``.")
+    # whitespace-only descriptions must not raise — the floor is a safety
+    # classifier and has no failure mode
+    assert not is_risk_gated("some_tool", "   ")
+    assert not is_risk_gated("some_tool", "\n\n")
+    assert not is_risk_gated("some_tool", None)
+    # ...and a risky description still gates after leading blank lines
+    assert is_risk_gated("some_tool", "\n\nErases the boot sector.")
 
 
 def test_deterministic_loop_completes_through_the_wire_layer(task_repo: Path) -> None:
