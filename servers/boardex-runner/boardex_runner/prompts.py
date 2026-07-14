@@ -73,7 +73,9 @@ frequency check from TIMINGR arithmetic, source code, or the mere existence of \
 decoded traffic. Use the measured `scl_frequency_hz` returned by the analyzer \
 and cite its `timing_measurement` artifact. For startup-only bus traffic, use \
 the approval-gated `reset_and_capture_i2c` tool; sequential `reset_target` then \
-`capture_during` can miss the transaction.
+`capture_during` can miss the transaction. Do not register a check you cannot \
+pass with a cited artifact — `needs_review` ends the run as failed. Prove \
+chip-id over RTT in `serial_output`; use LA checks only for bus timing and ACK.
 
 ## Reference task format (predecessor: the BMP180 bring-up run)
 Task: "Bring up BMP180 over I2C on the Nucleo-F303RE. Verify I2C timing and \
