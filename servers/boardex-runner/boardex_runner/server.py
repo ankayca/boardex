@@ -38,11 +38,16 @@ class RunnerApp:
         recorder: FixtureRecorder | None = None,
         board_profiles: list[dict[str, Any]] | None = None,
         bench_status: dict[str, Any] | None = None,
+        engine_cls: type[RunEngine] = RunEngine,
+        models: list[str] | None = None,
     ) -> None:
         self.bench_factory = bench_factory
         self.clock_factory = clock_factory
         self.artifacts = artifacts or ArtifactStore()
         self.recorder = recorder
+        self.engine_cls = engine_cls
+        # v2.1 capabilities.models; None => no model choice advertised (§5.3).
+        self.models = models
         self.runs: dict[str, RunEngine] = {}
         self.board_profiles: dict[str, dict[str, Any]] = {
             str(profile["id"]): profile
@@ -80,14 +85,16 @@ class RunnerApp:
 
     # -- run lifecycle ---------------------------------------------------------------
 
-    def create_run(self, task_prompt: str, board_profile_id: str) -> str:
+    def create_run(
+        self, task_prompt: str, board_profile_id: str, model: str | None = None
+    ) -> str:
         run_id = new_run_id()
         profile = self.board_profiles.get(board_profile_id)
         if profile is None:
             # Tolerant like the mock: an unknown profile falls back to the
             # canned one rather than failing run creation.
             profile = next(iter(self.board_profiles.values()))
-        engine = RunEngine(
+        engine = self.engine_cls(
             run_id=run_id,
             task_prompt=task_prompt,
             profile=profile,
@@ -95,6 +102,7 @@ class RunnerApp:
             clock=self.clock_factory(),
             artifacts=self.artifacts,
             on_event=lambda event, _rid=run_id: self.dispatch(self.runs[_rid], event),
+            model=model,
         )
         self.runs[run_id] = engine
         if self.recorder is not None and self._recorded_run is None:
@@ -152,11 +160,14 @@ def build_app(state: RunnerApp) -> web.Application:
         return web.Response(status=204, headers=_cors(request))
 
     async def health(request: web.Request) -> web.Response:
-        return _json(
-            request,
-            200,
-            {"ok": True, "contractVersion": CONTRACT_VERSION, "runnerKind": "real"},
-        )
+        payload: dict[str, Any] = {
+            "ok": True,
+            "contractVersion": CONTRACT_VERSION,
+            "runnerKind": "real",
+        }
+        if state.models:
+            payload["capabilities"] = {"models": state.models}
+        return _json(request, 200, payload)
 
     async def bench(request: web.Request) -> web.Response:
         return _json(request, 200, state.bench_status())
@@ -188,7 +199,21 @@ def build_app(state: RunnerApp) -> web.Application:
             or not isinstance(body.get("boardProfileId"), str)
         ):
             return _error(request, 400, "invalid create-run request")
-        run_id = state.create_run(body["taskPrompt"], body["boardProfileId"])
+        model = body.get("model")
+        if model is not None and not isinstance(model, str):
+            return _error(request, 400, "invalid create-run request")
+        if state.models is not None:
+            # A model outside the advertised list conflicts with the runner's
+            # capabilities (409, like any command invalid against server state).
+            if model is None:
+                model = state.models[0]
+            elif model not in state.models:
+                return _json(
+                    request,
+                    409,
+                    {"error": f'model "{model}" is not in this runner\'s advertised model list'},
+                )
+        run_id = state.create_run(body["taskPrompt"], body["boardProfileId"], model)
         return _json(request, 200, {"runId": run_id})
 
     def _engine(request: web.Request) -> RunEngine | None:
@@ -321,11 +346,13 @@ def build_app(state: RunnerApp) -> web.Application:
 def state_from_env() -> RunnerApp:
     """Build runner state from environment configuration.
 
-    BENCH=fake (default until real hardware config is supplied) | real
+    BENCH=fake (default until real hardware config is supplied) | real | agent
     SPEED    — fake-bench pacing divisor (virtual clock)
     FIXTURE=fail — fake bench replays the fail-variant arc
     RECORD=<dir> — tee the first run to <dir>/recorded_run.jsonl (+ artifacts/)
     BOARDEX_BENCH_CONFIG=<json file> — RealBench configuration (BENCH=real)
+    AGENT_MODELS=<csv> — LiteLLM model strings advertised via capabilities (BENCH=agent)
+    AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 40)
     """
     bench_kind = os.environ.get("BENCH", "fake")
     speed = float(os.environ.get("SPEED", "1"))
@@ -338,6 +365,25 @@ def state_from_env() -> RunnerApp:
     record_dir = os.environ.get("RECORD")
     if record_dir:
         recorder = FixtureRecorder(Path(record_dir), "recorded_run")
+
+    if bench_kind == "agent":
+        from .agent_bench import (
+            AgentBench,
+            AgentRunEngine,
+            agent_bench_status,
+            agent_models_from_env,
+        )
+
+        max_turns = int(os.environ.get("AGENT_MAX_TURNS", "40"))
+        return RunnerApp(
+            # One AgentBench per run — never a shared instance (audit HIGH-1).
+            bench_factory=lambda: AgentBench(max_turns=max_turns),
+            clock_factory=Clock,
+            recorder=recorder,
+            engine_cls=AgentRunEngine,
+            models=agent_models_from_env(),
+            bench_status=agent_bench_status(),
+        )
 
     if bench_kind == "real":
         from .real_bench import RealBench, RealBenchConfig

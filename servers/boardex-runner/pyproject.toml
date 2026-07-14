@@ -19,6 +19,17 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# BENCH=agent extras: imported lazily (provider/mcp host), so fake/real
+# deployments and the test suite need none of these installed.
+agent = [
+    "litellm>=1.40",
+    # litellm lazy-imports its proxy path (fastapi + orjson) whenever `tools`
+    # is passed to completion(); without these the first tool-calling turn
+    # crashes on ModuleNotFoundError.
+    "fastapi>=0.100",
+    "orjson>=3.9",
+    "mcp>=1.0",
+]
 
 [project.scripts]
 boardex-runner = "boardex_runner.server:main"

@@ -65,6 +65,7 @@ class RunEngine:
         clock: Clock,
         artifacts: ArtifactStore,
         on_event: Callable[[dict[str, Any]], None] | None = None,
+        model: str | None = None,
     ) -> None:
         self.id = run_id
         self.task_prompt = task_prompt
@@ -72,6 +73,7 @@ class RunEngine:
         self.bench = bench
         self.clock = clock
         self.artifacts = artifacts
+        self.model = model  # CreateRun.model, echoed onto Run.model (v2.1)
         self.log = EventLog(run_id, on_event=on_event)
 
         self.title = _title_from_prompt(task_prompt)
@@ -157,7 +159,7 @@ class RunEngine:
         self.status = status
 
     def _run_entity(self, status: str) -> dict[str, Any]:
-        return {
+        entity = {
             "id": self.id,
             "title": self.title,
             "taskPrompt": self.task_prompt,
@@ -167,6 +169,9 @@ class RunEngine:
             "updatedAt": self.clock.now_iso(),
             "iteration": self.iteration,
         }
+        if self.model is not None:
+            entity["model"] = self.model
+        return entity
 
     async def _sleep(self, ms: float) -> None:
         await self.clock.sleep(ms)
