@@ -129,14 +129,48 @@ def test_bad_trigger_edge_errors(registry):
 
 def test_decode(registry, fake_cli):
     result = registry.resolve(DEVICE).decode(
-        DEVICE, "i2c", {"scl": 0, "sda": 1}, num_samples=4000
+        DEVICE,
+        "i2c",
+        {"scl": 0, "sda": 1},
+        sample_rate_hz=4_000_000,
+        num_samples=4000,
     )
     assert result.ok
+    assert result.data["device_id"] == DEVICE
+    assert result.data["channel_map"] == {"scl": 0, "sda": 1}
+    assert result.data["sample_rate_hz"] == 4_000_000
+    assert result.data["num_samples"] == 4000
+    assert result.data["duration_s"] == 0.001
     assert result.data["annotations"][0]["decoder"] == "i2c"
     assert result.data["bus_state"] == "decoded_ok"
     assert result.data["transactions"][0]["addr_7bit"] == 0x24
     # Indices are resolved to the device's channel names before hitting sigrok.
     assert fake_cli["decode"]["channel_map"] == {"scl": "D0", "sda": "D1"}
+    assert fake_cli["decode"]["options"]["address_format"] == "unshifted"
+
+
+def test_decode_reports_physically_measured_i2c_clock(registry, monkeypatch):
+    text = (
+        "0-40 i2c-1: Start\n"
+        "40-80 i2c-1: 0\n"
+        "80-120 i2c-1: 1\n"
+        "120-160 i2c-1: 0\n"
+        "40-160 i2c-1: Address write: EE\n"
+        "160-200 i2c-1: Stop\n"
+    )
+    monkeypatch.setattr(
+        "boardex_logic.adapters.sigrok_adapter.sigrok_cli.decode_raw",
+        lambda *a, **k: text,
+    )
+    result = registry.resolve(DEVICE).decode(
+        DEVICE,
+        "i2c",
+        {"scl": 0, "sda": 1},
+        sample_rate_hz=4_000_000,
+        num_samples=200,
+    )
+    assert result.data["scl_frequency_hz"] == 100_000.0
+    assert result.data["transactions"][0]["addr_7bit"] == 0x77
 
 
 def test_decode_structured_transactions(registry, monkeypatch):
@@ -184,6 +218,65 @@ def test_decode_with_trigger(registry, monkeypatch):
     )
     assert captured["trigger"] == ("D1", "f")
     assert "D0" in captured["channels"] and "D1" in captured["channels"]
+
+
+def test_adapter_advertises_coordinated_capture(registry):
+    from boardex_core import SupportsCoordinatedCapture
+
+    assert isinstance(registry.resolve(DEVICE), SupportsCoordinatedCapture)
+
+
+def test_decode_coordinated_invokes_callback_and_flags_arm(registry, monkeypatch):
+    captured: dict = {}
+
+    def fake_decode_raw_coordinated(spec, *, on_armed, **kwargs):
+        captured.update(kwargs)
+        on_armed()
+        return "0-100 i2c: START\n100-200 i2c: ADDRESS WRITE: EE\n", True
+
+    monkeypatch.setattr(
+        "boardex_logic.adapters.sigrok_adapter.sigrok_cli.decode_raw_coordinated",
+        fake_decode_raw_coordinated,
+    )
+
+    fired: list[int] = []
+    result = registry.resolve(DEVICE).decode_coordinated(
+        DEVICE,
+        "i2c",
+        {"scl": 0, "sda": 1},
+        on_capture_started=lambda: fired.append(1),
+        sample_rate_hz=4_000_000,
+        num_samples=400,
+    )
+
+    assert fired == [1]
+    assert result.ok
+    assert result.data["armed_via_marker"] is True
+    assert result.data["transactions"][0]["addr_7bit"] == 0x77
+    # I2C address mode still forced unshifted on the coordinated path.
+    assert captured["options"]["address_format"] == "unshifted"
+
+
+def test_decode_coordinated_warns_when_marker_missed(registry, monkeypatch):
+    def fake_decode_raw_coordinated(spec, *, on_armed, **kwargs):
+        on_armed()
+        return "", False
+
+    monkeypatch.setattr(
+        "boardex_logic.adapters.sigrok_adapter.sigrok_cli.decode_raw_coordinated",
+        fake_decode_raw_coordinated,
+    )
+
+    result = registry.resolve(DEVICE).decode_coordinated(
+        DEVICE,
+        "i2c",
+        {"scl": 0, "sda": 1},
+        on_capture_started=lambda: None,
+        num_samples=400,
+    )
+
+    assert result.data["armed_via_marker"] is False
+    assert any("fallback" in w for w in result.warnings)
 
 
 def test_unavailable_backend_scans_empty(monkeypatch):

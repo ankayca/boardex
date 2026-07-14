@@ -162,6 +162,117 @@ class SigrokAdapter(LogicAnalyzer):
         trigger_channel: int | None = None,
         trigger_edge: str = "rising",
     ) -> OperationResult:
+        prep = self._prepare_decode(
+            device_id,
+            protocol,
+            channel_map,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=num_samples,
+            duration_s=duration_s,
+            options=options,
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge,
+        )
+        if isinstance(prep, OperationResult):
+            return prep
+        text = sigrok_cli.decode_raw(
+            prep["spec"],
+            sample_rate_hz=sample_rate_hz,
+            num_samples=prep["num_samples"],
+            protocol=protocol,
+            channel_map=prep["decoder_channel_map"],
+            options=prep["decoder_options"],
+            channels=prep["channels"],
+            trigger=prep["trigger"],
+        )
+        return self._finish_decode(
+            text,
+            protocol=protocol,
+            device_id=device_id,
+            channel_map=channel_map,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=prep["num_samples"],
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge,
+        )
+
+    def decode_coordinated(
+        self,
+        device_id: str,
+        protocol: str,
+        channel_map: dict[str, int],
+        *,
+        on_capture_started,
+        sample_rate_hz: int = 1_000_000,
+        num_samples: int | None = None,
+        duration_s: float | None = None,
+        options: dict[str, str] | None = None,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "rising",
+    ) -> OperationResult:
+        """Capture+decode, firing ``on_capture_started`` when sampling begins.
+
+        Satisfies ``SupportsCoordinatedCapture``: an orchestrator can hold the
+        target halted and only resume it from inside ``on_capture_started``, so
+        startup-only bus traffic lands inside a guaranteed-open window instead of
+        being missed by a fixed arm delay.
+        """
+        prep = self._prepare_decode(
+            device_id,
+            protocol,
+            channel_map,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=num_samples,
+            duration_s=duration_s,
+            options=options,
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge,
+        )
+        if isinstance(prep, OperationResult):
+            return prep
+        text, armed_via_marker = sigrok_cli.decode_raw_coordinated(
+            prep["spec"],
+            on_armed=on_capture_started,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=prep["num_samples"],
+            protocol=protocol,
+            channel_map=prep["decoder_channel_map"],
+            options=prep["decoder_options"],
+            channels=prep["channels"],
+            trigger=prep["trigger"],
+        )
+        result = self._finish_decode(
+            text,
+            protocol=protocol,
+            device_id=device_id,
+            channel_map=channel_map,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=prep["num_samples"],
+            trigger_channel=trigger_channel,
+            trigger_edge=trigger_edge,
+        )
+        result.data["armed_via_marker"] = armed_via_marker
+        if not armed_via_marker:
+            result.warnings.append(
+                "Acquisition-start marker not seen before arm timeout; target "
+                "was resumed as a fallback (capture window may be misaligned)."
+            )
+        return result
+
+    def _prepare_decode(
+        self,
+        device_id: str,
+        protocol: str,
+        channel_map: dict[str, int],
+        *,
+        sample_rate_hz: int,
+        num_samples: int | None,
+        duration_s: float | None,
+        options: dict[str, str] | None,
+        trigger_channel: int | None,
+        trigger_edge: str,
+    ) -> dict | OperationResult:
+        """Validate inputs and build the sigrok decode arguments (or an error)."""
         spec = self._spec(device_id)
         n = self._resolve_num_samples(num_samples, duration_s, sample_rate_hz)
         if n is None:
@@ -182,22 +293,45 @@ class SigrokAdapter(LogicAnalyzer):
                 )
             trigger = (self._channel_name(device_id, trigger_channel), edge)
 
-        text = sigrok_cli.decode_raw(
-            spec,
-            sample_rate_hz=sample_rate_hz,
-            num_samples=n,
-            protocol=protocol,
-            channel_map={
+        decoder_options = dict(options or {})
+        if protocol.lower() == "i2c":
+            # libsigrokdecode displays 7-bit ("shifted") addresses by default,
+            # while our transaction parser deliberately consumes the complete
+            # wire byte and removes R/W itself.
+            decoder_options.setdefault("address_format", "unshifted")
+        return {
+            "spec": spec,
+            "num_samples": n,
+            "decoder_channel_map": {
                 pin: self._channel_name(device_id, idx)
                 for pin, idx in channel_map.items()
             },
-            options=options,
-            channels=sorted(set(channel_names)),
-            trigger=trigger,
-        )
+            "decoder_options": decoder_options,
+            "channels": sorted(set(channel_names)),
+            "trigger": trigger,
+        }
+
+    def _finish_decode(
+        self,
+        text: str,
+        *,
+        protocol: str,
+        device_id: str,
+        channel_map: dict[str, int],
+        sample_rate_hz: int,
+        num_samples: int,
+        trigger_channel: int | None,
+        trigger_edge: str,
+    ) -> OperationResult:
+        """Parse decoder output into a structured, contract-shaped result."""
         annotations = parse.parse_annotations(text)
         transactions = decode.decode_transactions(protocol, annotations)
         bus_state = _bus_state(annotations, transactions)
+        scl_frequency_hz = (
+            analyze.estimate_i2c_scl_hz(annotations, sample_rate_hz)
+            if protocol.lower() == "i2c"
+            else None
+        )
 
         if transactions:
             verdict = OperationResult.passed
@@ -218,7 +352,13 @@ class SigrokAdapter(LogicAnalyzer):
         return verdict(
             summary,
             protocol=protocol,
+            device_id=device_id,
+            channel_map=channel_map,
+            sample_rate_hz=sample_rate_hz,
+            num_samples=num_samples,
+            duration_s=num_samples / sample_rate_hz,
             bus_state=bus_state,
+            scl_frequency_hz=scl_frequency_hz,
             annotations=annotations,
             transactions=transactions,
             trigger_channel=trigger_channel,

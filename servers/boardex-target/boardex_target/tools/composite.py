@@ -63,6 +63,40 @@ def register(
         ).to_dict()
 
     @mcp.tool()
+    def reset_and_capture_i2c(
+        device_id: str,
+        logic_analyzer_id: str,
+        channel_map: dict[str, int],
+        target: str | None = None,
+        sample_rate_hz: int = 4_000_000,
+        duration_s: float = 0.1,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "falling",
+        options: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Reset-and-halt the MCU, arm an I2C capture, then resume the target.
+
+        Use this for startup-only traffic such as a sensor chip-ID read. The
+        target cannot execute between reset and analyzer arming, so the first
+        SCL edge deterministically triggers the capture.
+        """
+        return _guard(
+            lambda: workflows.reset_and_capture_i2c(
+                registry,
+                device_id=device_id,
+                target=target,
+                logic_analyzer_id=logic_analyzer_id,
+                channel_map=channel_map,
+                sample_rate_hz=sample_rate_hz,
+                duration_s=duration_s,
+                trigger_channel=trigger_channel,
+                trigger_edge=trigger_edge,
+                options=options,
+                sessions=sessions,
+            )
+        ).to_dict()
+
+    @mcp.tool()
     def verify_bringup(
         device_id: str,
         rtt_pattern: str,
@@ -87,8 +121,9 @@ def register(
     ) -> dict[str, Any]:
         """Verify sensor bring-up with RTT proof and optional logic-analyzer I2C proof.
 
-        Composite workflow: build (optional) → flash → wait for RTT → capture/decode I2C
-        (when ``logic_analyzer_id`` and ``i2c_channel_map`` are set). Requires
+        Composite workflow: build (optional) → flash → wait for RTT → halt target
+        at reset → arm analyzer → resume and capture/decode I2C (when
+        ``logic_analyzer_id`` and ``i2c_channel_map`` are set). Requires
         ``boardex-logic`` installed in the same environment for bus proof.
 
         ``i2c_expect`` is a list of expected transactions, e.g.

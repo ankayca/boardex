@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+import threading
+import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -9,6 +12,7 @@ from boardex_core import (
     BackendRegistry,
     EvidenceBundle,
     OperationResult,
+    SupportsCoordinatedCapture,
     SupportsPeripheralInspection,
     TargetController,
     Verdict,
@@ -18,6 +22,8 @@ from boardex_core import (
 from . import builder
 from .integrations import logic as logic_integration
 from .session import SessionManager, open_session_for, start_session_rtt
+
+CAPTURE_ARM_DELAY_S = 0.25
 
 
 @dataclass(frozen=True)
@@ -242,6 +248,206 @@ def run_checkpoint(
     return result
 
 
+def reset_and_capture_i2c(
+    registry: BackendRegistry[TargetController],
+    *,
+    device_id: str,
+    logic_analyzer_id: str,
+    channel_map: dict[str, int],
+    target: str | None = None,
+    sample_rate_hz: int = 4_000_000,
+    duration_s: float = 0.1,
+    trigger_channel: int | None = None,
+    trigger_edge: str = "falling",
+    options: dict[str, str] | None = None,
+    arm_delay_s: float = CAPTURE_ARM_DELAY_S,
+    sessions: SessionManager | None = None,
+) -> OperationResult:
+    """Capture immediate post-reset I2C traffic without a reset/arm race.
+
+    The target is first held at reset, then the trigger-armed analyzer is
+    started on a worker. Only after that worker has entered the decode call and
+    had a short hardware-arm interval do we resume the MCU.
+    """
+    adapter = registry.resolve(device_id)
+    managed = sessions.find_by_device(device_id) if sessions is not None else None
+    if sessions is not None and managed is None:
+        managed = open_session_for(adapter, sessions, device_id, target=target)
+    analyzer = logic_integration.resolve_logic_analyzer(logic_analyzer_id)
+    if analyzer is None:
+        return OperationResult.errored(
+            "boardex-logic is not installed or logic analyzer id is unknown.",
+            logic_analyzer_id=logic_analyzer_id,
+        )
+
+    reset_result = adapter.reset(device_id, target=target, halt=True)
+    if not reset_result.ok:
+        return OperationResult(
+            reset_result.verdict,
+            f"Could not halt target before capture: {reset_result.summary}",
+            data={"reset": reset_result.to_dict()},
+        )
+
+    trig = trigger_channel
+    if trig is None and "scl" in channel_map:
+        trig = channel_map["scl"]
+
+    if isinstance(analyzer, SupportsCoordinatedCapture):
+        decode_result, resume_result = _coordinated_capture(
+            adapter,
+            analyzer,
+            device_id=device_id,
+            logic_analyzer_id=logic_analyzer_id,
+            channel_map=channel_map,
+            target=target,
+            sample_rate_hz=sample_rate_hz,
+            duration_s=duration_s,
+            trig=trig,
+            trigger_edge=trigger_edge,
+            options=options,
+        )
+    else:
+        decode_result, resume_result = _delayed_arm_capture(
+            adapter,
+            analyzer,
+            device_id=device_id,
+            logic_analyzer_id=logic_analyzer_id,
+            channel_map=channel_map,
+            target=target,
+            sample_rate_hz=sample_rate_hz,
+            duration_s=duration_s,
+            trig=trig,
+            trigger_edge=trigger_edge,
+            options=options,
+            arm_delay_s=arm_delay_s,
+        )
+
+    if resume_result is not None and not resume_result.ok:
+        return OperationResult(
+            resume_result.verdict,
+            f"Analyzer armed but target could not resume: {resume_result.summary}",
+            data={
+                "reset": reset_result.to_dict(),
+                "resume": resume_result.to_dict(),
+            },
+        )
+    if decode_result is None:
+        return OperationResult.errored(
+            "Logic-analyzer capture worker did not start; target resumed."
+        )
+
+    decode_result.data["capture_coordination"] = {
+        "target_reset_halted": True,
+        "analyzer_armed_before_resume": True,
+        "resume_gated_on": (
+            "acquisition_marker"
+            if isinstance(analyzer, SupportsCoordinatedCapture)
+            and decode_result.data.get("armed_via_marker")
+            else "arm_delay"
+        ),
+        "session_id": managed.session_id if managed is not None else None,
+    }
+    return decode_result
+
+
+def _coordinated_capture(
+    adapter: TargetController,
+    analyzer: SupportsCoordinatedCapture,
+    *,
+    device_id: str,
+    logic_analyzer_id: str,
+    channel_map: dict[str, int],
+    target: str | None,
+    sample_rate_hz: int,
+    duration_s: float,
+    trig: int | None,
+    trigger_edge: str,
+    options: dict[str, str] | None,
+) -> tuple[OperationResult | None, OperationResult | None]:
+    """Resume the target the instant the analyzer confirms it is sampling.
+
+    Removes the fixed arm-delay guess: ``on_started`` fires (and resumes the
+    MCU) only once acquisition is physically live, so a startup-only chip-ID
+    read cannot slip through before the window opens.
+    """
+    resume_holder: dict[str, OperationResult] = {}
+    resumed = threading.Event()
+
+    def on_started() -> None:
+        if resumed.is_set():
+            return
+        resume_holder["result"] = adapter.resume(device_id, target=target)
+        resumed.set()
+
+    try:
+        decode_result = analyzer.decode_coordinated(
+            logic_analyzer_id,
+            "i2c",
+            channel_map,
+            on_capture_started=on_started,
+            sample_rate_hz=sample_rate_hz,
+            duration_s=duration_s,
+            options=options,
+            trigger_channel=trig,
+            trigger_edge=trigger_edge,
+        )
+    finally:
+        # Belt and suspenders: never leave a halted target, whether the analyzer
+        # returned without signalling or blew up before arming.
+        if not resumed.is_set():
+            resume_holder["result"] = adapter.resume(device_id, target=target)
+            resumed.set()
+    return decode_result, resume_holder.get("result")
+
+
+def _delayed_arm_capture(
+    adapter: TargetController,
+    analyzer: Any,
+    *,
+    device_id: str,
+    logic_analyzer_id: str,
+    channel_map: dict[str, int],
+    target: str | None,
+    sample_rate_hz: int,
+    duration_s: float,
+    trig: int | None,
+    trigger_edge: str,
+    options: dict[str, str] | None,
+    arm_delay_s: float,
+) -> tuple[OperationResult | None, OperationResult | None]:
+    """Fallback for analyzers that cannot report acquisition start.
+
+    Starts the capture on a worker, waits a fixed arm interval, then resumes —
+    the best a backend without ``SupportsCoordinatedCapture`` can do.
+    """
+    decode_entered = threading.Event()
+
+    def capture() -> OperationResult:
+        decode_entered.set()
+        return analyzer.decode(
+            logic_analyzer_id,
+            "i2c",
+            channel_map,
+            sample_rate_hz=sample_rate_hz,
+            duration_s=duration_s,
+            options=options,
+            trigger_channel=trig,
+            trigger_edge=trigger_edge,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(capture)
+        if not decode_entered.wait(timeout=1.0):
+            adapter.resume(device_id, target=target)
+            return None, None
+        time.sleep(max(0.0, arm_delay_s))
+        resume_result = adapter.resume(device_id, target=target)
+        # Always collect the analyzer result so its subprocess cannot outlive
+        # the workflow and keep the USB device claimed.
+        decode_result = future.result()
+    return decode_result, resume_result
+
+
 def verify_bringup(
     registry: BackendRegistry[TargetController],
     sessions: SessionManager,
@@ -285,27 +491,44 @@ def verify_bringup(
                 data={"evidence": bundle.to_dict(), "session_id": sid},
             )
 
-        if spec.reset_before_i2c_capture and sid:
-            reset_result = adapter.reset(cp.device_id, target=cp.target, halt=False)
-            steps.append(_step("reset_before_capture", reset_result))
-
         trig = spec.trigger_channel
         if trig is None and "scl" in spec.i2c_channel_map:
             trig = spec.i2c_channel_map["scl"]
 
-        decode_result = la.decode(
-            spec.logic_analyzer_id,
-            "i2c",
-            spec.i2c_channel_map,
-            sample_rate_hz=spec.sample_rate_hz,
-            duration_s=spec.i2c_duration_s,
-            trigger_channel=trig,
-            trigger_edge=spec.trigger_edge,
-        )
+        if spec.reset_before_i2c_capture:
+            decode_result = reset_and_capture_i2c(
+                registry,
+                device_id=cp.device_id,
+                target=cp.target,
+                logic_analyzer_id=spec.logic_analyzer_id,
+                channel_map=spec.i2c_channel_map,
+                sample_rate_hz=spec.sample_rate_hz,
+                duration_s=spec.i2c_duration_s,
+                trigger_channel=trig,
+                trigger_edge=spec.trigger_edge,
+                sessions=sessions,
+            )
+        else:
+            decode_result = la.decode(
+                spec.logic_analyzer_id,
+                "i2c",
+                spec.i2c_channel_map,
+                sample_rate_hz=spec.sample_rate_hz,
+                duration_s=spec.i2c_duration_s,
+                trigger_channel=trig,
+                trigger_edge=spec.trigger_edge,
+            )
         steps.append(_step("decode_bus", decode_result))
 
         i2c_data = {
+            "protocol": decode_result.data.get("protocol", "i2c"),
+            "device_id": decode_result.data.get("device_id", spec.logic_analyzer_id),
+            "channel_map": decode_result.data.get("channel_map", spec.i2c_channel_map),
+            "sample_rate_hz": decode_result.data.get("sample_rate_hz", spec.sample_rate_hz),
+            "num_samples": decode_result.data.get("num_samples"),
+            "duration_s": decode_result.data.get("duration_s", spec.i2c_duration_s),
             "bus_state": decode_result.data.get("bus_state"),
+            "scl_frequency_hz": decode_result.data.get("scl_frequency_hz"),
             "transactions": decode_result.data.get("transactions", []),
             "annotations": decode_result.data.get("annotations", []),
             "trigger_channel": trig,
