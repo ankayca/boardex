@@ -9,36 +9,21 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { BenchStatus, Event, RunStatus, RunView } from '@boardex/contract';
+import type { BenchStatus, Event, RunView } from '@boardex/contract';
 
-const stopRun = vi.fn<() => Promise<void>>();
-const resolveApproval = vi.fn<() => Promise<void>>();
-
-vi.mock('../../lib/api', () => ({
-  api: {
-    stopRun: (...args: unknown[]) => (stopRun as (...a: unknown[]) => Promise<void>)(...args),
-    resolveApproval: (...args: unknown[]) =>
-      (resolveApproval as (...a: unknown[]) => Promise<void>)(...args),
-  },
-  StateConflict: class StateConflict extends Error {
-    readonly currentStatus: RunStatus;
-    constructor(message: string, currentStatus: RunStatus) {
-      super(message);
-      this.name = 'StateConflict';
-      this.currentStatus = currentStatus;
-    }
-  },
-}));
+// Commands are injected through RunCommandsContext (T6.5), not the api client, so the
+// test wires these fns as the provider value and asserts against them directly.
+const stopRun = vi.fn<(...args: unknown[]) => Promise<void>>();
+const resolveApproval = vi.fn<(...args: unknown[]) => Promise<void>>();
 
 // The bench snapshot behind the §7.2 warning's repeat at hardware-action approvals
 // (T5.0 adjudication); null (no snapshot) by default so unrelated tests see nothing.
+// Threaded as the rail's bench prop now (T6.5), no longer via useBenchStatus.
 let benchSnapshot: BenchStatus | null = null;
-vi.mock('../../lib/useBenchStatus', () => ({
-  useBenchStatus: () => benchSnapshot,
-}));
 
 import { StatusApprovalRail } from './StatusApprovalRail';
-import { StateConflict } from '../../lib/api';
+import { StateConflict } from '../../lib/apiErrors';
+import { RunCommandsProvider, type RunCommands } from '../../lib/runCommands';
 import { approval, artifact, diagnosis, envelope, failedCheck, run, RUN_ID, TS, viewFrom } from './test-events';
 
 const runningView = (): RunView => viewFrom([envelope(1, 'run.created', { run })]);
@@ -90,10 +75,13 @@ const fixGateView = (): RunView =>
 
 function renderRail(view: RunView) {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const commands: RunCommands = { stop: stopRun, resolveApproval };
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <StatusApprovalRail view={view} />
+        <RunCommandsProvider value={commands}>
+          <StatusApprovalRail view={view} bench={benchSnapshot} />
+        </RunCommandsProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );

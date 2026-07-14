@@ -103,7 +103,22 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
   });
 
   const recent = useMemo(() => recentRuns(runsQuery.data ?? []), [runsQuery.data]);
-  if (recent.length === 0) return null;
+  // No runs yet: the sidebar's quiet onboarding equivalent of Home's demo action
+  // (§7.1 / T6.5). Hidden on the icon rail, where the top of the app already shows the
+  // primary affordances.
+  if (recent.length === 0) {
+    if (collapsed) return null;
+    return (
+      <div className="mt-6">
+        <NavLink
+          to="/demo"
+          className="block rounded-button px-2 py-1.5 text-meta text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+        >
+          Watch a demo run
+        </NavLink>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6 min-h-0 overflow-y-auto">

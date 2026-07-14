@@ -4,26 +4,32 @@
 // state refresh, not an error — the event stream reconciles the view (§5.3).
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { Approval, RunView } from '@boardex/contract';
-import { api, StateConflict } from '../../lib/api';
+import type { Approval, BenchStatus, RunView } from '@boardex/contract';
+import { StateConflict } from '../../lib/apiErrors';
+import { useRunCommands } from '../../lib/runCommands';
 import { benchIssues } from '../../lib/benchReadiness';
-import { useBenchStatus } from '../../lib/useBenchStatus';
 import { BenchWarning } from '../composer/BenchReadiness';
 import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
-import { evidenceHref, evidenceTargets } from './evidence';
+import { evidenceHrefAt, evidenceTargets, reportHrefAt } from './evidence';
+import { useEvidenceBase } from './evidenceBase';
 import { deriveProgress } from './progress';
 import { StatusCard } from './StatusCard';
 
-export function StatusApprovalRail({ view }: { view: RunView }) {
+// The bench snapshot arrives as a prop (T6.5), not from useBenchStatus, so the rail
+// stays free of the api client: the live workspace threads the real snapshot down,
+// the demo threads null. The §7.2 hardware-approval warning still repeats here.
+export function StatusApprovalRail({ view, bench }: { view: RunView; bench: BenchStatus | null }) {
   const { run } = view;
+  const base = useEvidenceBase(run.id);
+  const commands = useRunCommands();
   // Review Diff targets the run's latest code_diff artifact, exactly as the evidence
   // band's Open Diff does; null when the run has produced none yet.
   const diffTarget = evidenceTargets(view).diff;
 
   const stop = useMutation({
-    mutationFn: () => api.stopRun(run.id),
+    mutationFn: () => commands.stop(run.id),
     onError: (error) => {
       if (error instanceof StateConflict) stop.reset();
     },
@@ -31,7 +37,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
 
   const resolve = useMutation({
     mutationFn: ({ approval, status }: { approval: Approval; status: 'approved' | 'rejected' }) =>
-      api.resolveApproval(run.id, approval.id, status),
+      commands.resolveApproval(run.id, approval.id, status),
     onError: (error) => {
       if (error instanceof StateConflict) resolve.reset();
     },
@@ -62,8 +68,8 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
   // hardware actions (Kerem's T5.0 adjudication): an operator about to authorize a
   // flash deserves the same "your analyzer is unplugged" they got at composition.
   // Profile-independent by the same ruling — mid-run approvals gate on the bench's
-  // own report only (instruments: null), never on re-resolving a profile.
-  const bench = useBenchStatus();
+  // own report only (instruments: null), never on re-resolving a profile. The snapshot
+  // is the prop threaded from the workspace (T6.5).
   const pendingApproval = gate?.kind === 'ready' ? gate.approval : null;
   const hardwareApprovalIssues =
     pendingApproval && pendingApproval.proposal.hardwareActions.length > 0
@@ -99,7 +105,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       </div>
       {reportTarget && (
         <Link
-          to={`/runs/${run.id}/report`}
+          to={reportHrefAt(base)}
           className="flex w-full items-center justify-center rounded-button bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
         >
           Open Validation Report
@@ -109,7 +115,7 @@ export function StatusApprovalRail({ view }: { view: RunView }) {
       {gate && fixApproval === null && (
         <ApprovalCard
           gate={gate}
-          diffHref={diffTarget && evidenceHref(run.id, diffTarget)}
+          diffHref={diffTarget && evidenceHrefAt(base, diffTarget)}
           resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
           resolveError={commandError(
             resolve.error,

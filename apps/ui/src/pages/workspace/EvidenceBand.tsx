@@ -11,7 +11,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CheckVerdict, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
-import { checkLabel, evidenceHref, evidenceTargets } from './evidence';
+import { checkLabel, evidenceHrefAt, evidenceTargets, reportHrefAt } from './evidence';
+import { useEvidenceBase } from './evidenceBase';
 
 // The iteration-2 verdict-flip moment (T6.2 item 3): when a check the reducer
 // upserts by id flips FAIL → PASS on re-evaluation, its badge plays a one-shot
@@ -72,6 +73,7 @@ const CHIP_BASE =
 
 export function EvidenceBand({ view }: { view: RunView }) {
   const { run, checks } = view;
+  const base = useEvidenceBase(run.id);
   const targets = evidenceTargets(view);
   // Evidence-linking law (§4): only an artifactId with a live artifact.created in
   // RunView gets a link; the reducer has already downgraded the miss to needs_review.
@@ -104,7 +106,7 @@ export function EvidenceBand({ view }: { view: RunView }) {
               <li key={check.id} className="animate-chip-in shrink-0">
                 {artifactIds.has(check.artifactId) ? (
                   <Link
-                    to={evidenceHref(run.id, check.artifactId)}
+                    to={evidenceHrefAt(base, check.artifactId)}
                     className={`${CHIP_BASE} transition-colors hover:border-accent`}
                   >
                     {body}
@@ -123,11 +125,11 @@ export function EvidenceBand({ view }: { view: RunView }) {
       )}
 
       <div className="flex shrink-0 items-center gap-2">
-        <BandAction label="Open Logs" to={targets.logs && evidenceHref(run.id, targets.logs)} />
-        <BandAction label="Open Diff" to={targets.diff && evidenceHref(run.id, targets.diff)} />
+        <BandAction label="Open Logs" to={targets.logs && evidenceHrefAt(base, targets.logs)} />
+        <BandAction label="Open Diff" to={targets.diff && evidenceHrefAt(base, targets.diff)} />
         {/* Open Report opens the dedicated §7.6 Validation Report screen (not the
             evidence drawer); disabled until the run's report_md artifact exists. */}
-        <BandAction label="Open Report" to={targets.report ? `/runs/${run.id}/report` : null} />
+        <BandAction label="Open Report" to={targets.report ? reportHrefAt(base) : null} />
       </div>
     </section>
   );

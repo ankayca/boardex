@@ -91,13 +91,15 @@ afterEach(() => {
 });
 
 describe('HomePage (BIBLE §7.1)', () => {
-  it('shows the first-use hero when there are no runs', async () => {
+  it('shows the first-use hero with both actions when there are no runs', async () => {
     listRuns.mockResolvedValue([]);
     renderHome();
-    expect(await screen.findByText('No runs yet')).toBeInTheDocument();
+    expect(await screen.findByText('Bring up your first board')).toBeInTheDocument();
     // T6.1b: the header New Run action moved to the shell's top bar (Shell.test),
     // so the page itself carries exactly the hero's button.
     expect(screen.getAllByRole('button', { name: 'New Run' })).toHaveLength(1);
+    // T6.5: the hero's secondary action opens the offline-capable demo run.
+    expect(screen.getByRole('button', { name: 'Watch a demo run' })).toBeInTheDocument();
   });
 
   it('orders needs-attention runs above active and terminal ones', async () => {

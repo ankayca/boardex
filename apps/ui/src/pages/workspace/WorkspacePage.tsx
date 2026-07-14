@@ -49,7 +49,7 @@ export function WorkspacePage({
             </div>
           </div>
           <aside aria-label="Run status and approval" className="workspace-rail">
-            <StatusApprovalRail view={view} />
+            <StatusApprovalRail view={view} bench={bench} />
           </aside>
         </div>
 

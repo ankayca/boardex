@@ -22,7 +22,20 @@ export function checkLabel(requirementId: string): string {
 // Checks table, the Diagnosis Card's failed checks, and the Approval Card's Review
 // Diff all route through here, and the drawer resolves the id to its kind's tab.
 export function evidenceHref(runId: string, artifactId: string): string {
-  return `/runs/${runId}/evidence?artifact=${artifactId}`;
+  return evidenceHrefAt(`/runs/${runId}`, artifactId);
+}
+
+// Base-relative forms (T6.5): the same links against an arbitrary run-surface base
+// path so a reused surface can deep-link within it. Live callers use `/runs/${runId}`
+// (the helpers above); the demo shell passes `/demo` via EvidenceBaseContext, so its
+// bands, cards, and checks table deep-link to /demo/evidence and /demo/report rather
+// than navigating out of the demo into a live run route.
+export function evidenceHrefAt(base: string, artifactId: string): string {
+  return `${base}/evidence?artifact=${artifactId}`;
+}
+
+export function reportHrefAt(base: string): string {
+  return `${base}/report`;
 }
 
 // The Sources tab (§7.4, T6.3), opened at a specific document and optional locator.
@@ -30,9 +43,13 @@ export function evidenceHref(runId: string, artifactId: string): string {
 // and the Validation Report — so a citation always lands on the exact section, never
 // a dead link (the plain sourceRef text stays the fallback when it can't resolve).
 export function evidenceDocHref(runId: string, documentId: string, locator?: string): string {
+  return evidenceDocHrefAt(`/runs/${runId}`, documentId, locator);
+}
+
+export function evidenceDocHrefAt(base: string, documentId: string, locator?: string): string {
   const params = new URLSearchParams({ doc: documentId });
   if (locator) params.set('loc', locator);
-  return `/runs/${runId}/evidence?${params.toString()}`;
+  return `${base}/evidence?${params.toString()}`;
 }
 
 // "Open Logs" prefers the serial console log, then build, then flash — the most

@@ -99,7 +99,7 @@ describe('HomePage global-stream invalidation (BIBLE §7.1)', () => {
 
     const { invalidateSpy } = renderHome();
     // Let the initial queries settle so any startup work is behind us.
-    await screen.findByText('No runs yet');
+    await screen.findByText('Bring up your first board');
     expect(capturedHandler).toBeTypeOf('function');
     invalidateSpy.mockClear();
 
