@@ -49,6 +49,9 @@
   --motion-fast: 120ms;
   --motion-medium: 200ms;
   --motion-gentle: 360ms;
+  /* Ambient loop — the active-step pulse (T6.2). Distinct from the one-shot
+     durations above: it is a slow, repeating breath, not a transition. */
+  --motion-ambient: 2s;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -162,7 +165,7 @@ body {
   animation: dialog-in var(--motion-medium) var(--ease-entrance);
 }
 .animate-step-pulse {
-  animation: step-active-pulse 2s var(--ease-standard) infinite;
+  animation: step-active-pulse var(--motion-ambient) var(--ease-standard) infinite;
 }
 .animate-chip-in {
   animation: chip-in var(--motion-fast) var(--ease-entrance);

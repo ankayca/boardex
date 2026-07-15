@@ -15,7 +15,8 @@ import type {
   MeasurementCheck,
 } from '@boardex/contract';
 import { Badge, Button } from '../../design';
-import { evidenceHref } from './evidence';
+import { evidenceHrefAt } from './evidence';
+import { useEvidenceBase } from './evidenceBase';
 import { rankHypotheses } from './hypotheses';
 
 const EVIDENCE_LINK_BASE = 'text-meta font-medium';
@@ -53,6 +54,7 @@ export function DiagnosisCard({
   resolveError,
   onApproveFix,
 }: DiagnosisCardProps) {
+  const base = useEvidenceBase(runId);
   const checksById = new Map(checks.map((check) => [check.id, check]));
   const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
   // Every cited id renders: resolvable ones as check rows, the rest as an explicit
@@ -79,7 +81,7 @@ export function DiagnosisCard({
                 <span className="min-w-0 flex-1 text-meta text-text-primary">{check.description}</span>
                 {artifactIds.has(check.artifactId) ? (
                   <Link
-                    to={evidenceHref(runId, check.artifactId)}
+                    to={evidenceHrefAt(base, check.artifactId)}
                     className={`${EVIDENCE_LINK_BASE} text-accent hover:text-accent-hover`}
                   >
                     View evidence

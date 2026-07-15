@@ -19,31 +19,25 @@ import {
   type CreateRunRequest,
   type CreateRunResponse,
   type HealthResponse,
-  type RunStatus,
   type RunSummary,
   type WireEvent,
 } from '@boardex/contract';
 import { RUNNER_HTTP_BASE } from './config';
+import { ApiError, StateConflict } from './apiErrors';
 
-// HTTP 409: the command was invalid for the run's current state (§5.3). The current
-// status rides along so the UI can reconcile without a crash.
-export class StateConflict extends Error {
-  readonly currentStatus: RunStatus;
-  constructor(message: string, currentStatus: RunStatus) {
-    super(message);
-    this.name = 'StateConflict';
-    this.currentStatus = currentStatus;
-  }
-}
+// Re-exported from their own module (T6.5) so callers that only need the error types
+// don't pull in the api singleton on their path. Behaviour is unchanged.
+export { ApiError, StateConflict } from './apiErrors';
 
-// Any other non-2xx (or otherwise unexpected) HTTP response.
-export class ApiError extends Error {
-  readonly status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-  }
+// Demo-source branch (T6.5, BIBLE §7.1 demo mode): while the demo shell is mounted it
+// registers its bundled artifact text here, and the by-reference artifact fetch below
+// serves it locally — no runner, no network. Registration is read-only (never a
+// command) and lives in a single demo bridge module (demo/demoArtifactSource); the
+// demo's command/playback path imports none of this. null when no demo is active.
+let demoArtifactText: ReadonlyMap<string, string> | null = null;
+
+export function setDemoArtifactSource(source: ReadonlyMap<string, string> | null): void {
+  demoArtifactText = source;
 }
 
 interface JsonRequestInit {
@@ -155,6 +149,8 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
       requestJson(`/artifacts/${artifactId}/meta`, GetArtifactMetaResponseSchema),
     artifactUrl: (artifactId) => `${base}/artifacts/${artifactId}`,
     getArtifactText: async (artifactId) => {
+      const demo = demoArtifactText?.get(artifactId);
+      if (demo !== undefined) return demo; // demo-source branch (T6.5): bundled, offline
       const res = await fetch(`${base}/artifacts/${artifactId}`);
       if (!res.ok) {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
@@ -170,6 +166,8 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
       return res.text();
     },
     getArtifactBlob: async (artifactId, mimeType) => {
+      const demo = demoArtifactText?.get(artifactId);
+      if (demo !== undefined) return new Blob([demo], { type: mimeType }); // demo-source (T6.5)
       const res = await fetch(`${base}/artifacts/${artifactId}`);
       if (!res.ok) {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);

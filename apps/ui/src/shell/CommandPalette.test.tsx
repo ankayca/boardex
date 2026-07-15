@@ -27,10 +27,35 @@ vi.mock('../lib/api', () => ({
   },
 }));
 
+// runStore mutators are spied too (F3): the palette is a pure navigator, so it must
+// never ingest events or reset a run store. Named with the `mock` prefix so the hoisted
+// vi.mock factory may reference them.
+const mockIngest = vi.fn();
+const mockIngestMany = vi.fn();
+const mockReset = vi.fn();
+const mockResetAll = vi.fn();
+const STORE_MUTATORS = [mockIngest, mockIngestMany, mockReset, mockResetAll];
+
 let mockView: RunView | null = null;
-vi.mock('../lib/runStore', () => ({
-  useRunView: (runId: string) => (runId ? mockView : null),
-}));
+vi.mock('../lib/runStore', () => {
+  // Built lazily inside getState so the spies are read at call time (during a test),
+  // not when this factory runs at import — they aren't initialized until later.
+  const getState = () => ({
+    ingest: mockIngest,
+    ingestMany: mockIngestMany,
+    reset: mockReset,
+    resetAll: mockResetAll,
+  });
+  const useRunStore = Object.assign(
+    (selector?: (s: ReturnType<typeof getState>) => unknown) =>
+      selector ? selector(getState()) : getState(),
+    { getState },
+  );
+  return {
+    useRunStore,
+    useRunView: (runId: string) => (runId ? mockView : null),
+  };
+});
 
 import { CommandPalette } from './CommandPalette';
 
@@ -84,6 +109,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('CommandPalette', () => {
@@ -154,7 +180,12 @@ describe('CommandPalette', () => {
     expect(options[1]).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('NEVER executes a state-changing command from any entry (spied api)', async () => {
+  it('NEVER executes a state-changing command from any entry (spied api, fetch, and store)', async () => {
+    // The api layer is fully mocked, so ANY fetch from the palette is illegitimate;
+    // the store mutators must never fire from a pure navigator either (F3).
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
     // Every source populated, opened inside a run so contextual entries appear too.
     listRuns.mockResolvedValue([run('r1', 'BME280 bring-up')]);
     listBoardProfiles.mockResolvedValue([profile('bp1', 'Nucleo-F303RE', 'STM32F303RE')]);
@@ -174,6 +205,10 @@ describe('CommandPalette', () => {
     for (const spy of STATE_CHANGING) {
       expect(spy).not.toHaveBeenCalled();
     }
+    for (const mutator of STORE_MUTATORS) {
+      expect(mutator).not.toHaveBeenCalled();
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('shows contextual entries only when their artifact exists (gating)', async () => {

@@ -23,6 +23,21 @@ function NewRunButton() {
   );
 }
 
+// The first-run hero's two actions (§7.1 / T6.5): start a real run, or watch the
+// recorded demo run — the latter works offline, which is exactly when onboarding
+// happens (the runner may not be up yet).
+function HeroActions() {
+  const navigate = useNavigate();
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      <NewRunButton />
+      <Button variant="secondary" onClick={() => navigate('/demo')}>
+        Watch a demo run
+      </Button>
+    </div>
+  );
+}
+
 // Amber, per D14 (a warning that needs attention) — the runner is unreachable, but the
 // list below still renders from the last successful GET /runs (§7.1).
 function RunnerOfflineBanner({ onRetry }: { onRetry: () => void }) {
@@ -169,9 +184,9 @@ export default function HomePage() {
         // already explains why, and "start your first run" would misread the situation.
         // T6.1c: the first-use hero floats on the canvas ~35vh down, no card chrome.
         <EmptyState
-          title="No runs yet"
-          description="Describe a bring-up task and Boardex plans, flashes, measures, and reports."
-          action={<NewRunButton />}
+          title="Bring up your first board"
+          description="Describe a bring-up task in plain language — Boardex plans it, flashes, measures, and reports, with every result linked to its evidence."
+          action={<HeroActions />}
           frameless
           className="mt-[24vh]"
         />

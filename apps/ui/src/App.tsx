@@ -15,6 +15,11 @@ const DesignGalleryPage = import.meta.env.DEV
   ? lazy(() => import('./design/DesignGalleryPage'))
   : null;
 
+// First-run demo mode (BIBLE §7.1 / §8 T6.5): a self-contained /demo/* shell OUTSIDE
+// the app Layout — its own read-only frame, no api-bound sidebar/top bar on its path.
+// Lazy so its bundled recording + artifacts load only when a user opens the demo.
+const DemoPage = lazy(() => import('./demo/DemoPage'));
+
 export default function App() {
   return (
     <Routes>
@@ -34,6 +39,14 @@ export default function App() {
         <Route path="/boards/new" element={<BoardProfilePage />} />
         <Route path="/boards/:id" element={<BoardProfilePage />} />
       </Route>
+      <Route
+        path="/demo/*"
+        element={
+          <Suspense fallback={null}>
+            <DemoPage />
+          </Suspense>
+        }
+      />
       {import.meta.env.DEV && DesignGalleryPage && (
         <Route
           path="/design"

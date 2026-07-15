@@ -10,6 +10,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Run } from '@boardex/contract';
 import { Button } from '../../design';
 import { api, StateConflict } from '../../lib/api';
+import { liveRunCommands } from '../../lib/liveRunCommands';
+import { RunCommandsProvider } from '../../lib/runCommands';
 import { useRunView } from '../../lib/runStore';
 import { useRunStream } from '../../lib/useRunStream';
 import { EvidenceDrawer } from '../evidence/EvidenceDrawer';
@@ -115,13 +117,17 @@ export default function RunPage() {
   if (!COMPOSER_STATUSES.has(run.status)) {
     return (
       <>
-        <WorkspacePage
-          view={view}
-          profile={profile}
-          profileLoading={profilesQuery.isPending}
-          bench={bench}
-          connection={connection}
-        />
+        {/* Live run commands (stop / resolve-approval) are api-backed here; the demo
+            shell mounts a local provider instead (T6.5). */}
+        <RunCommandsProvider value={liveRunCommands}>
+          <WorkspacePage
+            view={view}
+            profile={profile}
+            profileLoading={profilesQuery.isPending}
+            bench={bench}
+            connection={connection}
+          />
+        </RunCommandsProvider>
         {evidenceDrawer}
       </>
     );

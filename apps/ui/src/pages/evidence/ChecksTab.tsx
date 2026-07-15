@@ -8,7 +8,8 @@
 import { Link } from 'react-router-dom';
 import type { BoardDocument, MeasurementCheck, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
-import { evidenceDocHref, evidenceHref } from '../workspace/evidence';
+import { evidenceDocHrefAt, evidenceHrefAt } from '../workspace/evidence';
+import { useEvidenceBase } from '../workspace/evidenceBase';
 import { formatActual, formatExpected } from './checksTable';
 
 const CELL = 'px-3 py-2 align-top';
@@ -29,18 +30,18 @@ export interface ChecksTabProps {
 // human recognises), else the document's label.
 function SourceCell({
   check,
-  runId,
+  base,
   documentsById,
 }: {
   check: MeasurementCheck;
-  runId: string;
+  base: string;
   documentsById: Map<string, BoardDocument>;
 }) {
   const doc = check.sourceDoc ? documentsById.get(check.sourceDoc.documentId) : undefined;
   if (check.sourceDoc && doc) {
     return (
       <Link
-        to={evidenceDocHref(runId, check.sourceDoc.documentId, check.sourceDoc.locator)}
+        to={evidenceDocHrefAt(base, check.sourceDoc.documentId, check.sourceDoc.locator)}
         className={SOURCE_LINK}
       >
         {check.sourceRef ?? doc.label}
@@ -51,6 +52,7 @@ function SourceCell({
 }
 
 export function ChecksTab({ view, documents }: ChecksTabProps) {
+  const base = useEvidenceBase(view.run.id);
   const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
   const documentsById = new Map((documents ?? []).map((doc) => [doc.id, doc]));
 
@@ -90,12 +92,12 @@ export function ChecksTab({ view, documents }: ChecksTabProps) {
                 <Badge kind="verdict" value={check.verdict} />
               </td>
               <td className={`${CELL} text-text-secondary`}>
-                <SourceCell check={check} runId={view.run.id} documentsById={documentsById} />
+                <SourceCell check={check} base={base} documentsById={documentsById} />
               </td>
               <td className={CELL}>
                 {artifactIds.has(check.artifactId) ? (
                   <Link
-                    to={evidenceHref(view.run.id, check.artifactId)}
+                    to={evidenceHrefAt(base, check.artifactId)}
                     className={`${EVIDENCE_LINK_BASE} text-accent hover:text-accent-hover`}
                   >
                     View evidence
