@@ -9,7 +9,7 @@
 // this path — and evidence deep links resolve to /demo via EvidenceBaseContext. The
 // only api touch is the read-only artifact bridge (installDemoArtifacts), which lets
 // the shared evidence tabs and report fetch the bundled artifact content offline.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { RunCommandsProvider } from '../lib/runCommands';
 import { EvidenceDrawer } from '../pages/evidence/EvidenceDrawer';
@@ -17,6 +17,7 @@ import { EvidenceBaseProvider } from '../pages/workspace/evidenceBase';
 import { WorkspacePage } from '../pages/workspace/WorkspacePage';
 import { DEMO_PROFILE } from './data/demoProfile';
 import { DemoReport } from './DemoReport';
+import { DemoRejectNotice } from './DemoRejectNotice';
 import { DemoShell } from './DemoShell';
 import { installDemoArtifacts, uninstallDemoArtifacts } from './demoArtifactSource';
 import { makeDemoCommands } from './demoCommands';
@@ -27,6 +28,9 @@ export default function DemoPage() {
   const navigate = useNavigate();
   const playback = useDemoPlayback();
   const { view } = playback;
+  // Set when the user rejects at an approval gate (F1): the recording was approved, so
+  // rejecting cannot continue playback — it surfaces the honest notice and exits.
+  const [rejected, setRejected] = useState(false);
 
   const onReport = useMatch('/demo/report') !== null;
   const onEvidence = useMatch('/demo/evidence') !== null;
@@ -37,16 +41,23 @@ export default function DemoPage() {
     return () => uninstallDemoArtifacts();
   }, []);
 
+  const exit = () => navigate('/');
+
   const commands = useMemo(
     () =>
       makeDemoCommands({
-        exit: () => navigate('/'),
+        exit,
         resolve: playback.advanceToApprovalResolution,
+        // Reject: freeze the replay behind the notice, then leave — never fabricate a
+        // rejected ending the recording doesn't have.
+        reject: () => {
+          playback.pause();
+          setRejected(true);
+        },
       }),
-    [navigate, playback.advanceToApprovalResolution],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, playback.advanceToApprovalResolution, playback.pause],
   );
-
-  const exit = () => navigate('/');
 
   return (
     <RunCommandsProvider value={commands}>
@@ -66,12 +77,14 @@ export default function DemoPage() {
                 profileLoading={false}
                 bench={null}
                 connection="open"
+                demoMode
               />
               {onEvidence && <EvidenceDrawer view={view} onClose={() => navigate('/demo')} />}
               <Tour view={view} />
             </>
           )}
         </DemoShell>
+        {rejected && <DemoRejectNotice onExit={exit} />}
       </EvidenceBaseProvider>
     </RunCommandsProvider>
   );

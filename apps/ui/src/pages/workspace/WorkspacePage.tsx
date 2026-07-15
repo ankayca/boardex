@@ -18,6 +18,8 @@ export interface WorkspacePageProps {
   profileLoading: boolean;
   bench: BenchStatus | null;
   connection: RunStreamStatus;
+  /** Demo replay (T6.5): the rail's Stop skips its live confirm and exits directly (P5). */
+  demoMode?: boolean;
 }
 
 export function WorkspacePage({
@@ -26,6 +28,7 @@ export function WorkspacePage({
   profileLoading,
   bench,
   connection,
+  demoMode = false,
 }: WorkspacePageProps) {
   const { run } = view;
   // Frame v2 (T6.1b): the run title + status badge live in the shell's top bar.
@@ -49,7 +52,7 @@ export function WorkspacePage({
             </div>
           </div>
           <aside aria-label="Run status and approval" className="workspace-rail">
-            <StatusApprovalRail view={view} bench={bench} />
+            <StatusApprovalRail view={view} bench={bench} demoMode={demoMode} />
           </aside>
         </div>
 

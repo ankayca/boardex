@@ -1,7 +1,7 @@
 // Demo shell integration (T6.5): the demo mounts the REAL workspace surfaces, plays
 // to completion, and deep-links evidence within /demo — no runner, no api command.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -85,5 +85,71 @@ describe('DemoPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Exit demo' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Runs home' })).toBeInTheDocument());
+  });
+});
+
+// The demo gate can't keep the live rail's promises (F1/P5): its Stop merely leaves the
+// replay, and Reject has no rejected ending to play (the recording was approved). These
+// drive the REAL rail through the paced playback, one recorded event per tick, and stop
+// at the gate — no fabricated events, no live confirm copy.
+describe('DemoPage — demo-gate command safety', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse('2026-07-14T16:00:00.000Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Each recorded gap is ≤ the pace cap, and the next timer is only scheduled after the
+  // prior event's state commits — so one 2600ms tick ingests exactly one event.
+  function advanceUntil(present: () => boolean, maxEvents = 40): void {
+    for (let i = 0; i < maxEvents && !present(); i++) {
+      act(() => {
+        vi.advanceTimersByTime(2600);
+      });
+    }
+  }
+
+  // The mutate() path (react-query) invokes the command in a microtask; flush it so the
+  // exit/notice lands before we assert.
+  async function flush(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it('Stop Run exits the demo directly, with no confirm dialog (P5)', async () => {
+    renderDemo();
+    advanceUntil(() => screen.queryByRole('button', { name: 'Stop Run' }) !== null);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Run' }));
+    await flush();
+
+    // No ConfirmDialog — the live "ends immediately as Stopped … Evidence retained"
+    // copy would promise what the demo can't keep — and it leaves straight away.
+    expect(screen.queryByRole('dialog', { name: 'Stop this run?' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Runs home' })).toBeInTheDocument();
+  });
+
+  it('Reject at the gate surfaces the honest notice and exits — no playback continuation (F1)', async () => {
+    renderDemo();
+    advanceUntil(() => screen.queryByRole('button', { name: 'Reject' }) !== null);
+    // We stopped AT the gate: the recorded resolution has not played.
+    expect(screen.queryByText('Demo complete')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    await flush();
+
+    const notice = screen.getByRole('dialog', { name: 'Reject ends the run' });
+    expect(within(notice).getByText(/This recording was approved/)).toBeInTheDocument();
+    // Playback did not fast-forward into a fabricated ending: still in the demo, not
+    // completed, until the user chooses to leave.
+    expect(screen.queryByRole('heading', { name: 'Runs home' })).toBeNull();
+    expect(screen.queryByText('Demo complete')).toBeNull();
+
+    fireEvent.click(within(notice).getByRole('button', { name: 'Exit demo' }));
+    await flush();
+    expect(screen.getByRole('heading', { name: 'Runs home' })).toBeInTheDocument();
   });
 });

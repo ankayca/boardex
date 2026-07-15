@@ -104,10 +104,12 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
 
   const recent = useMemo(() => recentRuns(runsQuery.data ?? []), [runsQuery.data]);
   // No runs yet: the sidebar's quiet onboarding equivalent of Home's demo action
-  // (§7.1 / T6.5). Hidden on the icon rail, where the top of the app already shows the
-  // primary affordances.
+  // (§7.1 / T6.5). Gated on runsQuery.isSuccess exactly like Home's first-use hero —
+  // a genuine empty response, never a still-pending or failed fetch, so a cold start
+  // with the runner down doesn't misread as "no runs, watch the demo". Hidden on the
+  // icon rail, where the top of the app already shows the primary affordances.
   if (recent.length === 0) {
-    if (collapsed) return null;
+    if (collapsed || !runsQuery.isSuccess) return null;
     return (
       <div className="mt-6">
         <NavLink

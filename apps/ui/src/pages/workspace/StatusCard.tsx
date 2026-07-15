@@ -22,6 +22,12 @@ export interface StatusCardProps {
   stopping: boolean;
   stopError: string | null;
   onStop: () => void;
+  /**
+   * Guard Stop Run behind the ConfirmDialog (default). The demo passes false (P5):
+   * its Stop merely exits the replay, so the live confirm copy — "ends immediately
+   * as Stopped … Evidence retained" — would promise something the demo can't keep.
+   */
+  confirmStop?: boolean;
 }
 
 // Compact by default: one amber line stating the count, expanding on demand to
@@ -74,6 +80,7 @@ export function StatusCard({
   stopping,
   stopError,
   onStop,
+  confirmStop = true,
 }: StatusCardProps) {
   const terminal = isTerminalStatus(run.status);
   const now = useNow(!terminal);
@@ -134,7 +141,7 @@ export function StatusCard({
           <Button
             variant="outline-danger"
             disabled={stopping}
-            onClick={() => setConfirming(true)}
+            onClick={() => (confirmStop ? setConfirming(true) : onStop())}
           >
             {stopping ? 'Stopping…' : 'Stop Run'}
           </Button>

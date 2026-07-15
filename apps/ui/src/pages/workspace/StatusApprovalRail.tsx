@@ -20,7 +20,16 @@ import { StatusCard } from './StatusCard';
 // The bench snapshot arrives as a prop (T6.5), not from useBenchStatus, so the rail
 // stays free of the api client: the live workspace threads the real snapshot down,
 // the demo threads null. The §7.2 hardware-approval warning still repeats here.
-export function StatusApprovalRail({ view, bench }: { view: RunView; bench: BenchStatus | null }) {
+export function StatusApprovalRail({
+  view,
+  bench,
+  demoMode = false,
+}: {
+  view: RunView;
+  bench: BenchStatus | null;
+  /** Demo replay (T6.5): Stop skips its confirm and exits the replay directly (P5). */
+  demoMode?: boolean;
+}) {
   const { run } = view;
   const base = useEvidenceBase(run.id);
   const commands = useRunCommands();
@@ -101,6 +110,7 @@ export function StatusApprovalRail({ view, bench }: { view: RunView; bench: Benc
             'Could not stop the run — check that the runner is online, then try again.',
           )}
           onStop={() => stop.mutate()}
+          confirmStop={!demoMode}
         />
       </div>
       {reportTarget && (

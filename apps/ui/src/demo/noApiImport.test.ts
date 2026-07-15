@@ -1,52 +1,60 @@
-// Structural command-safety (T6.5). The demo's shell, playback engine, and command
-// implementation must not import the api client — that is what makes the demo
-// incapable of issuing a real command, the same "never executes" guarantee the command
-// palette enforces by its type. The ONLY demo module allowed to touch lib/api is the
-// read-only artifact bridge (demoArtifactSource), which registers content for
-// by-reference reads and issues no command; it is deliberately excluded here.
+// Structural command-safety (T6.5, F2). The demo cannot issue a real command because
+// its modules cannot even reach the api client. Rather than list the command-path
+// modules by hand — a denylist that silently misses any file added later — this walks
+// EVERY module under src/demo/** and asserts none of them import lib/api or its
+// api-backed liveRunCommands, in either the static `from '…'` or dynamic `import('…')`
+// form. The single documented exception is the read-only artifact bridge
+// (demoArtifactSource), which touches lib/api only to register content for by-reference
+// reads and issues no command verb.
 //
 // Sources are read via import.meta.glob (?raw) so the check resolves through the
-// bundler, independent of the test's runtime environment.
+// bundler over the real files on disk, independent of the test's runtime environment —
+// a new demo module is covered the moment it exists.
 import { describe, expect, it } from 'vitest';
 
-const SOURCES = import.meta.glob('./*.{ts,tsx}', {
+const SOURCES = import.meta.glob('./**/*.{ts,tsx}', {
   query: '?raw',
   import: 'default',
   eager: true,
 }) as Record<string, string>;
 
-function source(basename: string): string {
-  const key = Object.keys(SOURCES).find((path) => path.endsWith(`/${basename}`));
-  if (key === undefined) throw new Error(`demo source not found: ${basename}`);
-  return SOURCES[key]!;
-}
+// The lone module allowed to import lib/api (see file header). Excluded from the sweep,
+// then asserted explicitly below so the exception can never widen unnoticed.
+const EXCEPTION = 'demoArtifactSource.ts';
 
-const COMMAND_PATH_MODULES = [
-  'useDemoPlayback.ts',
-  'demoCommands.ts',
-  'DemoShell.tsx',
-  'DemoPage.tsx',
-  'Tour.tsx',
-  'tour.ts',
-  'pace.ts',
-];
+const isTestModule = (path: string): boolean => /\.test\.tsx?$/.test(path);
 
+// Matches an import of lib/api OR lib/liveRunCommands, in both `from '…'` and
+// `import('…')` forms. The trailing quote after the module name means lib/apiErrors
+// (a legitimate sibling) is NOT matched — only the api client and its live impl are.
+const FORBIDDEN_IMPORT =
+  /(?:from\s+|import\s*\(\s*)['"][^'"]*\blib\/(?:api|liveRunCommands)['"]/;
 const API_IMPORT = /from\s+['"][^'"]*lib\/api['"]/;
 
-describe('demo command path never imports the api client', () => {
-  for (const module of COMMAND_PATH_MODULES) {
-    it(`${module} does not import lib/api`, () => {
-      expect(source(module)).not.toMatch(API_IMPORT);
+const swept = Object.entries(SOURCES).filter(
+  ([path]) => !isTestModule(path) && !path.endsWith(`/${EXCEPTION}`),
+);
+
+describe('the demo never imports the api client or its live commands', () => {
+  it('sweeps at least the known command-path + data modules (glob resolved something)', () => {
+    // Guards against a glob that silently matches nothing (which would pass vacuously).
+    expect(swept.length).toBeGreaterThan(5);
+  });
+
+  for (const [path, src] of swept) {
+    it(`${path} imports neither lib/api nor lib/liveRunCommands`, () => {
+      expect(src).not.toMatch(FORBIDDEN_IMPORT);
     });
   }
 
   it('the artifact bridge is the sole, read-only exception', () => {
-    // Documents the exception explicitly: if this ever stops importing lib/api the
-    // demo-source registration moved, and the exclusion above should be revisited.
-    const bridge = source('demoArtifactSource.ts');
+    // Documents the exception explicitly: it DOES import lib/api, but only to register
+    // content for by-reference reads — never a command verb.
+    const bridge = SOURCES[
+      Object.keys(SOURCES).find((path) => path.endsWith(`/${EXCEPTION}`))!
+    ]!;
     expect(bridge).toMatch(API_IMPORT);
     expect(bridge).toMatch(/setDemoArtifactSource/);
-    // ...and it registers only content, never a command verb.
     expect(bridge).not.toMatch(/stopRun|resolveApproval|createRun|approvePlan/);
   });
 });
