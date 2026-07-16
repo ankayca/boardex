@@ -22,7 +22,7 @@ import {
   type RunSummary,
   type WireEvent,
 } from '@boardex/contract';
-import { RUNNER_HTTP_BASE } from './config';
+import { getRunnerHttpBase } from './config';
 import { ApiError, StateConflict } from './apiErrors';
 
 // Re-exported from their own module (T6.5) so callers that only need the error types
@@ -86,8 +86,12 @@ export interface ApiClient {
   getArtifactBlob(artifactId: string, mimeType: string): Promise<Blob>;
 }
 
-export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
-  const base = baseUrl.replace(/\/+$/, '');
+export function createApiClient(baseUrl?: string): ApiClient {
+  // No explicit base → resolve the EFFECTIVE base on every call, so a runtime runner-URL
+  // change (Settings, T6.6) re-points this client with no reconstruction; the app
+  // singleton captures nothing. An explicit base (tests, a one-off probe client) stays
+  // fixed — Settings' Test Connection relies on this to probe a candidate URL.
+  const resolveBase = (): string => (baseUrl ?? getRunnerHttpBase()).replace(/\/+$/, '');
 
   async function requestJson<T>(
     path: string,
@@ -96,7 +100,7 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
     schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     init?: JsonRequestInit,
   ): Promise<T> {
-    const res = await fetch(base + path, {
+    const res = await fetch(resolveBase() + path, {
       method: init?.method ?? 'GET',
       headers: { 'Content-Type': 'application/json' },
       ...(init?.body !== undefined ? { body: init.body } : {}),
@@ -109,7 +113,7 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
 
   // POST commands answer 204 on success, or 409 { error, currentStatus } (§5.3).
   async function command(path: string, body?: unknown): Promise<void> {
-    const res = await fetch(base + path, {
+    const res = await fetch(resolveBase() + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body ?? {}),
@@ -124,7 +128,11 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
   }
 
   return {
-    baseUrl: base,
+    // A getter, not a captured string: reads the effective base at access time so a
+    // consumer that reads baseUrl after a runtime URL change sees the new base.
+    get baseUrl() {
+      return resolveBase();
+    },
     getHealth: () => requestJson('/health', HealthResponseSchema),
     getBench: () => requestJson('/bench', GetBenchResponseSchema),
     listBoardProfiles: () => requestJson('/board-profiles', ListBoardProfilesResponseSchema),
@@ -147,19 +155,19 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
       requestJson(`/runs/${runId}/events?afterSeq=${afterSeq}`, GetRunEventsResponseSchema),
     getArtifactMeta: (artifactId) =>
       requestJson(`/artifacts/${artifactId}/meta`, GetArtifactMetaResponseSchema),
-    artifactUrl: (artifactId) => `${base}/artifacts/${artifactId}`,
+    artifactUrl: (artifactId) => `${resolveBase()}/artifacts/${artifactId}`,
     getArtifactText: async (artifactId) => {
       const demo = demoArtifactText?.get(artifactId);
       if (demo !== undefined) return demo; // demo-source branch (T6.5): bundled, offline
-      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      const res = await fetch(`${resolveBase()}/artifacts/${artifactId}`);
       if (!res.ok) {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
       }
       return res.text();
     },
-    documentUrl: (documentId) => `${base}/documents/${documentId}`,
+    documentUrl: (documentId) => `${resolveBase()}/documents/${documentId}`,
     getDocumentText: async (documentId) => {
-      const res = await fetch(`${base}/documents/${documentId}`);
+      const res = await fetch(`${resolveBase()}/documents/${documentId}`);
       if (!res.ok) {
         throw new ApiError(`GET /documents/${documentId} failed with ${res.status}`, res.status);
       }
@@ -168,7 +176,7 @@ export function createApiClient(baseUrl: string = RUNNER_HTTP_BASE): ApiClient {
     getArtifactBlob: async (artifactId, mimeType) => {
       const demo = demoArtifactText?.get(artifactId);
       if (demo !== undefined) return new Blob([demo], { type: mimeType }); // demo-source (T6.5)
-      const res = await fetch(`${base}/artifacts/${artifactId}`);
+      const res = await fetch(`${resolveBase()}/artifacts/${artifactId}`);
       if (!res.ok) {
         throw new ApiError(`GET /artifacts/${artifactId} failed with ${res.status}`, res.status);
       }

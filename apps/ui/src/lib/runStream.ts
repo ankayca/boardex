@@ -7,7 +7,7 @@
 // its own reconnect + replay-from-lastSeq handshake (§5.4); and the moment the
 // live stream delivers the terminal event, the socket is detached — the same
 // invariant maintained over time: sockets exist only for runs that can still emit.
-import { RUNNER_WS_BASE } from './config';
+import { getRunnerWsBase } from './config';
 import { ApiError, type ApiClient } from './api';
 import type { RunStore } from './runStore';
 import { isTerminalStatus } from './runStatus';
@@ -129,7 +129,7 @@ export class RunStreamClient {
   private attachSocket(): void {
     const { runId, api, store } = this.params;
     this.ws = new WsClient({
-      wsBase: this.params.wsBase ?? RUNNER_WS_BASE,
+      wsBase: this.params.wsBase ?? getRunnerWsBase(),
       target: { kind: 'run', runId },
       onEvent: (event) => {
         store.getState().ingest(runId, event);

@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useRunStore } from './runStore';
 import { connectRunStream, type RunStreamStatus } from './runStream';
+import { useRunnerUrlVersion } from './settings';
 
 interface StreamStatus {
   runId: string | undefined;
@@ -22,6 +23,10 @@ interface StreamStatus {
 }
 
 export function useRunStream(runId: string | undefined): RunStreamStatus {
+  // Reconnect the run socket when the runner URL changes at runtime (T6.6): keyed into
+  // the effect deps so a URL swap tears down the old-base client and connects a fresh
+  // one against the new base (replay is idempotent, so no data is lost or doubled).
+  const urlVersion = useRunnerUrlVersion();
   const [state, setState] = useState<StreamStatus>({ runId, status: 'connecting' });
   // Derived-state reset in render: React re-renders with the fresh state before
   // committing, so the stale status is discarded without ever painting.
@@ -44,7 +49,7 @@ export function useRunStream(runId: string | undefined): RunStreamStatus {
       active = false;
       client.close();
     };
-  }, [runId]);
+  }, [runId, urlVersion]);
 
   return state.runId === runId ? state.status : 'connecting';
 }

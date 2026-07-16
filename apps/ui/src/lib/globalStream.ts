@@ -5,7 +5,8 @@
 // bar's runner pill (bench snapshot) and the Home list's live run updates both do.
 import { useEffect, useRef } from 'react';
 import { isKnownEvent, type Event } from '@boardex/contract';
-import { RUNNER_WS_BASE } from './config';
+import { getRunnerWsBase } from './config';
+import { subscribeSettings } from './settings';
 import { WsClient, type WsConnectionStatus } from './ws';
 
 export type GlobalListener = (event: Event) => void;
@@ -14,12 +15,16 @@ export type GlobalStatusListener = (status: WsConnectionStatus) => void;
 const listeners = new Set<GlobalListener>();
 const statusListeners = new Set<GlobalStatusListener>();
 let client: WsClient | null = null;
+// The ws base the live client is connected to — compared on a settings change so an
+// unrelated toggle (sidebar collapse) never cycles a healthy socket (T6.6).
+let clientBase: string | null = null;
 let status: WsConnectionStatus = 'closed';
 
 function ensureClient(): void {
   if (client) return;
+  clientBase = getRunnerWsBase();
   client = new WsClient({
-    wsBase: RUNNER_WS_BASE,
+    wsBase: clientBase,
     target: { kind: 'global' },
     // Snapshot the set: a listener that unsubscribes mid-dispatch must not perturb the
     // iteration. Forward compatibility (§5.1): the wire yields ignored envelopes for
@@ -46,9 +51,24 @@ function releaseClient(): void {
   if (listeners.size === 0 && statusListeners.size === 0 && client) {
     client.close();
     client = null;
+    clientBase = null;
     status = 'closed';
   }
 }
+
+// T6.6: when the runner URL changes at runtime, a live global socket is pointed at the
+// old base. Tear it down and — if anyone is still listening — reconnect to the new base
+// immediately (ensureClient re-reads getRunnerWsBase). Listeners persist across the swap;
+// a settings change that leaves the ws base unchanged is ignored, so it never churns a
+// healthy connection. No client open → nothing to do; the next ensureClient reads fresh.
+subscribeSettings(() => {
+  if (!client || getRunnerWsBase() === clientBase) return;
+  client.close();
+  client = null;
+  clientBase = null;
+  status = 'closed';
+  if (listeners.size > 0 || statusListeners.size > 0) ensureClient();
+});
 
 export function subscribeGlobal(listener: GlobalListener): () => void {
   listeners.add(listener);
