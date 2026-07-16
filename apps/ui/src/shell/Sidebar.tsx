@@ -3,17 +3,22 @@
 // global stream, same ['runs'] invalidation contract as Home), and the runner
 // status pill at the bottom (moved here from the old top bar). Collapses to a
 // 56px icon rail; the choice is deliberately in-memory only (module state), so
-// it survives navigation but resets on reload — no storage.
-import { useMemo, useState } from 'react';
+// it survives navigation but resets on reload — no storage. T6.6: that module flag
+// moved into lib/settings so Settings can drive the same collapse-by-default value
+// (one source of truth), still module memory, still no storage.
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RunStatusIcon, StatusDot } from '../design';
 import { api } from '../lib/api';
 import { useGlobalEvents } from '../lib/globalStream';
+import {
+  getSidebarCollapsed,
+  setSidebarCollapsed,
+  useSettingsVersion,
+} from '../lib/settings';
 import { recentRuns } from './recentRuns';
-
-let collapsedMemory = false;
 
 function RunsIcon() {
   return (
@@ -34,6 +39,20 @@ function BoardsIcon() {
       <rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M6.5 4V2M9.5 4V2M6.5 14v-2M9.5 14v-2M4 6.5H2M4 9.5H2M14 6.5h-2M14 9.5h-2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none">
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8 1.5v1.7M8 12.8v1.7M14.5 8h-1.7M3.2 8H1.5M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2M12.6 12.6l-1.2-1.2M4.6 4.6L3.4 3.4"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
@@ -185,16 +204,16 @@ function RunnerPill({ collapsed }: { collapsed: boolean }) {
 }
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(collapsedMemory);
+  // The collapse choice lives in lib/settings (module memory) so Settings and the
+  // sidebar button read/write the same value; useSettingsVersion re-renders on change.
+  useSettingsVersion();
+  const collapsed = getSidebarCollapsed();
   const { pathname } = useLocation();
-  const toggle = () =>
-    setCollapsed((current) => {
-      collapsedMemory = !current;
-      return !current;
-    });
+  const toggle = () => setSidebarCollapsed(!collapsed);
 
   const runsActive = pathname === '/' || pathname.startsWith('/runs');
   const boardsActive = pathname.startsWith('/boards');
+  const settingsActive = pathname.startsWith('/settings');
 
   return (
     <aside
@@ -264,7 +283,14 @@ export function Sidebar() {
         <RecentRuns collapsed={collapsed} />
       </div>
 
-      <div className={`shrink-0 border-t border-border ${collapsed ? 'px-2 py-3' : 'p-3'}`}>
+      <div className={`shrink-0 space-y-2 border-t border-border ${collapsed ? 'px-2 py-3' : 'p-3'}`}>
+        <NavItem
+          to="/settings"
+          label="Settings"
+          icon={<SettingsIcon />}
+          active={settingsActive}
+          collapsed={collapsed}
+        />
         <RunnerPill collapsed={collapsed} />
       </div>
     </aside>

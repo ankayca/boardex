@@ -67,6 +67,9 @@ function useHeaderInfo(): HeaderInfo {
   if (pathname.startsWith('/boards/')) {
     return { title: 'Board Profile', badge: null, actions: null };
   }
+  if (pathname === '/settings') {
+    return { title: 'Settings', badge: null, actions: null };
+  }
   return { title: 'Boardex', badge: null, actions: null };
 }
 

@@ -18,9 +18,9 @@ function profile(id: string, name: string, mcu: string): BoardProfile {
 const EMPTY: CommandSources = { recentRuns: [], boardProfiles: [], runContext: null };
 
 describe('buildCommands', () => {
-  it('always includes the three navigation destinations', () => {
+  it('always includes the navigation destinations', () => {
     const entries = buildCommands(EMPTY);
-    expect(entries.map((e) => e.to)).toEqual(['/', '/runs/new', '/boards']);
+    expect(entries.map((e) => e.to)).toEqual(['/', '/runs/new', '/boards', '/settings']);
     expect(entries.every((e) => e.group === 'navigation')).toBe(true);
   });
 
@@ -116,7 +116,15 @@ describe('rankCommands', () => {
   it('keeps every entry in default group order for an empty query', () => {
     const groups = rankCommands(commands, '').map((r) => r.entry.group);
     // navigation block, then recent block, then boards block — contiguous.
-    expect(groups).toEqual(['navigation', 'navigation', 'navigation', 'recent', 'recent', 'boards']);
+    expect(groups).toEqual([
+      'navigation',
+      'navigation',
+      'navigation',
+      'navigation',
+      'recent',
+      'recent',
+      'boards',
+    ]);
   });
 
   it('filters to fuzzy matches and ranks within a group by score', () => {

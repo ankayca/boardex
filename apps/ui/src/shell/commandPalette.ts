@@ -69,12 +69,13 @@ function statusHint(status: RunStatus): string {
 export function buildCommands(sources: CommandSources): CommandEntry[] {
   const entries: CommandEntry[] = [];
 
-  // 1. Navigation — the app-wide surfaces we have (no Settings yet, T6.6). The
-  //    dev-only /design gallery is not a product surface and is deliberately absent.
+  // 1. Navigation — the app-wide surfaces we have (Settings added T6.6). The dev-only
+  //    /design gallery is not a product surface and is deliberately absent.
   entries.push(
     { id: 'nav:runs', label: 'Runs', hint: 'Go to run list', group: 'navigation', to: '/' },
     { id: 'nav:new-run', label: 'New Run', hint: 'Start a run', group: 'navigation', to: '/runs/new' },
     { id: 'nav:boards', label: 'Boards', hint: 'Board profiles', group: 'navigation', to: '/boards' },
+    { id: 'nav:settings', label: 'Settings', hint: 'Runner & preferences', group: 'navigation', to: '/settings' },
   );
 
   // 2. In-run context — actions navigate to their surface (the approval card etc.

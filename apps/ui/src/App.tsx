@@ -7,6 +7,7 @@ import RunPage from './pages/composer/RunPage';
 import ReportPage from './pages/report/ReportPage';
 import BoardsPage from './pages/boards/BoardsPage';
 import BoardProfilePage from './pages/boards/BoardProfilePage';
+import SettingsPage from './pages/settings/SettingsPage';
 
 // Dev-only gallery route (BIBLE §8 T0.5). Gate the lazy construction itself, not just
 // the route: in a prod build `import.meta.env.DEV` is statically false, so the dynamic
@@ -38,6 +39,8 @@ export default function App() {
             (§7.5), not a profile whose id happens to be "new". */}
         <Route path="/boards/new" element={<BoardProfilePage />} />
         <Route path="/boards/:id" element={<BoardProfilePage />} />
+        {/* Settings (§T6.6): runner connection, model info, appearance/behavior. */}
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route
         path="/demo/*"
