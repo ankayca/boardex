@@ -1,0 +1,11 @@
+{
+  "verdict": "pass",
+  "summary": "Flashed '/home/ankayca/boardex/firmware/bmp180-f303re/rtt-f303re.elf'.",
+  "data": {
+    "firmware_path": "/home/ankayca/boardex/firmware/bmp180-f303re/rtt-f303re.elf",
+    "verified": true,
+    "reset_after": true
+  },
+  "warnings": [],
+  "duration_s": 0.258
+}

@@ -1,0 +1,7 @@
+make: Entering directory '/bench/firmware/bme280-f303re'
+arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -O2 -Wall -Wextra -c main.c -o main.o
+arm-none-eabi-gcc -T linker.ld -nostartfiles main.o -o bme280-f303re.elf
+arm-none-eabi-size bme280-f303re.elf
+   text    data     bss     dec     hex filename
+   4712      12    1568    6292    1894 bme280-f303re.elf
+make: Leaving directory '/bench/firmware/bme280-f303re'
