@@ -1,0 +1,7 @@
+BMP180 bring-up
+chip-id=0x55
+calibration OK
+AC1=8527
+AC2=-1137
+AC3=-14932
+tick=0 T=319 P=91832

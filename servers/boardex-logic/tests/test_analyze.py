@@ -43,6 +43,21 @@ def test_summarize_multiple_channels():
     assert m["CH1"]["duty_cycle"] == 1.0
 
 
+def test_estimate_i2c_scl_from_sample_ranged_bit_annotations():
+    annotations = [
+        {"start": 0, "end": 40, "text": "Start"},
+        {"start": 40, "end": 80, "text": "0"},
+        {"start": 80, "end": 120, "text": "1"},
+        {"start": 120, "end": 161, "text": "0"},
+        {"start": 40, "end": 161, "text": "Address write: EE"},
+    ]
+    assert analyze.estimate_i2c_scl_hz(annotations, 4_000_000) == 100_000.0
+
+
+def test_estimate_i2c_scl_requires_measured_bit_spans():
+    assert analyze.estimate_i2c_scl_hz([{"text": "0"}], 4_000_000) is None
+
+
 def test_limit_samples_clamps_window():
     parsed = {
         "channels": ["CH0"],

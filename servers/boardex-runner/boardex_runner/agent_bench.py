@@ -41,7 +41,20 @@ from .workspace import (
 
 TOOL_RESULT_CAP = 16_000
 MAX_IDLE_TURNS = 3  # consecutive assistant turns with no tool call
-DEFAULT_MAX_TURNS = 60  # hardware runs burn turns on tool failures; the BMP180 run died at 40
+DEFAULT_MAX_TURNS = 60
+PROTOCOL_DECODE_FIELDS = {
+    "protocol",
+    "device_id",
+    "channel_map",
+    "sample_rate_hz",
+    "num_samples",
+    "duration_s",
+    "bus_state",
+    "trigger_channel",
+    "trigger_edge",
+    "annotations",
+    "transactions",
+}
 
 
 class BoundsExceeded(Exception):
@@ -79,6 +92,10 @@ class AgentBench:
     """Per-run agent-bench configuration and resource lifecycle."""
 
     blocking = False  # the loop is natively async; no executor stages here
+    # Per-run AgentBench instances are fresh, but each spawns MCP servers that
+    # drive the ONE physical probe + analyzer: concurrent runs would collide on
+    # the shared hardware underneath (audit HIGH-1), so the bench is exclusive.
+    exclusive = True
 
     def __init__(
         self,
@@ -594,6 +611,12 @@ class AgentRunEngine(RunEngine):
         self, name: str, step_id: str, result: dict[str, Any]
     ) -> list[str]:
         data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        decode_data = data
+        if name == "verify_bringup":
+            evidence = data.get("evidence") if isinstance(data.get("evidence"), dict) else {}
+            decode_data = (
+                evidence.get("i2c") if isinstance(evidence.get("i2c"), dict) else {}
+            )
         ids: list[str] = []
         if name == "build_firmware":
             text = _build_log_text(result)
@@ -611,15 +634,38 @@ class AgentRunEngine(RunEngine):
                     content=json.dumps(result, indent=2, default=str).encode(),
                 )
             )
-        elif name in ("decode_bus", "capture_during") and "annotations" in data:
+        elif name in (
+            "decode_bus",
+            "capture_during",
+            "reset_and_capture_i2c",
+            "verify_bringup",
+        ) and "annotations" in decode_data:
+            protocol_content = {
+                key: value
+                for key, value in decode_data.items()
+                if key in PROTOCOL_DECODE_FIELDS and value is not None
+            }
             ids.append(
                 self._add_artifact(
                     kind="protocol_decode",
-                    label=f"Protocol decode ({data.get('protocol', 'bus')})",
+                    label=f"Protocol decode ({decode_data.get('protocol', 'bus')})",
                     step_id=step_id,
-                    content=json.dumps(data, indent=2, default=str).encode(),
+                    content=protocol_content,
                 )
             )
+            frequency = decode_data.get("scl_frequency_hz")
+            if isinstance(frequency, (int, float)) and frequency > 0:
+                ids.append(
+                    self._add_artifact(
+                        kind="timing_measurement",
+                        label="Measured I2C SCL frequency",
+                        step_id=step_id,
+                        content={
+                            "measurement": "logic_analyzer.i2c.scl_frequency_hz",
+                            "valueHz": frequency,
+                        },
+                    )
+                )
         elif isinstance(data.get("text"), str) and data["text"].strip() and name in _KIND_RTT:
             ids.append(
                 self._add_artifact(
@@ -756,7 +802,13 @@ _KIND_FLASH = {
     "write_register", "halt_target", "resume_target", "run_checkpoint",
     "verify_bringup",
 }
-_KIND_CAPTURE = {"capture", "decode_bus", "capture_during", "get_capabilities"}
+_KIND_CAPTURE = {
+    "capture",
+    "decode_bus",
+    "capture_during",
+    "reset_and_capture_i2c",
+    "get_capabilities",
+}
 _KIND_RTT = {
     "read_firmware_log", "read_rtt", "wait_for_rtt", "start_rtt", "stop_rtt",
     "prepare_session", "open_session", "close_session",

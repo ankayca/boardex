@@ -196,6 +196,7 @@ class FakeBench:
     """Deterministic simulated bench; every stage is pure data."""
 
     blocking = False
+    exclusive = False  # per-run instances share no hardware — concurrent runs are safe
 
     def __init__(self, *, fail_variant: bool = False) -> None:
         self.fail_variant = fail_variant

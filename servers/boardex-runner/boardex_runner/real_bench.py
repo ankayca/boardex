@@ -63,6 +63,7 @@ class RealBench:
     """Drives the physical bench through the MCP tool layer, in-process."""
 
     blocking = True
+    exclusive = True  # one probe + one analyzer: a run must own the bench alone
 
     def __init__(self, config: RealBenchConfig) -> None:
         # Imports are deferred to construction so the runner package imports
@@ -259,18 +260,28 @@ class RealBench:
         )
 
     def flash_approval(self, iteration: int) -> ApprovalSpec | None:
-        if not self.config.profile.get("safety", {}).get("flashRequiresApproval", True):
-            return None
+        # Gate floor (audit MEDIUM-5): flashing mutates hardware, so it always
+        # requests approval. A falsey ``safety.flashRequiresApproval`` in the
+        # board profile CANNOT remove this gate — config may add friction, never
+        # take the floor away (the AgentBench interception floor is the same law).
+        gated_by_profile = self.config.profile.get("safety", {}).get(
+            "flashRequiresApproval", True
+        )
+        reason = (
+            "The built image must be programmed to the target before "
+            "verification. Flashing mutates hardware and always requires approval."
+        )
+        if gated_by_profile:
+            reason += " Board profile marks flashing as approval-required."
         return ApprovalSpec(
             title="Flash firmware to the target",
-            reason="The built image must be programmed to the target before "
-            "verification. Board profile marks flashing as approval-required.",
+            reason=reason,
             risk_level="medium",
             files_changed=[],
             hardware_actions=[
                 f"Flash {self._ev(iteration).firmware_path} via {self.config.device_id}"
             ],
-            status_reason="Flash requires approval (board profile safety)",
+            status_reason="Flash requires approval (hardware-mutating step)",
         )
 
     def flash(self, iteration: int) -> StepResult:

@@ -1,0 +1,1007 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.8",
+  "channel_map": {
+    "sda": 0,
+    "scl": 1
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 12000000,
+  "duration_s": 3.0,
+  "bus_state": "decoded_ok",
+  "annotations": [
+    {
+      "raw": "i2c-1: Start",
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Write",
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "i2c-1: Address write: 77",
+      "decoder": "i2c-1",
+      "text": "Address write: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data write: F4",
+      "decoder": "i2c-1",
+      "text": "Data write: F4"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: Data write: 2E",
+      "decoder": "i2c-1",
+      "text": "Data write: 2E"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: Stop",
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "i2c-1: Start",
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Write",
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "i2c-1: Address write: 77",
+      "decoder": "i2c-1",
+      "text": "Address write: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data write: F6",
+      "decoder": "i2c-1",
+      "text": "Data write: F6"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: Start repeat",
+      "decoder": "i2c-1",
+      "text": "Start repeat"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Read",
+      "decoder": "i2c-1",
+      "text": "Read"
+    },
+    {
+      "raw": "i2c-1: Address read: 77",
+      "decoder": "i2c-1",
+      "text": "Address read: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: Data read: 71",
+      "decoder": "i2c-1",
+      "text": "Data read: 71"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: Data read: 7E",
+      "decoder": "i2c-1",
+      "text": "Data read: 7E"
+    },
+    {
+      "raw": "i2c-1: NACK",
+      "decoder": "i2c-1",
+      "text": "NACK"
+    },
+    {
+      "raw": "i2c-1: Stop",
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "i2c-1: Start",
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Write",
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "i2c-1: Address write: 77",
+      "decoder": "i2c-1",
+      "text": "Address write: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data write: F4",
+      "decoder": "i2c-1",
+      "text": "Data write: F4"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data write: F4",
+      "decoder": "i2c-1",
+      "text": "Data write: F4"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: Stop",
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "i2c-1: Start",
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Write",
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "i2c-1: Address write: 77",
+      "decoder": "i2c-1",
+      "text": "Address write: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data write: F6",
+      "decoder": "i2c-1",
+      "text": "Data write: F6"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: Start repeat",
+      "decoder": "i2c-1",
+      "text": "Start repeat"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Read",
+      "decoder": "i2c-1",
+      "text": "Read"
+    },
+    {
+      "raw": "i2c-1: Address read: 77",
+      "decoder": "i2c-1",
+      "text": "Address read: 77"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data read: 99",
+      "decoder": "i2c-1",
+      "text": "Data read: 99"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data read: 98",
+      "decoder": "i2c-1",
+      "text": "Data read: 98"
+    },
+    {
+      "raw": "i2c-1: ACK",
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: 0",
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "i2c-1: 1",
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "i2c-1: Data read: A0",
+      "decoder": "i2c-1",
+      "text": "Data read: A0"
+    },
+    {
+      "raw": "i2c-1: NACK",
+      "decoder": "i2c-1",
+      "text": "NACK"
+    },
+    {
+      "raw": "i2c-1: Stop",
+      "decoder": "i2c-1",
+      "text": "Stop"
+    }
+  ],
+  "transactions": [
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [
+        244,
+        46
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [
+        246
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "r",
+      "write": [],
+      "read": [
+        113,
+        126
+      ],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [
+        244,
+        244
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "w",
+      "write": [
+        246
+      ],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 59,
+      "rw": "r",
+      "write": [],
+      "read": [
+        153,
+        152,
+        160
+      ],
+      "nack_at": null
+    }
+  ],
+  "trigger_channel": 1,
+  "trigger_edge": "falling"
+}

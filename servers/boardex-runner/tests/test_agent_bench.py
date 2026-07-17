@@ -5,6 +5,7 @@ hardcoded gate floor, stop-as-hard-cancel, fail-closed meta-tools, bounds."""
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +159,89 @@ def test_deterministic_loop_completes_through_the_wire_layer(task_repo: Path) ->
     # The report artifact referenced by run.completed resolves.
     report_id = events[-1]["payload"]["reportArtifactId"]
     assert engine.artifacts.get(report_id) is not None
+
+
+def test_coordinated_i2c_capture_emits_decode_and_measured_timing_artifacts(
+    task_repo: Path,
+) -> None:
+    tool = "reset_and_capture_i2c"
+    host = FakeToolHost(
+        {tool: "Reset-and-halt the MCU, arm an I2C capture, then resume the target."},
+        results={
+            tool: {
+                "verdict": "pass",
+                "data": {
+                    "protocol": "i2c",
+                    "device_id": "sigrok:la",
+                    "channel_map": {"scl": 1, "sda": 0},
+                    "sample_rate_hz": 4_000_000,
+                    "num_samples": 400_000,
+                    "duration_s": 0.1,
+                    "bus_state": "decoded_ok",
+                    "trigger_channel": 1,
+                    "trigger_edge": "falling",
+                    "annotations": [
+                        {
+                            "raw": "0-40 i2c-1: 0",
+                            "start": 0,
+                            "end": 40,
+                            "decoder": "i2c-1",
+                            "text": "0",
+                        }
+                    ],
+                    "transactions": [
+                        {
+                            "addr_7bit": 0x77,
+                            "rw": "r",
+                            "write": [],
+                            "read": [0x55],
+                            "nack_at": None,
+                        }
+                    ],
+                    "scl_frequency_hz": 100_000.0,
+                    "capture_coordination": {"analyzer_armed_before_resume": True},
+                },
+            }
+        },
+    )
+    plan = {**VALID_PLAN_ARGS, "checks": []}
+    script = [
+        make_turn(calls=[("declare_plan", plan)]),
+        make_turn(
+            calls=[
+                (
+                    tool,
+                    {
+                        "device_id": "pyocd:0",
+                        "logic_analyzer_id": "sigrok:la",
+                        "channel_map": {"scl": 1, "sda": 0},
+                    },
+                )
+            ]
+        ),
+        make_turn(calls=[("write_report", {"markdown": "# Physical evidence complete"})]),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+
+    artifacts = [
+        e["payload"]["artifact"] for e in events if e["type"] == "artifact.created"
+    ]
+    assert [a["kind"] for a in artifacts] == [
+        "protocol_decode",
+        "timing_measurement",
+        "report_md",
+    ]
+    decode = engine.artifacts.get(artifacts[0]["id"])
+    timing = engine.artifacts.get(artifacts[1]["id"])
+    assert decode is not None and b"scl_frequency_hz" not in decode.content
+    assert decode is not None and b"capture_coordination" not in decode.content
+    assert timing is not None
+    assert json.loads(timing.content) == {
+        "measurement": "logic_analyzer.i2c.scl_frequency_hz",
+        "valueHz": 100_000.0,
+    }
 
 
 def test_rejected_gate_never_dispatches_and_stops_run(task_repo: Path) -> None:

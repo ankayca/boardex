@@ -1,0 +1,16 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.8",
+  "channel_map": {
+    "sda": 1,
+    "scl": 0
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 2000000,
+  "duration_s": 0.5,
+  "bus_state": "idle_bus",
+  "annotations": [],
+  "transactions": [],
+  "trigger_channel": 0,
+  "trigger_edge": "falling"
+}

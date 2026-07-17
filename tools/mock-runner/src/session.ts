@@ -38,10 +38,12 @@ export interface RunSessionOptions {
   onEvent: (event: Event) => void;
 }
 
-// Replace every occurrence of the fixture runId with this session's id. Artifact,
-// step, check and approval ids do not contain the runId, so they stay stable.
-function rekey(event: Event, toRunId: string): Event {
-  const json = JSON.stringify(event).split(FIXTURE_RUN_ID).join(toRunId);
+// Replace every occurrence of the source recording's runId with this session's
+// id. Artifact, step, check and approval ids do not contain the runId, so they
+// stay stable. The source id is the recording's own run.created id (FIXTURE_FILE
+// recordings carry their own), falling back to the authored fixture's constant.
+function rekey(event: Event, fromRunId: string, toRunId: string): Event {
+  const json = JSON.stringify(event).split(fromRunId).join(toRunId);
   return EventSchema.parse(JSON.parse(json));
 }
 
@@ -78,6 +80,7 @@ export class RunSession {
   private readonly log: Event[] = [];
   private title: string;
   private boardProfileId: string;
+  private readonly sourceRunId: string;
   private currentStatus: RunStatus = 'draft';
   private updatedAt: string;
   private nextSeq = 1;
@@ -107,6 +110,7 @@ export class RunSession {
     const run = created?.type === 'run.created' ? created.payload.run : undefined;
     this.title = run?.title ?? 'Run';
     this.boardProfileId = run?.boardProfileId ?? 'bp_nucleo_f303re';
+    this.sourceRunId = run?.id ?? FIXTURE_RUN_ID;
     this.updatedAt = new Date().toISOString();
     const firstTs = this.entries[0] ? Date.parse(this.entries[0].event.ts) : NaN;
     this.tsOffsetMs = Number.isFinite(firstTs) ? Date.now() - firstTs : 0;
@@ -168,7 +172,7 @@ export class RunSession {
     if (!this.log.some((event) => event.type === 'run.created')) {
       const created = this.entries.find((entry) => entry.event.type === 'run.created');
       if (created) {
-        this.emit(this.rebase(rekey(created.event, this.id)));
+        this.emit(this.rebase(rekey(created.event, this.sourceRunId, this.id)));
       }
     }
     this.emit(this.make('run.status_changed', { status: 'stopped', reason: 'Stopped by user' }));
@@ -190,7 +194,7 @@ export class RunSession {
       await this.sleep(entry.delayMs / this.speed);
       if (this.terminated) return;
 
-      const event = this.rebase(rekey(entry.event, this.id));
+      const event = this.rebase(rekey(entry.event, this.sourceRunId, this.id));
       this.emit(event);
 
       if (event.type === 'run.plan_generated') {

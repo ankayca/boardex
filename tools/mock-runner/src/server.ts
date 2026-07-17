@@ -15,7 +15,7 @@ import {
   type HealthResponse,
 } from '@boardex/contract';
 import { buildBenchStatus, DOCUMENT_CATALOG, NUCLEO_F303RE_PROFILE } from './data';
-import { buildArtifactCatalog, loadFixture, type ArtifactFile } from './fixture';
+import { buildArtifactCatalog, loadFixture, loadFixtureFile, type ArtifactFile } from './fixture';
 import { RunSession, type CommandResult } from './session';
 
 export interface MockRunnerOptions {
@@ -26,6 +26,10 @@ export interface MockRunnerOptions {
   // Replay the fail variant (T5.0/F9): iteration 2's checks fail again and the
   // run ends in run.failed with no further fix approval.
   failVariant?: boolean;
+  // FIXTURE_FILE override (§10.3): replay an arbitrary recorded run instead of
+  // the authored contract fixtures, serving its artifacts from the recording's
+  // own sibling artifacts/ dir. Takes precedence over failVariant.
+  fixtureFile?: string;
   // Validate every outbound event against the contract at send time (§5.6). On by
   // default; a conforming runner never trips it, so a throw here is a real defect.
   validateOutbound?: boolean;
@@ -48,8 +52,10 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
   const degraded = options.degraded ?? false;
   const validateOutbound = options.validateOutbound ?? true;
 
-  const fixture = loadFixture(options.failVariant ? 'fail' : 'default');
-  const artifactCatalog = buildArtifactCatalog(fixture);
+  const { entries: fixture, artifactsDir } = options.fixtureFile
+    ? loadFixtureFile(options.fixtureFile)
+    : { entries: loadFixture(options.failVariant ? 'fail' : 'default'), artifactsDir: undefined };
+  const artifactCatalog = buildArtifactCatalog(fixture, artifactsDir);
   const bench: BenchStatus = buildBenchStatus(degraded);
 
   // In-memory state (§D8: the mock persists nothing beyond fixture state in memory).
