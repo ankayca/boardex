@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from boardex_runner.agent_bench import DEFAULT_MAX_TURNS, AgentBench
 from boardex_runner.interception import is_risk_gated
 
 from conftest import (
@@ -35,6 +36,15 @@ def task_repo(tmp_path: Path) -> Path:
     repo.mkdir()
     (repo / "main.c").write_text("int main(void) { return 0; }\n")
     return repo
+
+
+def test_agent_turn_budget_default_is_60() -> None:
+    # Hardware runs burn turns on tool failures; the BMP180 run died at 40 with
+    # one check unrecorded. The default budget is 60; the AGENT_MAX_TURNS env
+    # override seam is unchanged (an explicit budget still wins).
+    assert DEFAULT_MAX_TURNS == 60
+    assert AgentBench().max_turns == 60
+    assert AgentBench(max_turns=25).max_turns == 25
 
 
 def test_risk_gate_floor() -> None:

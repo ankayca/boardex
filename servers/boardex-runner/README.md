@@ -51,8 +51,7 @@ VITE_RUNNER_URL=http://localhost:4380 npm run dev -w apps/ui
 | `BOARDEX_BENCH_CONFIG` | JSON file with `RealBenchConfig` fields (`BENCH=real`) |
 | `BOARDEX_BOARD_PROFILES` | JSON file (a BoardProfile or an array) baked in at launch so profiles survive restarts (`BENCH=fake`/`agent`) |
 | `AGENT_MODELS` | Comma-separated LiteLLM model strings advertised via `/health` `capabilities.models` (`BENCH=agent`; default `openrouter/anthropic/claude-sonnet-4.6`) |
-| `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 40) |
-| `AGENT_MAX_TOKENS` | Cap per-request model output tokens (`BENCH=agent`; unset lets LiteLLM auto-fill the model ceiling — a budget-limited key may 402) |
+| `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 60) |
 | `BOARDEX_CONTRACT_SCHEMA_DIR` | Override the JSON Schema location (defaults to repo lookup) |
 
 A `bench.json` for `BENCH=real` carries the wire `BoardProfile` plus bench
