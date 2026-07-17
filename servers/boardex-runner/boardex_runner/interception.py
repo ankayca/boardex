@@ -5,11 +5,18 @@ remove it. A gated call parks on the engine's approval gate BEFORE the MCP
 invocation; rejection returns a refusal result to the model and ends the run
 as stopped.
 
-The floor's contract rests on two explicit dependencies:
+The floor's contract rests on two explicit design constants:
 
-(a) The floor is destructive-only by design. Debug-control tools (halt, step,
-    breakpoints, register/memory reads) are ungated; whether ``halt_target``
-    on a live system counts as destructive is pending a backend-owner ruling.
+(a) Debug-control gating — RULED destructive-only (2026-07-14). The floor gates
+    exactly the hardware-mutating surface: the ``flash_``/``reset_``/``erase_``/
+    ``recover_``/``write_`` prefixes plus the ``run_checkpoint``/``verify_bringup``
+    composites. Debug-control tools (``halt_target``, ``resume_target``,
+    ``run_until``, ``step``, ``set_breakpoint``/``set_watchpoint``, register/
+    memory reads) execute ungated — nothing irreversible escapes without a gate.
+    If the bench could ever be mid-actuation (a motor/valve under target
+    control where a halt freezes an output in a dangerous state), add
+    ``halt_target`` to ``RISK_NAMES`` — the BMP180 bring-up bench cannot, so it
+    stays out.
 (b) The naming convention is load-bearing: any future destructive MCP tool
     MUST either carry one of the risk name prefixes below or declare a
     mutation verb on the first line of its description. A destructive tool

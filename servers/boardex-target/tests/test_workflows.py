@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -143,3 +144,185 @@ def test_run_checkpoint_rtt_fail_inspects(fake_registry, monkeypatch):
     assert result.verdict == Verdict.FAIL
     assert result.data["evidence"]["peripheral"] is not None
     assert "I2C1 not muxed" in result.data["evidence"]["hints"][0]
+
+
+class _CoordinatedAnalyzer:
+    """Analyzer that reports acquisition start via ``on_capture_started``.
+
+    Satisfies ``SupportsCoordinatedCapture`` (has ``decode_coordinated``), so the
+    workflow drives the deterministic poll-until-armed path.
+    """
+
+    def __init__(self, order: list[str], *, armed: bool = True) -> None:
+        self.order = order
+        self.armed = armed
+
+    def decode(self, *_args, **_kwargs):  # pragma: no cover - must not be used
+        self.order.append("decode_plain")
+        raise AssertionError("coordinated analyzer must use decode_coordinated")
+
+    def decode_coordinated(
+        self, _device_id, _protocol, _channel_map, *, on_capture_started, **_kwargs
+    ):
+        self.order.append("decode_entered")
+        on_capture_started()
+        self.order.append("decode_returned")
+        return OperationResult.passed(
+            "decoded",
+            protocol="i2c",
+            sample_rate_hz=4_000_000,
+            annotations=[],
+            transactions=[],
+            armed_via_marker=self.armed,
+        )
+
+
+class _DelayedAnalyzer:
+    """Analyzer without coordinated capture; forces the arm-delay fallback."""
+
+    def __init__(self, order: list[str], resumed: threading.Event) -> None:
+        self.order = order
+        self.resumed = resumed
+
+    def decode(self, *_args, **_kwargs):
+        self.order.append("decode_entered")
+        assert self.resumed.wait(timeout=1.0)
+        self.order.append("decode_returned")
+        return OperationResult.passed(
+            "decoded",
+            protocol="i2c",
+            sample_rate_hz=4_000_000,
+            annotations=[],
+            transactions=[],
+        )
+
+
+def test_reset_and_capture_i2c_resumes_on_acquisition_marker(
+    fake_registry, monkeypatch
+):
+    order: list[str] = []
+    target = fake_registry.resolve("fake:001")
+
+    def reset(_device_id, **kwargs):
+        order.append("reset_halted")
+        assert kwargs["halt"] is True
+        return OperationResult.passed("halted at reset")
+
+    def resume(_device_id, **_kwargs):
+        order.append("resume")
+        return OperationResult.passed("resumed")
+
+    target.reset = reset
+    target.resume = resume
+
+    analyzer = _CoordinatedAnalyzer(order)
+    monkeypatch.setattr(
+        workflows.logic_integration,
+        "resolve_logic_analyzer",
+        lambda _device_id: analyzer,
+    )
+
+    result = workflows.reset_and_capture_i2c(
+        fake_registry,
+        device_id="fake:001",
+        logic_analyzer_id="sigrok:la",
+        channel_map={"scl": 1, "sda": 0},
+    )
+
+    assert result.ok
+    # Resume is gated on the analyzer signalling that sampling is live, and it
+    # happens inside the decode call (between entry and return), not after.
+    assert order == ["reset_halted", "decode_entered", "resume", "decode_returned"]
+    coord = result.data["capture_coordination"]
+    assert coord["analyzer_armed_before_resume"] is True
+    assert coord["resume_gated_on"] == "acquisition_marker"
+
+
+def test_reset_and_capture_i2c_marks_arm_delay_when_marker_missed(
+    fake_registry, monkeypatch
+):
+    order: list[str] = []
+    target = fake_registry.resolve("fake:001")
+    target.reset = MagicMock(return_value=OperationResult.passed("halted"))
+    target.resume = MagicMock(return_value=OperationResult.passed("resumed"))
+
+    analyzer = _CoordinatedAnalyzer(order, armed=False)
+    monkeypatch.setattr(
+        workflows.logic_integration,
+        "resolve_logic_analyzer",
+        lambda _device_id: analyzer,
+    )
+
+    result = workflows.reset_and_capture_i2c(
+        fake_registry,
+        device_id="fake:001",
+        logic_analyzer_id="sigrok:la",
+        channel_map={"scl": 1, "sda": 0},
+    )
+
+    assert result.data["capture_coordination"]["resume_gated_on"] == "arm_delay"
+
+
+def test_reset_and_capture_i2c_arm_delay_fallback(fake_registry, monkeypatch):
+    order: list[str] = []
+    resumed = threading.Event()
+    target = fake_registry.resolve("fake:001")
+
+    def reset(_device_id, **kwargs):
+        order.append("reset_halted")
+        return OperationResult.passed("halted at reset")
+
+    def resume(_device_id, **_kwargs):
+        order.append("resume")
+        resumed.set()
+        return OperationResult.passed("resumed")
+
+    target.reset = reset
+    target.resume = resume
+
+    analyzer = _DelayedAnalyzer(order, resumed)
+    monkeypatch.setattr(
+        workflows.logic_integration,
+        "resolve_logic_analyzer",
+        lambda _device_id: analyzer,
+    )
+
+    result = workflows.reset_and_capture_i2c(
+        fake_registry,
+        device_id="fake:001",
+        logic_analyzer_id="sigrok:la",
+        channel_map={"scl": 1, "sda": 0},
+        arm_delay_s=0,
+    )
+
+    assert result.ok
+    assert order == ["reset_halted", "decode_entered", "resume", "decode_returned"]
+    assert result.data["capture_coordination"]["resume_gated_on"] == "arm_delay"
+
+
+def test_reset_and_capture_i2c_resumes_target_when_capture_fails(
+    fake_registry, monkeypatch
+):
+    target = fake_registry.resolve("fake:001")
+    target.reset = MagicMock(return_value=OperationResult.passed("halted"))
+    target.resume = MagicMock(return_value=OperationResult.passed("resumed"))
+
+    class _BrokenAnalyzer:
+        def decode_coordinated(self, *_args, **_kwargs):
+            raise RuntimeError("sigrok crashed")
+
+    monkeypatch.setattr(
+        workflows.logic_integration,
+        "resolve_logic_analyzer",
+        lambda _device_id: _BrokenAnalyzer(),
+    )
+
+    with pytest.raises(RuntimeError, match="sigrok crashed"):
+        workflows.reset_and_capture_i2c(
+            fake_registry,
+            device_id="fake:001",
+            logic_analyzer_id="sigrok:la",
+            channel_map={"scl": 1, "sda": 0},
+        )
+
+    target.resume.assert_called_once()

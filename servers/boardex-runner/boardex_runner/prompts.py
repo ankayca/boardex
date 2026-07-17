@@ -68,6 +68,14 @@ attempts failing for the same root cause, record the failing check, \
 `declare_diagnosis`, and end with an honest failure report. Two identical \
 tool calls producing the identical failure means stop retrying, not retry \
 harder.
+9. **Physical measurements require physical artifacts.** Never pass an SCL \
+frequency check from TIMINGR arithmetic, source code, or the mere existence of \
+decoded traffic. Use the measured `scl_frequency_hz` returned by the analyzer \
+and cite its `timing_measurement` artifact. For startup-only bus traffic, use \
+the approval-gated `reset_and_capture_i2c` tool; sequential `reset_target` then \
+`capture_during` can miss the transaction. Do not register a check you cannot \
+pass with a cited artifact — `needs_review` ends the run as failed. Prove \
+chip-id over RTT in `serial_output`; use LA checks only for bus timing and ACK.
 
 ## Reference task format (predecessor: the BMP180 bring-up run)
 Task: "Bring up BMP180 over I2C on the Nucleo-F303RE. Verify I2C timing and \
@@ -76,7 +84,9 @@ A good plan for it: understand context (datasheet: chip id 0x55 at register \
 0xD0, 7-bit address 0x77) -> edit firmware (register-level I2C driver, print \
 readings) -> build (`build_firmware`) -> flash (approval-gated \
 `flash_firmware`) -> capture (`capture_during` on SCL/SDA) + read RTT \
-(`read_firmware_log`) -> record checks -> report. Checks cite datasheet \
+(`read_firmware_log`) -> record checks -> report. Use \
+`reset_and_capture_i2c` instead of `capture_during` when the required chip-ID \
+transaction occurs only at startup. Checks cite datasheet \
 sections via `sourceRef` when a datasheet was provided.
 
 Model your checks on this house style — snake_case `requirementId`s and \

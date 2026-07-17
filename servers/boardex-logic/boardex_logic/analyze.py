@@ -12,6 +12,8 @@ the first entry is the level at sample 0 and each later entry is an edge.
 
 from __future__ import annotations
 
+from statistics import median
+
 #: Cap on edges returned per channel over the wire. Measurements are computed on
 #: the full data first, so truncating the transition list never affects the
 #: reported counts/frequencies — it only keeps the JSON payload bounded.
@@ -93,6 +95,28 @@ def summarize(
         name: channel_stats(edges, num_samples, sample_rate_hz)
         for name, edges in transitions.items()
     }
+
+
+def estimate_i2c_scl_hz(annotations: list[dict], sample_rate_hz: int) -> float | None:
+    """Estimate SCL from sigrok's sample-ranged I2C bit annotations.
+
+    The I2C decoder emits one ``0``/``1`` annotation per clocked bit. Its sample
+    span is one SCL period; using the median rejects occasional partial boundary
+    annotations without treating wider START/ADDRESS/DATA annotations as bits.
+    """
+    if sample_rate_hz <= 0:
+        return None
+    spans = [
+        annotation["end"] - annotation["start"]
+        for annotation in annotations
+        if str(annotation.get("text", "")).strip() in {"0", "1"}
+        and isinstance(annotation.get("start"), int)
+        and isinstance(annotation.get("end"), int)
+        and annotation["end"] > annotation["start"]
+    ]
+    if not spans:
+        return None
+    return round(sample_rate_hz / median(spans), 2)
 
 
 def bound_transitions(

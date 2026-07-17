@@ -88,9 +88,15 @@ class Bench(Protocol):
 
     Methods may block (real hardware); the engine runs them off the event loop
     when ``blocking`` is true.
+
+    ``exclusive`` marks a bench backed by a single physical bench (one probe,
+    one analyzer): the server refuses to start a second run while another is
+    non-terminal (audit HIGH-1). Hardware-free benches (``FakeBench``) are not
+    exclusive — their per-run instances share nothing.
     """
 
     blocking: bool
+    exclusive: bool
 
     def bench_status(self) -> dict[str, Any]: ...
 

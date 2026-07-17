@@ -1,0 +1,8 @@
+$ make clean && make
+rm -f rtt-f303re.elf rtt-f303re.bin
+arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Wall -Wextra -O2 -g -ffreestanding -nostdlib -std=c11 -T linker.ld -nostdlib -Wl,--gc-sections main.c -o rtt-f303re.elf
+arm-none-eabi-objcopy -O binary rtt-f303re.elf rtt-f303re.bin
+
+main.c:240:12: warning: 'i2c_read' defined but not used [-Wunused-function]
+  240 | static int i2c_read(uint8_t addr7, uint8_t *buf, uint8_t len) {
+      |            ^~~~~~~~

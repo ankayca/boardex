@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "path": "main.c",
+      "reason": "Add a register-level I2C1 driver (PB8/PB9, 100 kHz) and a BME280 init/read loop printing TEMP/HUM over USART2.",
+      "diff": "--- a/main.c\n+++ b/main.c\n@@ -1,5 +1,120 @@\n #include <stdint.h>\n+#define BME280_ADDR 0x76u\n+static void i2c1_init(void) { /* 100 kHz TIMINGR for 8 MHz HSI */ }\n+static int bme280_read_id(uint8_t *id) { /* CR2 SADD = BME280_ADDR */ }\n"
+    }
+  ]
+}

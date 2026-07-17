@@ -80,6 +80,43 @@ class SupportsSessions(Protocol):
 
 
 @runtime_checkable
+class SupportsCoordinatedCapture(Protocol):
+    """Analyzer can signal the caller the instant acquisition actually begins.
+
+    Ordinary ``decode``/``capture`` are opaque: the caller cannot tell when the
+    device has physically started sampling, only when the call returns. That is
+    fatal for startup-only bus traffic (a sensor chip-ID read fires within a
+    millisecond of reset) on streaming, memory-less analyzers that ignore
+    hardware triggers — the capture window and the event must be aligned by the
+    caller, not guessed with a sleep.
+
+    A backend implementing this runs the acquisition and invokes
+    ``on_capture_started`` exactly once, the moment sampling is confirmed live,
+    so an orchestrator can hold the target halted until then and resume it into
+    a guaranteed-open window. The callback must run on a thread that is not
+    blocking the analyzer's own I/O, so the caller's resume cannot stall the
+    capture.
+    """
+
+    def decode_coordinated(
+        self,
+        device_id: str,
+        protocol: str,
+        channel_map: dict[str, int],
+        *,
+        on_capture_started: Callable[[], None],
+        sample_rate_hz: int = 1_000_000,
+        num_samples: int | None = None,
+        duration_s: float | None = None,
+        options: dict[str, str] | None = None,
+        trigger_channel: int | None = None,
+        trigger_edge: str = "rising",
+    ) -> OperationResult:
+        """Capture+decode, calling ``on_capture_started`` when sampling begins."""
+        ...
+
+
+@runtime_checkable
 class SupportsPeripheralInspection(Protocol):
     """Backend can decode live on-chip peripheral register blocks."""
 

@@ -12,10 +12,31 @@ agent extras installed.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 DEFAULT_MODEL = "openrouter/anthropic/claude-sonnet-4.6"
+
+
+def _max_tokens_from_env() -> int | None:
+    """AGENT_MAX_TOKENS caps per-request output tokens.
+
+    Anthropic-family models require a max_tokens, and LiteLLM otherwise auto-fills
+    the model's ceiling (e.g. 65536 for sonnet), which is wasteful and can trip a
+    provider 402 ("requires more credits, or fewer max_tokens") on a budget-limited
+    key. Unset => leave it to LiteLLM (unchanged behavior).
+    """
+    raw = os.environ.get("AGENT_MAX_TOKENS")
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit("AGENT_MAX_TOKENS must be an integer")
+    if value <= 0:
+        raise SystemExit("AGENT_MAX_TOKENS must be a positive integer")
+    return value
 
 
 @dataclass
@@ -64,8 +85,9 @@ def _parse_turn(message: Any) -> ModelTurn:
 
 
 class LiteLLMProvider:
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, max_tokens: int | None = None) -> None:
         self.model = model
+        self.max_tokens = max_tokens if max_tokens is not None else _max_tokens_from_env()
 
     async def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -73,10 +95,14 @@ class LiteLLMProvider:
         import litellm
 
         litellm.suppress_debug_info = True
+        extra: dict[str, Any] = {}
+        if self.max_tokens is not None:
+            extra["max_tokens"] = self.max_tokens
         response = await litellm.acompletion(
             model=self.model,
             messages=messages,
             tools=tools,
             timeout=600,
+            **extra,
         )
         return _parse_turn(response.choices[0].message)

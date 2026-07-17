@@ -17,13 +17,22 @@ from aiohttp import WSMsgType, web
 
 from .artifacts import ArtifactStore
 from .clock import Clock, VirtualClock
-from .contract import CONTRACT_VERSION, GLOBAL_EVENT_TYPES, validate_event
+from .contract import (
+    CONTRACT_VERSION,
+    GLOBAL_EVENT_TYPES,
+    TERMINAL_STATUSES,
+    validate_event,
+)
 from .engine import Conflict, RunEngine, new_run_id
 from .fake_bench import FakeBench, fake_board_profile
 from .recorder import FixtureRecorder
 
 DEFAULT_PORT = 4380
 _LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+# Staleness bound for the off-loop bench snapshot (audit HIGH-2). The UI treats
+# bench status as advisory, so a few seconds of staleness is acceptable and it
+# stops repeated GET /bench + dashboard connects from hammering the probe.
+_BENCH_STATUS_TTL_S = 5.0
 
 
 class RunnerApp:
@@ -54,6 +63,8 @@ class RunnerApp:
             for profile in (board_profiles or [fake_board_profile()])
         }
         self._bench_status = bench_status
+        self._bench_status_cache: dict[str, Any] | None = None
+        self._bench_status_at = 0.0
         # WS fan-out: one outbound queue per client, drained by a single writer
         # task, so per-client frame order always matches emit order.
         self.run_clients: dict[str, set[asyncio.Queue[str | None]]] = {}
@@ -85,9 +96,24 @@ class RunnerApp:
 
     # -- run lifecycle ---------------------------------------------------------------
 
+    def _active_run(self) -> RunEngine | None:
+        """The one non-terminal run, if any (used to arbitrate exclusive benches)."""
+        return next(
+            (e for e in self.runs.values() if e.status not in TERMINAL_STATUSES),
+            None,
+        )
+
     def create_run(
         self, task_prompt: str, board_profile_id: str, model: str | None = None
-    ) -> str:
+    ) -> str | Conflict:
+        bench = self.bench_factory()
+        # Audit HIGH-1: an exclusive bench (real/agent) owns one physical probe
+        # + analyzer; a second concurrent run would clobber shared evidence and
+        # the debug session. Serialize by refusing to start while a run is live.
+        if getattr(bench, "exclusive", False):
+            active = self._active_run()
+            if active is not None:
+                return Conflict("bench busy", active.status)
         run_id = new_run_id()
         profile = self.board_profiles.get(board_profile_id)
         if profile is None:
@@ -98,7 +124,7 @@ class RunnerApp:
             run_id=run_id,
             task_prompt=task_prompt,
             profile=profile,
-            bench=self.bench_factory(),
+            bench=bench,
             clock=self.clock_factory(),
             artifacts=self.artifacts,
             on_event=lambda event, _rid=run_id: self.dispatch(self.runs[_rid], event),
@@ -110,10 +136,31 @@ class RunnerApp:
         engine.start()
         return run_id
 
-    def bench_status(self) -> dict[str, Any]:
+    async def bench_status(self) -> dict[str, Any]:
+        """§5.3 GET /bench + global-WS snapshot.
+
+        A blocking bench's snapshot runs a live hardware scan (pyOCD USB
+        enumeration + ``sigrok-cli --scan``, up to ~20 s). Running it on the
+        loop thread freezes every run's event stream for that whole window
+        (audit HIGH-2). Offload it to the executor and cache the result for a
+        few seconds so bursts of dashboard connects don't stack scans.
+        """
         if self._bench_status is not None:
             return self._bench_status
-        return self.bench_factory().bench_status()
+        bench = self.bench_factory()
+        if not getattr(bench, "blocking", False):
+            return bench.bench_status()
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        if (
+            self._bench_status_cache is not None
+            and now - self._bench_status_at < _BENCH_STATUS_TTL_S
+        ):
+            return self._bench_status_cache
+        snapshot = await loop.run_in_executor(None, bench.bench_status)
+        self._bench_status_cache = snapshot
+        self._bench_status_at = now
+        return snapshot
 
 
 # -- HTTP handlers --------------------------------------------------------------------
@@ -170,7 +217,7 @@ def build_app(state: RunnerApp) -> web.Application:
         return _json(request, 200, payload)
 
     async def bench(request: web.Request) -> web.Response:
-        return _json(request, 200, state.bench_status())
+        return _json(request, 200, await state.bench_status())
 
     async def list_profiles(request: web.Request) -> web.Response:
         return _json(request, 200, list(state.board_profiles.values()))
@@ -213,8 +260,14 @@ def build_app(state: RunnerApp) -> web.Application:
                     409,
                     {"error": f'model "{model}" is not in this runner\'s advertised model list'},
                 )
-        run_id = state.create_run(body["taskPrompt"], body["boardProfileId"], model)
-        return _json(request, 200, {"runId": run_id})
+        result = state.create_run(body["taskPrompt"], body["boardProfileId"], model)
+        if isinstance(result, Conflict):
+            return _json(
+                request,
+                409,
+                {"error": result.error, "currentStatus": result.current_status},
+            )
+        return _json(request, 200, {"runId": result})
 
     def _engine(request: web.Request) -> RunEngine | None:
         return state.runs.get(request.match_info["run_id"])
@@ -310,7 +363,7 @@ def build_app(state: RunnerApp) -> web.Application:
                 "runId": "_global",
                 "ts": Clock().now_iso(),
                 "type": "runner.status",
-                "payload": {"bench": state.bench_status()},
+                "payload": {"bench": await state.bench_status()},
             }
             validate_event(snapshot)
             await ws.send_str(json.dumps(snapshot))
@@ -343,6 +396,31 @@ def build_app(state: RunnerApp) -> web.Application:
 # -- process entry point -----------------------------------------------------------------
 
 
+def _board_profiles_from_env() -> list[dict[str, Any]] | None:
+    """Load board profiles baked into launch via ``BOARDEX_BOARD_PROFILES``.
+
+    The file is a single BoardProfile object or a JSON array of them. Baking the
+    profile into the launch means it survives runner restarts — otherwise a
+    profile only lives in runner memory (POST /board-profiles) and a restart
+    silently drops back to the default, so a run created against its id resolves
+    to a profile whose ``repoPath`` doesn't exist (agent bench fails on start).
+    Returns ``None`` when unset, so the caller keeps its default profile.
+    """
+    path = os.environ.get("BOARDEX_BOARD_PROFILES")
+    if not path:
+        return None
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    profiles = raw if isinstance(raw, list) else [raw]
+    if not profiles or not all(
+        isinstance(profile, dict) and profile.get("id") for profile in profiles
+    ):
+        raise SystemExit(
+            "BOARDEX_BOARD_PROFILES must be a board profile object (or array) "
+            "each with an 'id'"
+        )
+    return profiles
+
+
 def state_from_env() -> RunnerApp:
     """Build runner state from environment configuration.
 
@@ -351,6 +429,8 @@ def state_from_env() -> RunnerApp:
     FIXTURE=fail — fake bench replays the fail-variant arc
     RECORD=<dir> — tee the first run to <dir>/recorded_run.jsonl (+ artifacts/)
     BOARDEX_BENCH_CONFIG=<json file> — RealBench configuration (BENCH=real)
+    BOARDEX_BOARD_PROFILES=<json file> — board profile(s) baked in at launch
+        (survives restarts; BENCH=fake|agent)
     AGENT_MODELS=<csv> — LiteLLM model strings advertised via capabilities (BENCH=agent)
     AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 40)
     """
@@ -383,6 +463,7 @@ def state_from_env() -> RunnerApp:
             engine_cls=AgentRunEngine,
             models=agent_models_from_env(),
             bench_status=agent_bench_status(),
+            board_profiles=_board_profiles_from_env(),
         )
 
     if bench_kind == "real":
@@ -406,6 +487,7 @@ def state_from_env() -> RunnerApp:
         bench_factory=lambda: FakeBench(fail_variant=fail_variant),
         clock_factory=lambda: VirtualClock(speed=speed, dilation=pacing),
         recorder=recorder,
+        board_profiles=_board_profiles_from_env(),
     )
 
 

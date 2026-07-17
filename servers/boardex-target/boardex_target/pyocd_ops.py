@@ -30,6 +30,19 @@ except Exception as exc:  # noqa: BLE001
     _IMPORT_ERROR = exc
 
 
+def _silent_progress(*_args: Any, **_kwargs: Any) -> None:
+    """No-op pyOCD progress callback.
+
+    pyOCD's default ``FileProgrammer`` progress reporter writes ``[====...]`` /
+    erase bars to ``sys.stdout``. When this server runs as a stdio MCP server,
+    stdout IS the JSON-RPC transport, so those bars corrupt the framing and the
+    client's stdout reader throws ``Invalid JSON`` on lines like
+    ``[========================================]``. Passing an explicit no-op
+    progress callback suppresses pyOCD's console output entirely; its own
+    logging still goes to stderr, which is safe.
+    """
+
+
 def pyocd_available() -> bool:
     return _IMPORT_ERROR is None
 
@@ -118,7 +131,9 @@ def flash(
     reset_after: bool = True,
 ) -> OperationResult:
     started = time.monotonic()
-    FileProgrammer(session).program(firmware_path)  # auto-detects .elf/.hex/.bin
+    # progress=_silent_progress: keep pyOCD's flash bars off stdout, which is the
+    # MCP stdio transport (a leaked bar corrupts JSON-RPC framing).
+    FileProgrammer(session, progress=_silent_progress).program(firmware_path)  # .elf/.hex/.bin
     if reset_after:
         session.target.reset()
     result = OperationResult.passed(

@@ -17,7 +17,7 @@ from boardex_runner.artifacts import ArtifactStore
 from boardex_runner.clock import VirtualClock
 from boardex_runner.contract import validate_event
 from boardex_runner.fake_bench import FakeBench
-from boardex_runner.server import RunnerApp, build_app
+from boardex_runner.server import RunnerApp, build_app, state_from_env
 
 from conftest import run
 
@@ -433,6 +433,108 @@ def test_run_summary_valid_in_pre_run_created_window() -> None:
         await runner.cleanup()
 
     run(scenario())
+
+
+class _ExclusiveBench(FakeBench):
+    """A FakeBench that claims a single physical bench (audit HIGH-1)."""
+
+    exclusive = True
+
+
+class _BlockingScanBench(FakeBench):
+    """A blocking bench whose bench_status() counts how often it is scanned."""
+
+    blocking = True
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scans = 0
+
+    def bench_status(self) -> dict[str, Any]:
+        self.scans += 1
+        return {"runnerOnline": True, "contractVersion": "boardex-contract/0.1", "devices": []}
+
+
+async def _serve(state: RunnerApp) -> tuple[web.AppRunner, str]:
+    runner = web.AppRunner(build_app(state))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    return runner, f"http://127.0.0.1:{runner.addresses[0][1]}"
+
+
+def test_exclusive_bench_serializes_runs_with_409() -> None:
+    """Audit HIGH-1: a second run on an exclusive bench is refused while the
+    first is non-terminal; once the first ends, a new run starts."""
+
+    async def scenario() -> None:
+        state = RunnerApp(
+            bench_factory=lambda: _ExclusiveBench(),
+            clock_factory=lambda: VirtualClock(speed=SPEED),
+        )
+        runner, base = await _serve(state)
+        async with aiohttp.ClientSession() as session:
+            body = {"taskPrompt": "bring up BME280", "boardProfileId": "bp_nucleo_f303re"}
+            first = await session.post(base + "/runs", json=body)
+            assert first.status == 200
+            first_id = (await first.json())["runId"]
+
+            # A second run while the first is live is refused with the busy shape.
+            second = await session.post(base + "/runs", json=body)
+            assert second.status == 409
+            payload = await second.json()
+            assert payload["error"] == "bench busy"
+            assert payload["currentStatus"] not in TERMINAL
+            assert len(state.runs) == 1  # no engine was created for the refusal
+
+            # End the first run, then a fresh run is admitted.
+            assert (await session.post(base + f"/runs/{first_id}/stop")).status == 204
+            third = await session.post(base + "/runs", json=body)
+            assert third.status == 200
+            assert (await third.json())["runId"] != first_id
+        for engine in state.runs.values():
+            engine.dispose()
+        await runner.cleanup()
+
+    run(scenario())
+
+
+def test_bench_status_scan_is_offloaded_and_cached() -> None:
+    """Audit HIGH-2: a blocking bench's scan is served (not skipped) and cached
+    for the staleness window, so bursts of GET /bench don't stack scans."""
+
+    async def scenario() -> None:
+        bench = _BlockingScanBench()
+        state = RunnerApp(
+            bench_factory=lambda: bench, clock_factory=lambda: VirtualClock(speed=SPEED)
+        )
+        runner, base = await _serve(state)
+        async with aiohttp.ClientSession() as session:
+            for _ in range(5):
+                res = await session.get(base + "/bench")
+                assert res.status == 200
+                assert (await res.json())["runnerOnline"] is True
+            assert bench.scans == 1  # cached: five requests, one hardware scan
+        await runner.cleanup()
+
+    run(scenario())
+
+
+def test_board_profiles_baked_in_from_env(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """BOARDEX_BOARD_PROFILES bakes a profile into launch so it survives a
+    restart (the in-memory-only trap: a run against an id whose profile was
+    never re-POSTed resolves to the default, whose repoPath doesn't exist)."""
+    import json as _json
+
+    profile = {"id": "bp_bench", "name": "Bench", "repoPath": str(tmp_path / "repo")}
+    profile_file = tmp_path / "profiles.json"
+    profile_file.write_text(_json.dumps(profile), encoding="utf-8")
+    monkeypatch.setenv("BENCH", "fake")
+    monkeypatch.setenv("BOARDEX_BOARD_PROFILES", str(profile_file))
+
+    state = state_from_env()
+    assert "bp_bench" in state.board_profiles
+    assert state.board_profiles["bp_bench"]["repoPath"] == str(tmp_path / "repo")
 
 
 def test_fail_variant_over_http() -> None:

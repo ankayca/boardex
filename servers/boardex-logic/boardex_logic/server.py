@@ -167,9 +167,9 @@ def capture_during(
     """Trigger-armed bus capture for sporadic traffic (I2C/SPI/UART/...).
 
     Same as ``decode_bus`` but defaults to a short window and SCL-falling trigger
-    for I2C. Coordinate with the target MCP: call ``reset_target`` on the MCU
-    immediately before this tool so the capture covers the first post-reset bus
-    activity.
+    for I2C. Use this directly for periodic traffic. For immediate post-reset
+    traffic, use boardex-target's approval-gated ``reset_and_capture_i2c`` tool;
+    a sequential reset followed by this call can miss startup transactions.
 
     For I2C, when ``trigger_channel`` is omitted the ``scl`` entry from
     ``channel_map`` is used.

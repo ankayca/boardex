@@ -16,11 +16,24 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
+from collections import deque
+from typing import Callable
 
 from boardex_core import BackendUnavailableError, OperationFailedError
 
 #: Name of the CLI binary we drive. Overridable for tests via ``BINARY``.
 BINARY = "sigrok-cli"
+
+#: Substrings sigrok-cli logs (at ``-l 5``) the instant a device is physically
+#: sampling. On streaming, memory-less analyzers (Kingst LA1010, FX2 clones)
+#: acquisition begins immediately — there is no hardware trigger to wait on — so
+#: the first receive callback / frame-begin is the only trustworthy "the window
+#: is now open" signal. Matching either keeps this robust across sigrok versions.
+ACQUISITION_STARTED_MARKERS: tuple[str, ...] = (
+    "First receive callback in stream mode",
+    "Received SR_DF_FRAME_BEGIN",
+)
 
 #: Map Boardex's brand-neutral trigger edges to sigrok's single-char codes.
 #: (see ``sigrok-cli(1)``: r=rising f=falling 0=low 1=high e=either)
@@ -73,6 +86,85 @@ def run(args: list[str], *, timeout_s: float = 30.0) -> str:
             f"sigrok-cli failed (exit {proc.returncode}): {detail or 'no output'}"
         )
     return proc.stdout
+
+
+def run_coordinated(
+    args: list[str],
+    *,
+    on_armed: Callable[[], None],
+    arm_markers: tuple[str, ...] = ACQUISITION_STARTED_MARKERS,
+    arm_timeout_s: float = 10.0,
+    timeout_s: float = 60.0,
+) -> tuple[str, bool]:
+    """Run ``sigrok-cli`` and fire ``on_armed`` when sampling actually starts.
+
+    Streams stderr on a background thread, watching for an
+    ``arm_markers`` line; the moment one appears (acquisition is physically
+    live) ``on_armed`` is invoked from *this* thread while the stderr/stdout
+    drains keep running, so the callback cannot back-pressure sigrok's pipes and
+    stall the capture. Returns ``(stdout, armed_via_marker)``.
+
+    If no marker is seen within ``arm_timeout_s`` the callback is still invoked
+    once (as a best-effort fallback) so a coordinator never leaves a target
+    halted, and ``armed_via_marker`` is ``False``.
+
+    Raises ``OperationFailedError`` on non-zero exit or timeout, mirroring
+    ``run`` so callers get the same actionable stderr tail.
+    """
+    cmd = [_binary(), *args]
+    armed = threading.Event()
+    stderr_tail: deque[str] = deque(maxlen=50)
+    stdout_chunks: list[str] = []
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    def drain_stdout() -> None:
+        assert proc.stdout is not None
+        stdout_chunks.append(proc.stdout.read())
+
+    def drain_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            stderr_tail.append(line.rstrip("\n"))
+            if not armed.is_set() and any(m in line for m in arm_markers):
+                armed.set()
+
+    t_out = threading.Thread(target=drain_stdout, daemon=True)
+    t_err = threading.Thread(target=drain_stderr, daemon=True)
+    t_out.start()
+    t_err.start()
+
+    armed_via_marker = armed.wait(timeout=arm_timeout_s)
+    try:
+        on_armed()
+    finally:
+        # A resume that partially ran must not leak the sigrok subprocess: fall
+        # through to reap it regardless of what the callback did.
+        try:
+            proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired as exc:
+            proc.kill()
+            proc.wait()
+            t_out.join(timeout=5)
+            t_err.join(timeout=5)
+            raise OperationFailedError(
+                f"sigrok-cli timed out after {timeout_s:g}s: {' '.join(args)}"
+            ) from exc
+
+    t_out.join(timeout=5)
+    t_err.join(timeout=5)
+
+    if proc.returncode != 0:
+        detail = "\n".join(stderr_tail).strip()
+        raise OperationFailedError(
+            f"sigrok-cli failed (exit {proc.returncode}): {detail or 'no output'}"
+        )
+    return "".join(stdout_chunks), armed_via_marker
 
 
 def version() -> str:
@@ -130,26 +222,18 @@ def capture_csv(
     return run(args, timeout_s=timeout_s)
 
 
-def decode_raw(
+def _decode_args(
     device_spec: str,
     *,
     sample_rate_hz: int,
     num_samples: int,
     protocol: str,
     channel_map: dict[str, str],
-    options: dict[str, str] | None = None,
-    annotation: str | None = None,
-    channels: list[str] | None = None,
-    trigger: tuple[str, str] | None = None,
-    timeout_s: float = 60.0,
-) -> str:
-    """Capture and run a sigrok protocol decoder, returning annotation lines.
-
-    ``protocol`` is a libsigrokdecode id (``i2c``, ``spi``, ``uart``, ...);
-    ``channel_map`` binds decoder inputs to device channel *names*
-    (e.g. ``{"scl": "CH0", "sda": "CH1"}``); ``options`` sets decoder options
-    (e.g. ``{"baudrate": "115200"}``).
-    """
+    options: dict[str, str] | None,
+    annotation: str | None,
+    channels: list[str] | None,
+    trigger: tuple[str, str] | None,
+) -> list[str]:
     pd = protocol
     for pin, name in channel_map.items():
         pd += f":{pin}={name}"
@@ -170,5 +254,83 @@ def decode_raw(
     if trigger is not None:
         name, edge = trigger
         args += ["--triggers", f"{name}={edge}"]
-    args += ["-A", annotation or protocol]
+    # Sample ranges make protocol evidence physically measurable (for example,
+    # each I2C bit span yields the observed SCL period).
+    args += ["--protocol-decoder-samplenum", "-A", annotation or protocol]
+    return args
+
+
+def decode_raw(
+    device_spec: str,
+    *,
+    sample_rate_hz: int,
+    num_samples: int,
+    protocol: str,
+    channel_map: dict[str, str],
+    options: dict[str, str] | None = None,
+    annotation: str | None = None,
+    channels: list[str] | None = None,
+    trigger: tuple[str, str] | None = None,
+    timeout_s: float = 60.0,
+) -> str:
+    """Capture and run a sigrok protocol decoder, returning annotation lines.
+
+    ``protocol`` is a libsigrokdecode id (``i2c``, ``spi``, ``uart``, ...);
+    ``channel_map`` binds decoder inputs to device channel *names*
+    (e.g. ``{"scl": "CH0", "sda": "CH1"}``); ``options`` sets decoder options
+    (e.g. ``{"baudrate": "115200"}``).
+    """
+    args = _decode_args(
+        device_spec,
+        sample_rate_hz=sample_rate_hz,
+        num_samples=num_samples,
+        protocol=protocol,
+        channel_map=channel_map,
+        options=options,
+        annotation=annotation,
+        channels=channels,
+        trigger=trigger,
+    )
     return run(args, timeout_s=timeout_s)
+
+
+def decode_raw_coordinated(
+    device_spec: str,
+    *,
+    on_armed: Callable[[], None],
+    sample_rate_hz: int,
+    num_samples: int,
+    protocol: str,
+    channel_map: dict[str, str],
+    options: dict[str, str] | None = None,
+    annotation: str | None = None,
+    channels: list[str] | None = None,
+    trigger: tuple[str, str] | None = None,
+    arm_timeout_s: float = 10.0,
+    timeout_s: float = 60.0,
+) -> tuple[str, bool]:
+    """Like ``decode_raw`` but fire ``on_armed`` when sampling actually starts.
+
+    Adds ``-l 5`` so sigrok logs the acquisition-start markers this needs, then
+    routes through :func:`run_coordinated`. Returns ``(stdout, armed_via_marker)``.
+    """
+    args = _decode_args(
+        device_spec,
+        sample_rate_hz=sample_rate_hz,
+        num_samples=num_samples,
+        protocol=protocol,
+        channel_map=channel_map,
+        options=options,
+        annotation=annotation,
+        channels=channels,
+        trigger=trigger,
+    )
+    # -l 5 raises sigrok's log verbosity to stderr so the acquisition-start
+    # markers are emitted; annotation output still goes to stdout untouched.
+    args = ["-l", "5", *args]
+    return run_coordinated(
+        args,
+        on_armed=on_armed,
+        arm_timeout_s=arm_timeout_s,
+        timeout_s=timeout_s,
+    )
