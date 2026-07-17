@@ -1,0 +1,494 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.8",
+  "channel_map": {
+    "sda": 0,
+    "scl": 1
+  },
+  "sample_rate_hz": 4000000,
+  "num_samples": 2000000,
+  "duration_s": 0.5,
+  "bus_state": "decoded_ok",
+  "annotations": [
+    {
+      "raw": "992422-992422 i2c-1: Start",
+      "start": 992422,
+      "end": 992422,
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "993457-993652 i2c-1: 0",
+      "start": 993457,
+      "end": 993652,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "993262-993457 i2c-1: 0",
+      "start": 993262,
+      "end": 993457,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "993182-993262 i2c-1: 0",
+      "start": 993182,
+      "end": 993262,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "993099-993182 i2c-1: 0",
+      "start": 993099,
+      "end": 993182,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "992943-993099 i2c-1: 0",
+      "start": 992943,
+      "end": 993099,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "992741-992943 i2c-1: 0",
+      "start": 992741,
+      "end": 992943,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "992661-992741 i2c-1: 0",
+      "start": 992661,
+      "end": 992741,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "992545-992661 i2c-1: 0",
+      "start": 992545,
+      "end": 992661,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "993457-993652 i2c-1: Write",
+      "start": 993457,
+      "end": 993652,
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "992545-993457 i2c-1: Address write: 00",
+      "start": 992545,
+      "end": 993457,
+      "decoder": "i2c-1",
+      "text": "Address write: 00"
+    },
+    {
+      "raw": "993497-993692 i2c-1: NACK",
+      "start": 993497,
+      "end": 993692,
+      "decoder": "i2c-1",
+      "text": "NACK"
+    },
+    {
+      "raw": "1115925-1115925 i2c-1: Stop",
+      "start": 1115925,
+      "end": 1115925,
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "1115943-1115943 i2c-1: Start",
+      "start": 1115943,
+      "end": 1115943,
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "1117080-1117316 i2c-1: 0",
+      "start": 1117080,
+      "end": 1117316,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116844-1117080 i2c-1: 0",
+      "start": 1116844,
+      "end": 1117080,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116686-1116844 i2c-1: 0",
+      "start": 1116686,
+      "end": 1116844,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116619-1116686 i2c-1: 0",
+      "start": 1116619,
+      "end": 1116686,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116539-1116619 i2c-1: 0",
+      "start": 1116539,
+      "end": 1116619,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116464-1116539 i2c-1: 0",
+      "start": 1116464,
+      "end": 1116539,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116262-1116464 i2c-1: 0",
+      "start": 1116262,
+      "end": 1116464,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1116066-1116262 i2c-1: 0",
+      "start": 1116066,
+      "end": 1116262,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1117080-1117316 i2c-1: Write",
+      "start": 1117080,
+      "end": 1117316,
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "1116066-1117080 i2c-1: Address write: 00",
+      "start": 1116066,
+      "end": 1117080,
+      "decoder": "i2c-1",
+      "text": "Address write: 00"
+    },
+    {
+      "raw": "1117317-1117553 i2c-1: ACK",
+      "start": 1117317,
+      "end": 1117553,
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "1117338-1117338 i2c-1: Stop",
+      "start": 1117338,
+      "end": 1117338,
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "1117436-1117436 i2c-1: Start",
+      "start": 1117436,
+      "end": 1117436,
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "1118562-1118718 i2c-1: 0",
+      "start": 1118562,
+      "end": 1118718,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1118406-1118562 i2c-1: 0",
+      "start": 1118406,
+      "end": 1118562,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1118205-1118406 i2c-1: 0",
+      "start": 1118205,
+      "end": 1118406,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1118009-1118205 i2c-1: 0",
+      "start": 1118009,
+      "end": 1118205,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1117850-1118009 i2c-1: 0",
+      "start": 1117850,
+      "end": 1118009,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1117796-1117850 i2c-1: 1",
+      "start": 1117796,
+      "end": 1117850,
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "1117756-1117796 i2c-1: 0",
+      "start": 1117756,
+      "end": 1117796,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1117716-1117756 i2c-1: 0",
+      "start": 1117716,
+      "end": 1117756,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1118562-1118718 i2c-1: Write",
+      "start": 1118562,
+      "end": 1118718,
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "1117716-1118562 i2c-1: Address write: 20",
+      "start": 1117716,
+      "end": 1118562,
+      "decoder": "i2c-1",
+      "text": "Address write: 20"
+    },
+    {
+      "raw": "1118764-1118920 i2c-1: ACK",
+      "start": 1118764,
+      "end": 1118920,
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "1118781-1118781 i2c-1: Stop",
+      "start": 1118781,
+      "end": 1118781,
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "1118799-1118799 i2c-1: Start",
+      "start": 1118799,
+      "end": 1118799,
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "1756002-1756068 i2c-1: 0",
+      "start": 1756002,
+      "end": 1756068,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1755936-1756002 i2c-1: 0",
+      "start": 1755936,
+      "end": 1756002,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1755780-1755936 i2c-1: 0",
+      "start": 1755780,
+      "end": 1755936,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1755578-1755780 i2c-1: 0",
+      "start": 1755578,
+      "end": 1755780,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1755383-1755578 i2c-1: 0",
+      "start": 1755383,
+      "end": 1755578,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1755225-1755383 i2c-1: 0",
+      "start": 1755225,
+      "end": 1755383,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1118960-1755225 i2c-1: 1",
+      "start": 1118960,
+      "end": 1755225,
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "1118920-1118960 i2c-1: 0",
+      "start": 1118920,
+      "end": 1118960,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756002-1756068 i2c-1: Write",
+      "start": 1756002,
+      "end": 1756068,
+      "decoder": "i2c-1",
+      "text": "Write"
+    },
+    {
+      "raw": "1118920-1756002 i2c-1: Address write: 40",
+      "start": 1118920,
+      "end": 1756002,
+      "decoder": "i2c-1",
+      "text": "Address write: 40"
+    },
+    {
+      "raw": "1756161-1756227 i2c-1: ACK",
+      "start": 1756161,
+      "end": 1756227,
+      "decoder": "i2c-1",
+      "text": "ACK"
+    },
+    {
+      "raw": "1756179-1756179 i2c-1: Stop",
+      "start": 1756179,
+      "end": 1756179,
+      "decoder": "i2c-1",
+      "text": "Stop"
+    },
+    {
+      "raw": "1756197-1756197 i2c-1: Start",
+      "start": 1756197,
+      "end": 1756197,
+      "decoder": "i2c-1",
+      "text": "Start"
+    },
+    {
+      "raw": "1757472-1757552 i2c-1: 1",
+      "start": 1757472,
+      "end": 1757552,
+      "decoder": "i2c-1",
+      "text": "1"
+    },
+    {
+      "raw": "1757392-1757472 i2c-1: 0",
+      "start": 1757392,
+      "end": 1757472,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1757077-1757392 i2c-1: 0",
+      "start": 1757077,
+      "end": 1757392,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756994-1757077 i2c-1: 0",
+      "start": 1756994,
+      "end": 1757077,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756755-1756994 i2c-1: 0",
+      "start": 1756755,
+      "end": 1756994,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756636-1756755 i2c-1: 0",
+      "start": 1756636,
+      "end": 1756755,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756476-1756636 i2c-1: 0",
+      "start": 1756476,
+      "end": 1756636,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1756357-1756476 i2c-1: 0",
+      "start": 1756357,
+      "end": 1756476,
+      "decoder": "i2c-1",
+      "text": "0"
+    },
+    {
+      "raw": "1757472-1757552 i2c-1: Read",
+      "start": 1757472,
+      "end": 1757552,
+      "decoder": "i2c-1",
+      "text": "Read"
+    },
+    {
+      "raw": "1756357-1757472 i2c-1: Address read: 01",
+      "start": 1756357,
+      "end": 1757472,
+      "decoder": "i2c-1",
+      "text": "Address read: 01"
+    }
+  ],
+  "transactions": [
+    {
+      "addr_7bit": 0,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 0,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 16,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 32,
+      "rw": "w",
+      "write": [],
+      "read": [],
+      "nack_at": null
+    },
+    {
+      "addr_7bit": 0,
+      "rw": "r",
+      "write": [],
+      "read": [],
+      "nack_at": null
+    }
+  ],
+  "trigger_channel": 1,
+  "trigger_edge": "falling"
+}

@@ -1,0 +1,1207 @@
+{
+  "protocol": "i2c",
+  "device_id": "sigrok:kingst-la2016:conn=3.8",
+  "channel_map": {
+    "sda": 0,
+    "scl": 1
+  },
+  "sample_rate_hz": 8000000,
+  "num_samples": 1600000,
+  "duration_s": 0.2,
+  "bus_state": "activity_no_decode",
+  "annotations": [
+    {
+      "raw": "10420-10420 i2c-1: start: \"Start\" \"S\"",
+      "start": 10420,
+      "end": 10420,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "12851-13011 i2c-1: bit: \"0\"",
+      "start": 12851,
+      "end": 13011,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "12691-12851 i2c-1: bit: \"0\"",
+      "start": 12691,
+      "end": 12851,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "12222-12691 i2c-1: bit: \"0\"",
+      "start": 12222,
+      "end": 12691,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "11904-12222 i2c-1: bit: \"0\"",
+      "start": 11904,
+      "end": 12222,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "11773-11904 i2c-1: bit: \"0\"",
+      "start": 11773,
+      "end": 11904,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "11302-11773 i2c-1: bit: \"0\"",
+      "start": 11302,
+      "end": 11773,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "11058-11302 i2c-1: bit: \"0\"",
+      "start": 11058,
+      "end": 11302,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "10666-11058 i2c-1: bit: \"0\"",
+      "start": 10666,
+      "end": 11058,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "12851-13011 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 12851,
+      "end": 13011,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "10666-12851 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 10666,
+      "end": 12851,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "13011-13171 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 13011,
+      "end": 13171,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "13053-13053 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 13053,
+      "end": 13053,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "13088-13088 i2c-1: start: \"Start\" \"S\"",
+      "start": 13088,
+      "end": 13088,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "14981-15052 i2c-1: bit: \"0\"",
+      "start": 14981,
+      "end": 15052,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "14910-14981 i2c-1: bit: \"0\"",
+      "start": 14910,
+      "end": 14981,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "14750-14910 i2c-1: bit: \"0\"",
+      "start": 14750,
+      "end": 14910,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "14583-14750 i2c-1: bit: \"0\"",
+      "start": 14583,
+      "end": 14750,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "14192-14583 i2c-1: bit: \"0\"",
+      "start": 14192,
+      "end": 14583,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "13873-14192 i2c-1: bit: \"0\"",
+      "start": 13873,
+      "end": 14192,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "13407-13873 i2c-1: bit: \"1\"",
+      "start": 13407,
+      "end": 13873,
+      "decoder": "i2c-1",
+      "text": "bit: \"1\""
+    },
+    {
+      "raw": "13168-13407 i2c-1: bit: \"0\"",
+      "start": 13168,
+      "end": 13407,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "14981-15052 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 14981,
+      "end": 15052,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "13168-14981 i2c-1: address-write: \"Address write: 40\" \"AW: 40\" \"40\"",
+      "start": 13168,
+      "end": 14981,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 40\" \"AW: 40\" \"40\""
+    },
+    {
+      "raw": "15069-15140 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 15069,
+      "end": 15140,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "15104-15104 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 15104,
+      "end": 15104,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "15139-15139 i2c-1: start: \"Start\" \"S\"",
+      "start": 15139,
+      "end": 15139,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "17582-17988 i2c-1: bit: \"0\"",
+      "start": 17582,
+      "end": 17988,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "17176-17582 i2c-1: bit: \"0\"",
+      "start": 17176,
+      "end": 17582,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "16937-17176 i2c-1: bit: \"0\"",
+      "start": 16937,
+      "end": 17176,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "16698-16937 i2c-1: bit: \"0\"",
+      "start": 16698,
+      "end": 16937,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "16299-16698 i2c-1: bit: \"0\"",
+      "start": 16299,
+      "end": 16698,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "15750-16299 i2c-1: bit: \"0\"",
+      "start": 15750,
+      "end": 16299,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "15432-15750 i2c-1: bit: \"0\"",
+      "start": 15432,
+      "end": 15750,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "15301-15432 i2c-1: bit: \"0\"",
+      "start": 15301,
+      "end": 15432,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "17582-17988 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 17582,
+      "end": 17988,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "15301-17582 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 15301,
+      "end": 17582,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "18049-18455 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 18049,
+      "end": 18455,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "18091-18091 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 18091,
+      "end": 18091,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "18127-18127 i2c-1: start: \"Start\" \"S\"",
+      "start": 18127,
+      "end": 18127,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "20040-20200 i2c-1: bit: \"0\"",
+      "start": 20040,
+      "end": 20200,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "19880-20040 i2c-1: bit: \"0\"",
+      "start": 19880,
+      "end": 20040,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "19729-19880 i2c-1: bit: \"0\"",
+      "start": 19729,
+      "end": 19880,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "19563-19729 i2c-1: bit: \"0\"",
+      "start": 19563,
+      "end": 19729,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "19403-19563 i2c-1: bit: \"0\"",
+      "start": 19403,
+      "end": 19563,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "19013-19403 i2c-1: bit: \"0\"",
+      "start": 19013,
+      "end": 19403,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "18607-19013 i2c-1: bit: \"0\"",
+      "start": 18607,
+      "end": 19013,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "18296-18607 i2c-1: bit: \"0\"",
+      "start": 18296,
+      "end": 18607,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "20040-20200 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 20040,
+      "end": 20200,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "18296-20040 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 18296,
+      "end": 20040,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "20359-20519 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 20359,
+      "end": 20519,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "20482-20482 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 20482,
+      "end": 20482,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "20517-20517 i2c-1: start: \"Start\" \"S\"",
+      "start": 20517,
+      "end": 20517,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "22593-23076 i2c-1: bit: \"0\"",
+      "start": 22593,
+      "end": 23076,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "22110-22593 i2c-1: bit: \"0\"",
+      "start": 22110,
+      "end": 22593,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "21950-22110 i2c-1: bit: \"0\"",
+      "start": 21950,
+      "end": 22110,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "21713-21950 i2c-1: bit: \"0\"",
+      "start": 21713,
+      "end": 21950,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "21474-21713 i2c-1: bit: \"0\"",
+      "start": 21474,
+      "end": 21713,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "21163-21474 i2c-1: bit: \"0\"",
+      "start": 21163,
+      "end": 21474,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "20998-21163 i2c-1: bit: \"0\"",
+      "start": 20998,
+      "end": 21163,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "20838-20998 i2c-1: bit: \"0\"",
+      "start": 20838,
+      "end": 20998,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "22593-23076 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 22593,
+      "end": 23076,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "20838-22593 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 20838,
+      "end": 22593,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "22825-23308 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 22825,
+      "end": 23308,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "22867-22867 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 22867,
+      "end": 22867,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "22903-22903 i2c-1: start: \"Start\" \"S\"",
+      "start": 22903,
+      "end": 22903,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "24495-24652 i2c-1: bit: \"0\"",
+      "start": 24495,
+      "end": 24652,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "24338-24495 i2c-1: bit: \"0\"",
+      "start": 24338,
+      "end": 24495,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "24026-24338 i2c-1: bit: \"0\"",
+      "start": 24026,
+      "end": 24338,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "23939-24026 i2c-1: bit: \"0\"",
+      "start": 23939,
+      "end": 24026,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "23781-23939 i2c-1: bit: \"0\"",
+      "start": 23781,
+      "end": 23939,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "23622-23781 i2c-1: bit: \"0\"",
+      "start": 23622,
+      "end": 23781,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "23382-23622 i2c-1: bit: \"0\"",
+      "start": 23382,
+      "end": 23622,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "23144-23382 i2c-1: bit: \"0\"",
+      "start": 23144,
+      "end": 23382,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "24495-24652 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 24495,
+      "end": 24652,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "23144-24495 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 23144,
+      "end": 24495,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "24973-25130 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 24973,
+      "end": 25130,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "25015-25015 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 25015,
+      "end": 25015,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "25051-25051 i2c-1: start: \"Start\" \"S\"",
+      "start": 25051,
+      "end": 25051,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "27609-27856 i2c-1: bit: \"0\"",
+      "start": 27609,
+      "end": 27856,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "27362-27609 i2c-1: bit: \"0\"",
+      "start": 27362,
+      "end": 27609,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "27203-27362 i2c-1: bit: \"0\"",
+      "start": 27203,
+      "end": 27362,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "27044-27203 i2c-1: bit: \"0\"",
+      "start": 27044,
+      "end": 27203,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "26805-27044 i2c-1: bit: \"0\"",
+      "start": 26805,
+      "end": 27044,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "25927-26805 i2c-1: bit: \"0\"",
+      "start": 25927,
+      "end": 26805,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "25529-25927 i2c-1: bit: \"0\"",
+      "start": 25529,
+      "end": 25927,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "25290-25529 i2c-1: bit: \"0\"",
+      "start": 25290,
+      "end": 25529,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "27609-27856 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 27609,
+      "end": 27856,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "25290-27609 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 25290,
+      "end": 27609,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "28240-28487 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 28240,
+      "end": 28487,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "29081-29081 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 29081,
+      "end": 29081,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "29116-29116 i2c-1: start: \"Start\" \"S\"",
+      "start": 29116,
+      "end": 29116,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "31264-31424 i2c-1: bit: \"0\"",
+      "start": 31264,
+      "end": 31424,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "31104-31264 i2c-1: bit: \"0\"",
+      "start": 31104,
+      "end": 31264,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "30787-31104 i2c-1: bit: \"0\"",
+      "start": 30787,
+      "end": 31104,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "30388-30787 i2c-1: bit: \"0\"",
+      "start": 30388,
+      "end": 30787,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "30151-30388 i2c-1: bit: \"0\"",
+      "start": 30151,
+      "end": 30388,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "29761-30151 i2c-1: bit: \"0\"",
+      "start": 29761,
+      "end": 30151,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "29596-29761 i2c-1: bit: \"0\"",
+      "start": 29596,
+      "end": 29761,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "29276-29596 i2c-1: bit: \"0\"",
+      "start": 29276,
+      "end": 29596,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "31264-31424 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 31264,
+      "end": 31424,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "29276-31264 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 29276,
+      "end": 31264,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "31504-31664 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 31504,
+      "end": 31664,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "31546-31546 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 31546,
+      "end": 31546,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "31581-31581 i2c-1: start: \"Start\" \"S\"",
+      "start": 31581,
+      "end": 31581,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "33893-34205 i2c-1: bit: \"0\"",
+      "start": 33893,
+      "end": 34205,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "33581-33893 i2c-1: bit: \"0\"",
+      "start": 33581,
+      "end": 33893,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "33176-33581 i2c-1: bit: \"0\"",
+      "start": 33176,
+      "end": 33581,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "32786-33176 i2c-1: bit: \"0\"",
+      "start": 32786,
+      "end": 33176,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "32467-32786 i2c-1: bit: \"0\"",
+      "start": 32467,
+      "end": 32786,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "31981-32467 i2c-1: bit: \"1\"",
+      "start": 31981,
+      "end": 32467,
+      "decoder": "i2c-1",
+      "text": "bit: \"1\""
+    },
+    {
+      "raw": "31821-31981 i2c-1: bit: \"0\"",
+      "start": 31821,
+      "end": 31981,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "31663-31821 i2c-1: bit: \"0\"",
+      "start": 31663,
+      "end": 31821,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "33893-34205 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 33893,
+      "end": 34205,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "31663-33893 i2c-1: address-write: \"Address write: 20\" \"AW: 20\" \"20\"",
+      "start": 31663,
+      "end": 33893,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 20\" \"AW: 20\" \"20\""
+    },
+    {
+      "raw": "34060-34372 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 34060,
+      "end": 34372,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "34095-34095 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 34095,
+      "end": 34095,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "34130-34130 i2c-1: start: \"Start\" \"S\"",
+      "start": 34130,
+      "end": 34130,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "280880-281191 i2c-1: bit: \"0\"",
+      "start": 280880,
+      "end": 281191,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "280569-280880 i2c-1: bit: \"0\"",
+      "start": 280569,
+      "end": 280880,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "280164-280569 i2c-1: bit: \"0\"",
+      "start": 280164,
+      "end": 280569,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "279772-280164 i2c-1: bit: \"0\"",
+      "start": 279772,
+      "end": 280164,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "279456-279772 i2c-1: bit: \"0\"",
+      "start": 279456,
+      "end": 279772,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "34689-279456 i2c-1: bit: \"1\"",
+      "start": 34689,
+      "end": 279456,
+      "decoder": "i2c-1",
+      "text": "bit: \"1\""
+    },
+    {
+      "raw": "34609-34689 i2c-1: bit: \"0\"",
+      "start": 34609,
+      "end": 34689,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "34218-34609 i2c-1: bit: \"0\"",
+      "start": 34218,
+      "end": 34609,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "280880-281191 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 280880,
+      "end": 281191,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "34218-280880 i2c-1: address-write: \"Address write: 20\" \"AW: 20\" \"20\"",
+      "start": 34218,
+      "end": 280880,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 20\" \"AW: 20\" \"20\""
+    },
+    {
+      "raw": "281011-281322 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 281011,
+      "end": 281322,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "281046-281046 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 281046,
+      "end": 281046,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "281082-281082 i2c-1: start: \"Start\" \"S\"",
+      "start": 281082,
+      "end": 281082,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "283341-283451 i2c-1: bit: \"0\"",
+      "start": 283341,
+      "end": 283451,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "283231-283341 i2c-1: bit: \"1\"",
+      "start": 283231,
+      "end": 283341,
+      "decoder": "i2c-1",
+      "text": "bit: \"1\""
+    },
+    {
+      "raw": "282991-283231 i2c-1: bit: \"0\"",
+      "start": 282991,
+      "end": 283231,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "282832-282991 i2c-1: bit: \"0\"",
+      "start": 282832,
+      "end": 282991,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "282516-282832 i2c-1: bit: \"0\"",
+      "start": 282516,
+      "end": 282832,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "282276-282516 i2c-1: bit: \"0\"",
+      "start": 282276,
+      "end": 282516,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "281799-282276 i2c-1: bit: \"0\"",
+      "start": 281799,
+      "end": 282276,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "281331-281799 i2c-1: bit: \"0\"",
+      "start": 281331,
+      "end": 281799,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "283341-283451 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 283341,
+      "end": 283451,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "281331-283341 i2c-1: address-write: \"Address write: 02\" \"AW: 02\" \"02\"",
+      "start": 281331,
+      "end": 283341,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 02\" \"AW: 02\" \"02\""
+    },
+    {
+      "raw": "283658-283768 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 283658,
+      "end": 283768,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "283694-283694 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 283694,
+      "end": 283694,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "283730-283730 i2c-1: start: \"Start\" \"S\"",
+      "start": 283730,
+      "end": 283730,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "1558231-1558548 i2c-1: bit: \"0\"",
+      "start": 1558231,
+      "end": 1558548,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1557914-1558231 i2c-1: bit: \"0\"",
+      "start": 1557914,
+      "end": 1558231,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "285564-1557914 i2c-1: bit: \"1\"",
+      "start": 285564,
+      "end": 1557914,
+      "decoder": "i2c-1",
+      "text": "bit: \"1\""
+    },
+    {
+      "raw": "285484-285564 i2c-1: bit: \"0\"",
+      "start": 285484,
+      "end": 285564,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "285173-285484 i2c-1: bit: \"0\"",
+      "start": 285173,
+      "end": 285484,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "284768-285173 i2c-1: bit: \"0\"",
+      "start": 284768,
+      "end": 285173,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "284455-284768 i2c-1: bit: \"0\"",
+      "start": 284455,
+      "end": 284768,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "284051-284455 i2c-1: bit: \"0\"",
+      "start": 284051,
+      "end": 284455,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1558231-1558548 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 1558231,
+      "end": 1558548,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "284051-1558231 i2c-1: address-write: \"Address write: 04\" \"AW: 04\" \"04\"",
+      "start": 284051,
+      "end": 1558231,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 04\" \"AW: 04\" \"04\""
+    },
+    {
+      "raw": "1558622-1558939 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 1558622,
+      "end": 1558939,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "1558665-1558665 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 1558665,
+      "end": 1558665,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "1558700-1558700 i2c-1: start: \"Start\" \"S\"",
+      "start": 1558700,
+      "end": 1558700,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    },
+    {
+      "raw": "1560736-1561055 i2c-1: bit: \"0\"",
+      "start": 1560736,
+      "end": 1561055,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1560417-1560736 i2c-1: bit: \"0\"",
+      "start": 1560417,
+      "end": 1560736,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1560178-1560417 i2c-1: bit: \"0\"",
+      "start": 1560178,
+      "end": 1560417,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1559788-1560178 i2c-1: bit: \"0\"",
+      "start": 1559788,
+      "end": 1560178,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1559620-1559788 i2c-1: bit: \"0\"",
+      "start": 1559620,
+      "end": 1559788,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1559470-1559620 i2c-1: bit: \"0\"",
+      "start": 1559470,
+      "end": 1559620,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1559337-1559470 i2c-1: bit: \"0\"",
+      "start": 1559337,
+      "end": 1559470,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1559025-1559337 i2c-1: bit: \"0\"",
+      "start": 1559025,
+      "end": 1559337,
+      "decoder": "i2c-1",
+      "text": "bit: \"0\""
+    },
+    {
+      "raw": "1560736-1561055 i2c-1: address-write: \"Write\" \"Wr\" \"W\"",
+      "start": 1560736,
+      "end": 1561055,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Write\" \"Wr\" \"W\""
+    },
+    {
+      "raw": "1559025-1560736 i2c-1: address-write: \"Address write: 00\" \"AW: 00\" \"00\"",
+      "start": 1559025,
+      "end": 1560736,
+      "decoder": "i2c-1",
+      "text": "address-write: \"Address write: 00\" \"AW: 00\" \"00\""
+    },
+    {
+      "raw": "1560975-1561294 i2c-1: ack: \"ACK\" \"A\"",
+      "start": 1560975,
+      "end": 1561294,
+      "decoder": "i2c-1",
+      "text": "ack: \"ACK\" \"A\""
+    },
+    {
+      "raw": "1561017-1561017 i2c-1: stop: \"Stop\" \"P\"",
+      "start": 1561017,
+      "end": 1561017,
+      "decoder": "i2c-1",
+      "text": "stop: \"Stop\" \"P\""
+    },
+    {
+      "raw": "1561132-1561132 i2c-1: start: \"Start\" \"S\"",
+      "start": 1561132,
+      "end": 1561132,
+      "decoder": "i2c-1",
+      "text": "start: \"Start\" \"S\""
+    }
+  ],
+  "transactions": [],
+  "trigger_channel": 1,
+  "trigger_edge": "falling"
+}

@@ -1,0 +1,4 @@
+BMP180 init
+chip_id=0x55
+calibration OK
+temp=31.9 C  press=91754 Pa

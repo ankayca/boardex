@@ -2,6 +2,7 @@
 // it. The fixture is one JSON object per line: { delayMs, event }. delayMs is the
 // mock's replay pacing (§5.5) and is stripped before an event goes on the wire.
 import { readFileSync } from 'node:fs';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ArtifactSchema,
@@ -26,7 +27,9 @@ export const FIXTURE_RUN_ID = 'run_bme280_001';
 // this node-only path resolution when the runner is embedded in a browser-flavored
 // test host (the UI's jsdom integration tests).
 const moduleUrl = import.meta.url;
-const FIXTURES_DIR = fileURLToPath(new URL('../../../packages/contract/fixtures/', moduleUrl));
+// <checkout>/ — the mock lives at tools/mock-runner/src, so three levels up.
+const REPO_ROOT = fileURLToPath(new URL('../../../', moduleUrl));
+const FIXTURES_DIR = REPO_ROOT + 'packages/contract/fixtures/';
 const ARTIFACTS_DIR = FIXTURES_DIR + 'artifacts/';
 
 // The two authored stories (§5.5 + the T5.0/F9 fail variant: identical through
@@ -52,8 +55,7 @@ const EXTENSION_BY_KIND: Record<ArtifactKind, string> = {
   report_md: '.md',
 };
 
-export function loadFixture(variant: FixtureVariant = 'default'): FixtureEntry[] {
-  const text = readFileSync(FIXTURE_FILE_BY_VARIANT[variant], 'utf8');
+function parseEntries(text: string): FixtureEntry[] {
   const entries: FixtureEntry[] = [];
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
@@ -64,6 +66,30 @@ export function loadFixture(variant: FixtureVariant = 'default'): FixtureEntry[]
   return entries;
 }
 
+export function loadFixture(variant: FixtureVariant = 'default'): FixtureEntry[] {
+  return parseEntries(readFileSync(FIXTURE_FILE_BY_VARIANT[variant], 'utf8'));
+}
+
+export interface LoadedFixture {
+  entries: FixtureEntry[];
+  // Where buildArtifactCatalog resolves this recording's artifact bodies.
+  artifactsDir: string;
+}
+
+// FIXTURE_FILE override (§10.3): replay an arbitrary recorded run — e.g. a real
+// hardware agent run under records/ — instead of the authored contract fixtures.
+// A relative path resolves against the repo root, so `FIXTURE_FILE=records/...`
+// works regardless of the process cwd (npm runs the workspace script from the
+// package dir). Artifact bodies are served from the recording's own sibling
+// artifacts/ directory, referenced by id exactly like the authored fixtures.
+export function loadFixtureFile(fixtureFile: string): LoadedFixture {
+  const filePath = isAbsolute(fixtureFile) ? fixtureFile : resolve(REPO_ROOT, fixtureFile);
+  return {
+    entries: parseEntries(readFileSync(filePath, 'utf8')),
+    artifactsDir: dirname(filePath) + '/artifacts/',
+  };
+}
+
 export interface ArtifactFile {
   meta: Artifact;
   filePath: string;
@@ -72,12 +98,15 @@ export interface ArtifactFile {
 // Build a catalog of every artifact the fixture references, keyed by artifact id
 // (artifact ids do not contain the runId, so they are stable across run sessions).
 // Content is served from the file at ARTIFACTS_DIR/{id}{ext}.
-export function buildArtifactCatalog(entries: readonly FixtureEntry[]): Map<string, ArtifactFile> {
+export function buildArtifactCatalog(
+  entries: readonly FixtureEntry[],
+  artifactsDir: string = ARTIFACTS_DIR,
+): Map<string, ArtifactFile> {
   const catalog = new Map<string, ArtifactFile>();
   for (const { event } of entries) {
     if (event.type !== 'artifact.created') continue;
     const meta = ArtifactSchema.parse(event.payload.artifact);
-    const filePath = ARTIFACTS_DIR + meta.id + EXTENSION_BY_KIND[meta.kind];
+    const filePath = artifactsDir + meta.id + EXTENSION_BY_KIND[meta.kind];
     catalog.set(meta.id, { meta, filePath });
   }
   return catalog;
