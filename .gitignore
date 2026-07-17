@@ -40,3 +40,8 @@ out/
 # Node workspaces (Boardex UI/contract/mock scaffold) — additive
 dist/
 coverage/
+
+# Agent-run recordings are local demo/validation assets (§10.3): real
+# recordings' shapes vary, so the directory is ignored except curated keepers.
+/records/*
+!/records/bmp180-run/
