@@ -41,7 +41,7 @@ from .workspace import (
 
 TOOL_RESULT_CAP = 16_000
 MAX_IDLE_TURNS = 3  # consecutive assistant turns with no tool call
-DEFAULT_MAX_TURNS = 40
+DEFAULT_MAX_TURNS = 60  # hardware runs burn turns on tool failures; the BMP180 run died at 40
 
 
 class BoundsExceeded(Exception):

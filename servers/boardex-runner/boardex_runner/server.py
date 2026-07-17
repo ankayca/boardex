@@ -352,7 +352,7 @@ def state_from_env() -> RunnerApp:
     RECORD=<dir> — tee the first run to <dir>/recorded_run.jsonl (+ artifacts/)
     BOARDEX_BENCH_CONFIG=<json file> — RealBench configuration (BENCH=real)
     AGENT_MODELS=<csv> — LiteLLM model strings advertised via capabilities (BENCH=agent)
-    AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 40)
+    AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 60)
     """
     bench_kind = os.environ.get("BENCH", "fake")
     speed = float(os.environ.get("SPEED", "1"))
@@ -374,7 +374,7 @@ def state_from_env() -> RunnerApp:
             agent_models_from_env,
         )
 
-        max_turns = int(os.environ.get("AGENT_MAX_TURNS", "40"))
+        max_turns = int(os.environ.get("AGENT_MAX_TURNS", "60"))
         return RunnerApp(
             # One AgentBench per run — never a shared instance (audit HIGH-1).
             bench_factory=lambda: AgentBench(max_turns=max_turns),

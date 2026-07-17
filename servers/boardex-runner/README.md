@@ -50,7 +50,7 @@ VITE_RUNNER_URL=http://localhost:4380 npm run dev -w apps/ui
 | `RECORD=<dir>` | Tee the first run to `<dir>/recorded_run.jsonl` + `artifacts/` (§10.3 fixture format) |
 | `BOARDEX_BENCH_CONFIG` | JSON file with `RealBenchConfig` fields (`BENCH=real`) |
 | `AGENT_MODELS` | Comma-separated LiteLLM model strings advertised via `/health` `capabilities.models` (`BENCH=agent`; default `openrouter/anthropic/claude-sonnet-4.6`) |
-| `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 40) |
+| `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 60) |
 | `BOARDEX_CONTRACT_SCHEMA_DIR` | Override the JSON Schema location (defaults to repo lookup) |
 
 A `bench.json` for `BENCH=real` carries the wire `BoardProfile` plus bench
