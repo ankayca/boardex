@@ -177,7 +177,7 @@ describe('board profile builder → composer (integration)', () => {
 
     // The plan arrives and the D12 gate renders the checklist saved in act 2 — one
     // line, its label — and holds Approve Plan closed until it is confirmed.
-    const approve = await screen.findByRole('button', { name: 'Approve Plan' }, { timeout: 20000 });
+    const approve = await screen.findByRole('button', { name: /approve plan/i }, { timeout: 20000 });
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(1);
     expect(screen.getByText('SDO — GND (verify strap)')).toBeInTheDocument();

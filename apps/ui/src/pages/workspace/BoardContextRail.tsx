@@ -188,6 +188,17 @@ export interface BoardContextRailProps {
   boardProfileId: string;
 }
 
+function ProfileFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-metadata font-medium uppercase tracking-wide text-text-secondary">
+        {label}
+      </span>
+      <p className="break-words font-mono text-meta text-text-primary">{value}</p>
+    </div>
+  );
+}
+
 export function BoardContextRail({
   profile,
   profileLoading,
@@ -215,9 +226,12 @@ export function BoardContextRail({
     <aside aria-label="Board context" className="rail-sticky">
       <div className="rounded-card border border-border bg-surface p-5">
         <h2 className="text-body font-semibold text-text-primary">{profile.name}</h2>
-        <div className="mt-2">
-          <KeyValue label="MCU" value={profile.mcu} mono />
-          <KeyValue label="Repo" value={repoBasename(profile.repoPath)} mono />
+        {/* Stacked label-over-value (Sprint 7 P0): the 280px rail is too narrow
+            for KeyValue's label/value row — a long MCU name ("STM32F303RE
+            (Cortex-M4)") wrapped mid-token against the right edge. */}
+        <div className="mt-3 space-y-2">
+          <ProfileFact label="MCU" value={profile.mcu} />
+          <ProfileFact label="Repo" value={repoBasename(profile.repoPath)} />
         </div>
         <ul aria-label="Instruments" className="mt-3 space-y-1.5 border-t border-border pt-3">
           {instruments.map((instrument) => (

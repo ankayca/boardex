@@ -24,7 +24,7 @@ let benchSnapshot: BenchStatus | null = null;
 import { StatusApprovalRail } from './StatusApprovalRail';
 import { StateConflict } from '../../lib/apiErrors';
 import { RunCommandsProvider, type RunCommands } from '../../lib/runCommands';
-import { approval, artifact, diagnosis, envelope, failedCheck, run, RUN_ID, TS, viewFrom } from './test-events';
+import { approval, artifact, diagnosis, envelope, failedCheck, run, RUN_ID, runStep, TS, viewFrom } from './test-events';
 
 const runningView = (): RunView => viewFrom([envelope(1, 'run.created', { run })]);
 
@@ -434,5 +434,65 @@ describe('run model attribution (T6.3)', () => {
   it('renders no model line when the run carries none', () => {
     renderRail(runningView());
     expect(screen.queryByText('Model')).not.toBeInTheDocument();
+  });
+});
+
+// Sprint 7 P0 (§7.3 v2.3): the reserved action slot — one stable region under
+// the sticky status card whose content swaps in place (quiet autonomous state ↔
+// approval surface ↔ completion module) with zero rail reflow.
+describe('reserved action slot (Sprint 7 P0)', () => {
+  const slot = () => screen.getByTestId('rail-action-slot');
+
+  const executingView = (): RunView =>
+    viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'step.started', { step: runStep('st_flash', 2, 'Flash firmware') }),
+    ]);
+
+  const completedWithReport = (): RunView =>
+    viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'artifact.created', {
+        artifact: { ...artifact('art_report'), kind: 'report_md', label: 'Validation report' },
+      }),
+      envelope(3, 'run.completed', { summary: 'All checks passed.', reportArtifactId: 'art_report' }),
+    ]);
+
+  it('autonomous: the quiet state names the live active step, with no approval surface', () => {
+    renderRail(executingView());
+    expect(within(slot()).getByText(/No approval required/)).toBeInTheDocument();
+    expect(within(slot()).getByText(/Flash firmware/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Approval required' })).not.toBeInTheDocument();
+  });
+
+  it('gate active: the Approval Card occupies the SAME slot and the quiet state is gone', () => {
+    renderRail(awaitingView());
+    expect(within(slot()).getByRole('region', { name: 'Approval required' })).toBeInTheDocument();
+    expect(screen.queryByText(/No approval required/)).not.toBeInTheDocument();
+  });
+
+  it('completed: the completion module fills the slot with the report action', () => {
+    renderRail(completedWithReport());
+    expect(within(slot()).getByRole('region', { name: 'Run complete' })).toBeInTheDocument();
+    expect(within(slot()).getByRole('link', { name: 'Open Validation Report' })).toBeInTheDocument();
+  });
+
+  it('stopped without a report: the slot states the honest outcome, no dead link', () => {
+    renderRail(stoppedView());
+    expect(within(slot()).getByText('Run stopped')).toBeInTheDocument();
+    expect(within(slot()).getByText(/Evidence collected so far is retained/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Validation Report' })).not.toBeInTheDocument();
+  });
+
+  it('stable geometry: exactly one slot, always directly below the sticky status card', () => {
+    for (const view of [executingView(), awaitingView(), completedWithReport(), stoppedView()]) {
+      const { unmount } = renderRail(view);
+      const slots = screen.getAllByTestId('rail-action-slot');
+      expect(slots).toHaveLength(1);
+      const sticky = (slots[0] as HTMLElement).previousElementSibling;
+      expect(sticky?.classList.contains('rail-sticky')).toBe(true);
+      expect(within(sticky as HTMLElement).getByRole('region', { name: 'Run status' })).toBeInTheDocument();
+      unmount();
+    }
   });
 });

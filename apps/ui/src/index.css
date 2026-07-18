@@ -220,6 +220,14 @@ body {
   }
   .workspace-rail {
     grid-column: 3;
+    /* v2.3 rail composition: the rail reads as its own zone on the canvas —
+       a 1px divider at the start of the grid gap. The negative margin borrows
+       the 24px gap so the divider sits mid-gutter and the cards keep their
+       320px width. Only in the three-zone layout: stacked below 1208px, a
+       left border would read as a stray rule. */
+    border-left: 1px solid var(--color-border);
+    margin-left: -24px;
+    padding-left: 23px;
   }
   /* Sticky rails (T6.2b): the board card and the status card follow the scroll on
      long timelines (Stop Run stays reachable), pinned just below the frame's top

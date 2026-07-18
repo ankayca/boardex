@@ -146,10 +146,15 @@ describe('EvidenceDrawer tabs', () => {
     expect(await screen.findByRole('table', { name: 'Decoded transactions' })).toBeInTheDocument();
 
     await user.click(tab('Logs'));
-    // Opened by hand: first log sub-tab selected, labeled by kind + iteration.
-    const logTabs = screen.getByRole('tablist', { name: 'Log artifacts' });
-    expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 1' })).toHaveAttribute(
-      'aria-selected',
+    // Opened by hand: the first log artifact drives the two selectors (Sprint 7 P0).
+    const iterationGroup = screen.getByRole('group', { name: 'Iteration' });
+    expect(within(iterationGroup).getByRole('button', { name: '1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const typeGroup = screen.getByRole('group', { name: 'Type' });
+    expect(within(typeGroup).getByRole('button', { name: 'Serial' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
 
@@ -162,25 +167,24 @@ describe('EvidenceDrawer tabs', () => {
 });
 
 describe('EvidenceDrawer deep links (?artifact=…)', () => {
-  it('a serial_log artifact opens the Logs tab on that exact sub-tab with its content', async () => {
+  it('a serial_log artifact opens the Logs tab with the selectors on its exact cell', async () => {
     renderDrawer('?artifact=art_serial_2');
     expect(tab('Logs')).toHaveAttribute('aria-selected', 'true');
-    const logTabs = screen.getByRole('tablist', { name: 'Log artifacts' });
-    expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 2' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(
+      within(screen.getByRole('group', { name: 'Iteration' })).getByRole('button', { name: '2' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(screen.getByRole('group', { name: 'Type' })).getByRole('button', { name: 'Serial' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     const log = await screen.findByRole('log');
     expect(log).toHaveTextContent('TEMP=24.3 HUM=41.2');
   });
 
-  it('the other iteration’s serial log stays reachable from its own sub-tab', async () => {
+  it('the other iteration’s serial log stays reachable via the Iteration selector', async () => {
     const user = userEvent.setup();
     renderDrawer('?artifact=art_serial_2');
     await user.click(
-      within(screen.getByRole('tablist', { name: 'Log artifacts' })).getByRole('tab', {
-        name: 'Serial — iteration 1',
-      }),
+      within(screen.getByRole('group', { name: 'Iteration' })).getByRole('button', { name: '1' }),
     );
     expect(await screen.findByRole('log')).toHaveTextContent('BME280: probing at 0x76');
   });

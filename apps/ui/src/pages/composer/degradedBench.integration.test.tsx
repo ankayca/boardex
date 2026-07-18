@@ -73,7 +73,7 @@ describe('degraded bench → compose → approve (integration, --degraded)', () 
     await user.click(create);
 
     // (2) The warning repeats inside the plan-approval section, adjacent to the D12 gate.
-    const approve = await screen.findByRole('button', { name: 'Approve Plan' }, { timeout: 20000 });
+    const approve = await screen.findByRole('button', { name: /approve plan/i }, { timeout: 20000 });
     const planSection = screen.getByRole('region', { name: 'Run plan' });
     expect(within(planSection).getByText('Bench degraded')).toBeInTheDocument();
     expect(within(planSection).getByText(DEGRADED_LINE)).toBeInTheDocument();

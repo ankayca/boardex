@@ -69,7 +69,7 @@ describe('composer → plan → approve (integration)', () => {
     // run.plan_generated arrives and the mock pauses at the plan gate.
     const approve = await screen.findByRole(
       'button',
-      { name: 'Approve Plan' },
+      { name: /approve plan/i },
       { timeout: 20000 },
     );
     const planSteps = within(screen.getByRole('list', { name: 'Plan steps' })).getAllByRole(
@@ -97,6 +97,6 @@ describe('composer → plan → approve (integration)', () => {
       { timeout: 20000 },
     );
     expect(screen.getByRole('complementary', { name: 'Board context' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Approve Plan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve plan/i })).not.toBeInTheDocument();
   }, 60000);
 });

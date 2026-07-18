@@ -12,6 +12,7 @@ import { BenchWarning } from '../composer/BenchReadiness';
 import { deriveApprovalGate } from './approvalGate';
 import { ApprovalCard } from './ApprovalCard';
 import { DiagnosisCard } from './DiagnosisCard';
+import { isTerminalStatus } from './elapsed';
 import { evidenceHrefAt, evidenceTargets, reportHrefAt } from './evidence';
 import { useEvidenceBase } from './evidenceBase';
 import { deriveProgress } from './progress';
@@ -94,8 +95,15 @@ export function StatusApprovalRail({
   const commandError = (error: unknown, message: string): string | null =>
     error && !(error instanceof StateConflict) ? message : null;
 
-  // h-full lets the sticky status card travel the full height of the (stretched)
-  // rail grid area, so Stop Run stays reachable down a long timeline (T6.2b).
+  const terminal = isTerminalStatus(run.status);
+  const activeStep = view.steps.find((step) => step.status === 'active');
+
+  // The reserved action slot's occupant (Sprint 7 P0, §7.3): the SAME slot —
+  // directly under the sticky status card — holds the quiet autonomous state,
+  // the approval surface when a gate activates, or the completion module.
+  // Content swaps in place; the rail's geometry never reflows around it.
+  const approvalSurface = gate !== null || (showDiagnosis && view.diagnosis !== undefined);
+
   return (
     <div className="h-full space-y-4">
       <div className="rail-sticky">
@@ -113,47 +121,113 @@ export function StatusApprovalRail({
           confirmStop={!demoMode}
         />
       </div>
-      {reportTarget && (
+
+      <div data-testid="rail-action-slot" aria-label="Run actions" className="space-y-4">
+        {approvalSurface ? (
+          <>
+            {hardwareApprovalIssues.length > 0 && <BenchWarning issues={hardwareApprovalIssues} />}
+            {gate && fixApproval === null && (
+              <ApprovalCard
+                gate={gate}
+                diffHref={diffTarget && evidenceHrefAt(base, diffTarget)}
+                resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
+                resolvingStatus={
+                  gate.kind === 'ready' && resolvingFor(gate.approval)
+                    ? (resolve.variables?.status ?? null)
+                    : null
+                }
+                resolveError={commandError(
+                  resolve.error,
+                  'Could not resolve the approval — check that the runner is online, then try again.',
+                )}
+                onResolve={(approval, status) => resolve.mutate({ approval, status })}
+              />
+            )}
+            {showDiagnosis && view.diagnosis && (
+              <DiagnosisCard
+                diagnosis={view.diagnosis}
+                checks={view.checks}
+                artifacts={view.artifacts}
+                runId={run.id}
+                fixApproval={fixApproval}
+                resolving={fixApproval !== null && resolvingFor(fixApproval)}
+                resolveError={commandError(
+                  resolve.error,
+                  'Could not resolve the approval — check that the runner is online, then try again.',
+                )}
+                onApproveFix={(approval) => resolve.mutate({ approval, status: 'approved' })}
+              />
+            )}
+          </>
+        ) : terminal ? (
+          <CompletionModule status={run.status} reportHref={reportTarget ? reportHrefAt(base) : null} />
+        ) : (
+          <AutonomousState status={run.status} activeStepTitle={activeStep?.title ?? null} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The slot's quiet state while the agent works: no approval exists, and the
+// operator sees WHAT is executing, live from RunView. White card like its
+// sibling occupants so the swap reads as content change, not layout change.
+function AutonomousState({
+  status,
+  activeStepTitle,
+}: {
+  status: RunView['run']['status'];
+  activeStepTitle: string | null;
+}) {
+  const activity =
+    activeStepTitle !== null
+      ? `executing “${activeStepTitle}”`
+      : status === 'planning'
+        ? 'planning the run'
+        : status === 'plan_ready'
+          ? 'waiting for plan approval'
+          : 'working';
+  return (
+    <section
+      aria-label="No approval required"
+      className="rounded-card border border-border bg-surface p-5"
+    >
+      <p className="text-meta text-text-secondary">
+        <span className="font-medium text-text-primary">No approval required</span> · Boardex is{' '}
+        {activity}
+      </p>
+    </section>
+  );
+}
+
+// The slot's terminal state: the deliverable up front when it exists; a failed
+// or stopped run without a report states the honest outcome instead — never an
+// empty slot, never a dead end.
+function CompletionModule({
+  status,
+  reportHref,
+}: {
+  status: RunView['run']['status'];
+  reportHref: string | null;
+}) {
+  return (
+    <section aria-label="Run complete" className="rounded-card border border-border bg-surface p-5">
+      <h2 className="text-body font-semibold text-text-primary">
+        {status === 'completed' ? 'Run complete' : status === 'stopped' ? 'Run stopped' : 'Run failed'}
+      </h2>
+      <p className="mt-1 text-meta text-text-secondary">
+        {reportHref
+          ? 'The evidence-linked validation report is ready.'
+          : 'Evidence collected so far is retained. No validation report was produced.'}
+      </p>
+      {reportHref && (
         <Link
-          to={reportHrefAt(base)}
-          className="flex h-10 w-full items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+          to={reportHref}
+          className="mt-3 flex h-10 w-full items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-white transition-colors hover:bg-accent-hover"
         >
           Open Validation Report
         </Link>
       )}
-      {hardwareApprovalIssues.length > 0 && <BenchWarning issues={hardwareApprovalIssues} />}
-      {gate && fixApproval === null && (
-        <ApprovalCard
-          gate={gate}
-          diffHref={diffTarget && evidenceHrefAt(base, diffTarget)}
-          resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
-          resolvingStatus={
-            gate.kind === 'ready' && resolvingFor(gate.approval)
-              ? (resolve.variables?.status ?? null)
-              : null
-          }
-          resolveError={commandError(
-            resolve.error,
-            'Could not resolve the approval — check that the runner is online, then try again.',
-          )}
-          onResolve={(approval, status) => resolve.mutate({ approval, status })}
-        />
-      )}
-      {showDiagnosis && view.diagnosis && (
-        <DiagnosisCard
-          diagnosis={view.diagnosis}
-          checks={view.checks}
-          artifacts={view.artifacts}
-          runId={run.id}
-          fixApproval={fixApproval}
-          resolving={fixApproval !== null && resolvingFor(fixApproval)}
-          resolveError={commandError(
-            resolve.error,
-            'Could not resolve the approval — check that the runner is online, then try again.',
-          )}
-          onApproveFix={(approval) => resolve.mutate({ approval, status: 'approved' })}
-        />
-      )}
-    </div>
+    </section>
   );
 }
