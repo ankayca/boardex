@@ -688,3 +688,71 @@ describe('reduceRun — legal-ordering reconciliation (T5.0/F5)', () => {
     expect(view.warnings[0]).toContain('apr_ghost');
   });
 });
+
+// v2.4 (Sprint 7 P0): the declared check registry and the terminal summary —
+// the two RunView fields behind the UI's dual-outcome (execution vs coverage).
+describe('registeredChecks (run.plan_generated.checks, v2.4)', () => {
+  const declared = [
+    { requirementId: 'i2c_clock', description: 'SCL frequency within 100 kHz ±10%' },
+    { requirementId: 'device_ack', description: 'Device ACKs at 0x76' },
+  ];
+
+  it('is undefined when the producer declared no registry (pre-v2.4 streams)', () => {
+    const view = reduce(happyEvents());
+    expect(view.registeredChecks).toBeUndefined();
+  });
+
+  it('is populated verbatim from run.plan_generated.checks', () => {
+    const view = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.plan_generated', {
+        plan: [samplePlanStep],
+        riskSummary: 'risk',
+        checks: declared,
+      }),
+    ]);
+    expect(view.registeredChecks).toEqual(declared);
+  });
+});
+
+describe('terminalSummary (v2.4, reducer-only)', () => {
+  it('is undefined while the run is non-terminal', () => {
+    const view = reduce([envelope(1, 'run.created', { run: sampleRun })]);
+    expect(view.terminalSummary).toBeUndefined();
+  });
+
+  it('carries run.completed’s summary', () => {
+    expect(reduce(happyEvents()).terminalSummary).toBe('All checks pass.');
+  });
+
+  it('carries run.failed’s summary', () => {
+    const view = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.failed', { summary: 'turn bound exceeded: max_turns=40' }),
+    ]);
+    expect(view.terminalSummary).toBe('turn bound exceeded: max_turns=40');
+  });
+
+  it('falls back to a terminal run.status_changed reason, which a dedicated event overrides', () => {
+    const viaStatus = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.status_changed', { status: 'failed', reason: 'harness gave up' }),
+    ]);
+    expect(viaStatus.terminalSummary).toBe('harness gave up');
+
+    const overridden = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.status_changed', { status: 'failed', reason: 'harness gave up' }),
+      envelope(3, 'run.failed', { summary: 'turn bound exceeded: max_turns=40' }),
+    ]);
+    expect(overridden.terminalSummary).toBe('turn bound exceeded: max_turns=40');
+  });
+
+  it('run.stopped sets no summary — byUser is the whole story', () => {
+    const view = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.stopped', { byUser: true }),
+    ]);
+    expect(view.terminalSummary).toBeUndefined();
+  });
+});
