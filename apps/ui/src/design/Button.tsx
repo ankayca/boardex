@@ -11,7 +11,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'outline-danger
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-white enabled:hover:bg-accent-hover',
   secondary:
-    'border border-border bg-bg-panel text-text-primary enabled:hover:border-border-strong enabled:hover:bg-bg-app',
+    'border border-border bg-surface text-text-primary enabled:hover:border-border-strong enabled:hover:bg-canvas',
   danger: 'bg-fail text-white enabled:hover:opacity-90',
   'outline-danger':
     'border border-fail bg-transparent text-fail enabled:hover:bg-fail enabled:hover:text-white enabled:active:bg-fail enabled:active:text-white',
@@ -26,7 +26,7 @@ export function Button({ variant = 'primary', className = '', type = 'button', .
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-button px-4 py-2 text-body font-medium transition-colors duration-fast ease-motion disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-body font-medium transition-colors duration-fast ease-motion disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${className}`}
       {...rest}
     />
   );

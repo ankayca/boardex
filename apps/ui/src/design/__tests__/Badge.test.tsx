@@ -19,7 +19,7 @@ describe('Badge risk mapping (BIBLE §6.2)', () => {
   it('high renders amber solid with text-primary for contrast', () => {
     render(<Badge kind="risk" value="high" />);
     const badge = screen.getByText('High');
-    // White on amber #D97706 fails small-text contrast — high uses text-primary.
+    // White on the amber fill fails small-text contrast — high uses text-primary.
     expect(badge).toHaveClass('bg-warn', 'text-text-primary');
     expect(badge.classList.contains('text-white')).toBe(false);
   });

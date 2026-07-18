@@ -2,8 +2,8 @@ import type { CheckVerdict, RiskLevel, RunStatus } from '@boardex/contract';
 
 // BIBLE §6.2, exact: risk low = neutral, medium = amber outline, high = amber solid,
 // critical = red solid. Verdict: pass = green, fail = red, needs_review = amber.
-// High uses text-primary (#1C1917): white on amber #D97706 fails small-text contrast.
-// Critical keeps white on red (#DC2626), which passes.
+// High uses text-primary: white on the amber fill fails small-text contrast.
+// Critical keeps white on red, which passes.
 const riskClasses: Record<RiskLevel, string> = {
   low: 'bg-neutral-badge-bg text-neutral-badge',
   medium: 'border border-warn text-warn',

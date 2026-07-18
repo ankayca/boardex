@@ -18,7 +18,7 @@ export function EmptyState({
   frameless = false,
   className = '',
 }: EmptyStateProps) {
-  const frame = frameless ? '' : 'rounded-card border border-border bg-bg-panel';
+  const frame = frameless ? '' : 'rounded-card border border-border bg-surface';
   return (
     <div
       className={`flex flex-col items-center justify-center gap-2 px-6 py-12 text-center ${frame} ${className}`}

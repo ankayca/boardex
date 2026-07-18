@@ -62,8 +62,8 @@ export function PlanReview({
   };
 
   return (
-    <section aria-label="Run plan" className="rounded-card border border-border bg-bg-panel p-6 shadow-subtle">
-      <h2 className="text-section font-semibold text-text-primary">Plan</h2>
+    <section aria-label="Run plan" className="rounded-card border border-border bg-surface p-6">
+      <h2 className="text-body font-semibold text-text-primary">Plan</h2>
 
       <ol aria-label="Plan steps" className="mt-4 space-y-4">
         {plan.map((step, position) => (

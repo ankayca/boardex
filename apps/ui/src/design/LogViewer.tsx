@@ -152,7 +152,7 @@ export function LogViewer({
   };
 
   return (
-    <div className="overflow-hidden rounded-button border border-border bg-bg-panel">
+    <div className="overflow-hidden rounded-control border border-border bg-surface">
       {lines.length > 0 && (
         <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -163,7 +163,7 @@ export function LogViewer({
               onKeyDown={onFindKeyDown}
               placeholder="Find in log…"
               aria-label={`Find in ${label}`}
-              className="min-w-0 flex-1 rounded-button border border-border bg-bg-app px-2 py-1 font-mono text-meta text-text-primary placeholder:font-sans placeholder:text-text-secondary focus:border-accent focus:outline-none"
+              className="min-w-0 flex-1 rounded-control border border-border bg-canvas px-2 py-1 font-mono text-meta text-text-primary placeholder:font-sans placeholder:text-text-secondary focus:border-accent focus:outline-none"
             />
             {searching && (
               <>
@@ -176,7 +176,7 @@ export function LogViewer({
                   type="button"
                   aria-label="Clear search"
                   onClick={() => changeQuery('')}
-                  className="shrink-0 rounded-button p-1 text-text-secondary transition-colors duration-fast ease-motion hover:text-text-primary"
+                  className="shrink-0 rounded-control p-1 text-text-secondary transition-colors duration-fast ease-motion hover:text-text-primary"
                 >
                   <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none">
                     <path
@@ -195,7 +195,7 @@ export function LogViewer({
               type="button"
               aria-pressed={showTimestamps}
               onClick={() => setShowTimestamps((current) => !current)}
-              className={`shrink-0 rounded-button border px-2 py-1 text-label font-medium uppercase transition-colors duration-fast ease-motion ${
+              className={`shrink-0 rounded-control border px-2 py-1 text-metadata font-medium uppercase transition-colors duration-fast ease-motion ${
                 showTimestamps
                   ? 'border-accent text-accent'
                   : 'border-border text-text-secondary hover:text-text-primary'
@@ -267,7 +267,7 @@ export function LogViewer({
           <button
             type="button"
             onClick={jumpToLatest}
-            className="absolute bottom-3 right-3 rounded-button border border-border bg-bg-panel px-3 py-1 text-meta font-medium text-accent shadow-raised transition-colors duration-fast ease-motion hover:text-accent-hover"
+            className="absolute bottom-3 right-3 rounded-control border border-border bg-surface px-3 py-1 text-meta font-medium text-accent shadow-raised transition-colors duration-fast ease-motion hover:text-accent-hover"
           >
             Jump to latest
           </button>

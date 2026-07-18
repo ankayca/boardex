@@ -4,7 +4,7 @@
 import { useId, type ReactNode } from 'react';
 
 const INPUT_CLASSES =
-  'w-full rounded-button border border-border bg-bg-panel px-3 py-2 text-body text-text-primary focus:border-accent focus:outline-none';
+  'w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-text-primary focus:border-accent focus:outline-none';
 
 function FieldError({ id, message }: { id: string; message: string }) {
   return (
@@ -105,9 +105,9 @@ export function FormSection({
   return (
     <section
       aria-label={title}
-      className="rounded-card border border-border bg-bg-panel p-6 shadow-subtle"
+      className="rounded-card border border-border bg-surface p-6"
     >
-      <h2 className="text-section font-semibold text-text-primary">{title}</h2>
+      <h2 className="text-body font-semibold text-text-primary">{title}</h2>
       {hint && <p className="mt-0.5 text-meta text-text-secondary">{hint}</p>}
       <div className="mt-4 space-y-4">{children}</div>
     </section>

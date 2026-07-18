@@ -72,7 +72,7 @@ export default function NewRunPage() {
           onChange={(event) => setTaskPrompt(event.target.value)}
           rows={4}
           autoFocus
-          className="w-full resize-y rounded-card border border-border bg-bg-panel p-5 text-composer text-text-primary shadow-subtle placeholder:text-text-secondary focus:border-accent focus:outline-none"
+          className="w-full resize-y rounded-card border border-border bg-surface p-5 text-composer text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
         />
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -82,7 +82,7 @@ export default function NewRunPage() {
               value={profile?.id ?? ''}
               onChange={(event) => setProfileId(event.target.value)}
               disabled={profiles.length === 0}
-              className="rounded-button border border-border bg-bg-panel px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
+              className="rounded-control border border-border bg-surface px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
             >
               {profiles.length === 0 && <option value="">No profiles</option>}
               {profiles.map((p) => (
@@ -102,7 +102,7 @@ export default function NewRunPage() {
               aria-label="Model"
               value={model ?? ''}
               onChange={(event) => setModelChoice(event.target.value)}
-              className="rounded-button border border-border bg-bg-panel px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
+              className="rounded-control border border-border bg-surface px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
             >
               {models.map((m) => (
                 <option key={m} value={m}>

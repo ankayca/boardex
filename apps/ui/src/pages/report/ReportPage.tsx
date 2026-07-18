@@ -148,7 +148,7 @@ export default function ReportPage() {
           action={
             <Link
               to={`/runs/${run.id}`}
-              className="inline-flex items-center justify-center rounded-button bg-accent px-4 py-2 text-body font-medium text-white hover:bg-accent-hover"
+              className="inline-flex items-center justify-center rounded-control bg-accent px-4 py-2 text-body font-medium text-white hover:bg-accent-hover"
             >
               View run evidence
             </Link>

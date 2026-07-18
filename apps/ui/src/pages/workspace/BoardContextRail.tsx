@@ -199,8 +199,8 @@ export function BoardContextRail({
   if (!profile) {
     return (
       <aside aria-label="Board context" className="rail-sticky">
-        <div className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
-          <h2 className="text-section font-semibold text-text-primary">Board</h2>
+        <div className="rounded-card border border-border bg-surface p-5">
+          <h2 className="text-body font-semibold text-text-primary">Board</h2>
           <p className="mt-2 text-meta text-text-secondary">
             {profileLoading ? 'Loading the board profile…' : `Profile unavailable (${boardProfileId}).`}
           </p>
@@ -213,8 +213,8 @@ export function BoardContextRail({
 
   return (
     <aside aria-label="Board context" className="rail-sticky">
-      <div className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
-        <h2 className="text-section font-semibold text-text-primary">{profile.name}</h2>
+      <div className="rounded-card border border-border bg-surface p-5">
+        <h2 className="text-body font-semibold text-text-primary">{profile.name}</h2>
         <div className="mt-2">
           <KeyValue label="MCU" value={profile.mcu} mono />
           <KeyValue label="Repo" value={repoBasename(profile.repoPath)} mono />

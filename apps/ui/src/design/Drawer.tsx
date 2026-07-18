@@ -55,8 +55,9 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-bg-panel shadow-overlay ${closing ? 'animate-drawer-out' : 'animate-drawer-in'}`}
-        style={{ maxWidth: widthPx }}
+        className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-surface shadow-overlay ${closing ? 'animate-drawer-out' : 'animate-drawer-in'}`}
+        // §6.3 v2.3: capped at 47vw so the dimmed content underneath stays visible.
+        style={{ maxWidth: `min(${widthPx}px, 47vw)` }}
       >
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <h2 id={titleId} className="text-section font-semibold text-text-primary">

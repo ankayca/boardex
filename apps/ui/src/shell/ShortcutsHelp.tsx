@@ -40,7 +40,7 @@ const SECTIONS: readonly ShortcutSection[] = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-button border border-border bg-bg-app px-1.5 py-0.5 font-mono text-meta text-text-primary">
+    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-control border border-border bg-canvas px-1.5 py-0.5 font-mono text-meta text-text-primary">
       {children}
     </kbd>
   );
@@ -76,7 +76,7 @@ export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
         aria-modal="true"
         aria-label="Keyboard shortcuts"
         onKeyDown={onKeyDown}
-        className="relative w-full max-w-md animate-palette-in rounded-card border border-border bg-bg-panel p-6 shadow-overlay"
+        className="relative w-full max-w-md animate-palette-in rounded-card border border-border bg-surface p-6 shadow-overlay"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-section font-semibold text-text-primary">Keyboard shortcuts</h2>
@@ -85,7 +85,7 @@ export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-button p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+            className="rounded-control p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
           >
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none">
               <path
@@ -101,7 +101,7 @@ export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
         <div className="mt-4 space-y-5">
           {SECTIONS.map((section) => (
             <div key={section.title}>
-              <p className="text-label font-medium uppercase text-text-secondary">{section.title}</p>
+              <p className="text-metadata font-medium uppercase tracking-wide text-text-secondary">{section.title}</p>
               <dl className="mt-2 space-y-2">
                 {section.shortcuts.map((shortcut) => (
                   <div key={shortcut.label} className="flex items-center justify-between gap-4">

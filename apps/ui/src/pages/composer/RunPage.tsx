@@ -138,7 +138,7 @@ export default function RunPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
       <div className="space-y-4">
-        <p className="whitespace-pre-wrap rounded-card border border-border bg-bg-panel p-5 text-section text-text-primary shadow-subtle">
+        <p className="whitespace-pre-wrap rounded-card border border-border bg-surface p-5 text-section text-text-primary">
           {run.taskPrompt}
         </p>
 

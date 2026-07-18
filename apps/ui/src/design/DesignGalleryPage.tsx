@@ -103,7 +103,7 @@ export default function DesignGalleryPage() {
   });
 
   return (
-    <main className="min-h-screen bg-bg-app font-sans text-text-primary">
+    <main className="min-h-screen bg-canvas font-sans text-text-primary">
       <div className="mx-auto max-w-5xl space-y-8 px-8 py-10">
         <header>
           <h1 className="text-page font-semibold">Design primitives</h1>
@@ -115,12 +115,17 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Type scale & rhythm">
           <Card className="space-y-3">
-            <p className="text-page font-semibold">Page title — 20/26, −0.017em</p>
-            <p className="text-section font-semibold">Section title — 16/22, −0.01em</p>
+            <p className="text-page font-semibold">Page title — 22/28, −0.017em</p>
+            <p className="text-section font-semibold">Section / top-bar title — 15/20, −0.01em</p>
+            <p className="text-body font-semibold">Card & step title — 14/20 semibold</p>
             <p className="text-body">Body — 14/20. The plan executes against the bench.</p>
             <p className="text-meta text-text-secondary">Meta — 13/18. Updated 2 minutes ago.</p>
+            <p className="text-metadata text-text-secondary">Metadata — 12/16. seq 141 · iteration 2</p>
+            <p className="font-mono text-code text-text-secondary">
+              Code — 12.5/19 mono. i2c_clock=99.611kHz ack=1
+            </p>
             <p className="text-label font-medium uppercase text-text-secondary">
-              Label — 11/16, +0.05em, uppercase
+              Label — 11/16, +0.05em, uppercase — machine capsules only
             </p>
           </Card>
           <Card heading="Tabular numerals" className="max-w-md">
@@ -136,25 +141,28 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Elevation">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
-              <p className="text-body font-medium">1 · subtle</p>
-              <p className="mt-1 text-meta text-text-secondary">Resting cards and panels.</p>
-            </div>
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-raised">
-              <p className="text-body font-medium">2 · raised</p>
+            <div className="rounded-card border border-border bg-surface p-5">
+              <p className="text-body font-medium">resting</p>
               <p className="mt-1 text-meta text-text-secondary">
-                Floating over content — popovers, jump-to-latest.
+                Cards and panels — no shadow; surface + 1px border carry the depth.
               </p>
             </div>
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-overlay">
-              <p className="text-body font-medium">3 · overlay</p>
+            <div className="rounded-card border border-border bg-surface p-5 shadow-raised">
+              <p className="text-body font-medium">raised</p>
               <p className="mt-1 text-meta text-text-secondary">
-                Modal surfaces — dialogs and drawers.
+                Floating over content — popovers, jump-to-latest, demo callout.
+              </p>
+            </div>
+            <div className="rounded-card border border-border bg-surface p-5 shadow-overlay">
+              <p className="text-body font-medium">overlay</p>
+              <p className="mt-1 text-meta text-text-secondary">
+                Modal surfaces — dialogs, drawers, palette.
               </p>
             </div>
           </div>
           <p className="text-meta text-text-secondary">
-            Depth still reads borders-first (§6.1) — shadows only separate layers.
+            Shadows exist only on floating layers (§6.1 v2.3) — resting cards read against the
+            canvas by border and surface alone.
           </p>
         </GallerySection>
 
@@ -207,7 +215,7 @@ export default function DesignGalleryPage() {
         <GallerySection title="Card">
           <Card heading="Board Context">
             <p className="text-body text-text-secondary">
-              Panel on white with 1px border, 10px radius, subtle shadow only.
+              White surface with 1px border, 8px radius, no shadow — depth is the canvas behind.
             </p>
           </Card>
           <Card>
@@ -358,8 +366,9 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Motion">
           <p className="text-meta text-text-secondary">
-            Tokens: fast 120ms (state flips) · medium 200ms (drawer/dialog surfaces) · gentle
-            360ms (progress). All motion collapses under prefers-reduced-motion — final states
+            Tokens: fast 120ms (hover/focus, state flips) · medium 200ms (badge transitions,
+            drawer/dialog surfaces) · gentle 360ms (progress) · morph 280ms (the FAIL→PASS
+            verdict moment). All motion collapses under prefers-reduced-motion — final states
             still land.
           </p>
           <Card heading="Badge state flip — fast" className="max-w-md">

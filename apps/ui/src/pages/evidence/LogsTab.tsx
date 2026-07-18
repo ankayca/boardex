@@ -58,7 +58,7 @@ export function LogsTab({ view, targetArtifact }: LogsTabProps) {
               role="tab"
               aria-selected={isSelected}
               onClick={() => setSelection({ target: targetId, id: tab.artifact.id })}
-              className={`rounded-button px-3 py-1.5 text-meta font-medium transition-colors ${
+              className={`rounded-control px-3 py-1.5 text-meta font-medium transition-colors ${
                 isSelected
                   ? 'bg-neutral-badge-bg text-text-primary'
                   : 'text-text-secondary hover:text-text-primary'

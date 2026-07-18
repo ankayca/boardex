@@ -66,7 +66,7 @@ function TimelineMarker({ status, settling }: { status: StepStatus; settling: bo
   return (
     <span
       aria-hidden="true"
-      className={`absolute -left-[7px] top-1.5 inline-flex rounded-full bg-bg-app ${
+      className={`absolute -left-[7px] top-1.5 inline-flex rounded-full bg-canvas ${
         settling ? 'animate-icon-settle' : ''
       }`}
     >
@@ -84,7 +84,7 @@ function ArtifactChips({ artifacts }: { artifacts: readonly Artifact[] }) {
       {artifacts.map((artifact) => (
         <li
           key={artifact.id}
-          className="animate-chip-in rounded-full border border-border bg-bg-app px-2.5 py-0.5 text-meta text-text-secondary"
+          className="animate-chip-in rounded-full border border-border bg-canvas px-2.5 py-0.5 text-meta text-text-secondary"
         >
           {artifact.label}
         </li>
@@ -167,7 +167,7 @@ function IterationDivider({ iteration, reason }: { iteration: number; reason: st
   return (
     <li aria-label={`Iteration ${iteration}`} className="animate-iteration-in relative pb-6 pl-6">
       <div className="-ml-6 flex items-center gap-3">
-        <span className="whitespace-nowrap rounded-full border border-border bg-bg-app px-3 py-0.5 text-meta font-medium text-text-primary">
+        <span className="whitespace-nowrap rounded-full border border-border bg-canvas px-3 py-0.5 text-meta font-medium text-text-primary">
           Iteration {iteration} — applying fix
         </span>
         <span aria-hidden="true" className="h-px flex-1 bg-border" />
@@ -180,7 +180,7 @@ function IterationDivider({ iteration, reason }: { iteration: number; reason: st
 function TaskPrompt({ prompt }: { prompt: string }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="rounded-card border border-border bg-bg-panel px-5 py-4 shadow-subtle">
+    <div className="rounded-card border border-border bg-surface px-5 py-4">
       <p className={`whitespace-pre-wrap text-body text-text-primary ${expanded ? '' : 'line-clamp-2'}`}>
         {prompt}
       </p>

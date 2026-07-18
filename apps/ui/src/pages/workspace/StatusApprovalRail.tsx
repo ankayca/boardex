@@ -116,7 +116,7 @@ export function StatusApprovalRail({
       {reportTarget && (
         <Link
           to={reportHrefAt(base)}
-          className="flex w-full items-center justify-center rounded-button bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+          className="flex w-full items-center justify-center rounded-control bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
         >
           Open Validation Report
         </Link>

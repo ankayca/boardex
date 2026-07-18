@@ -6,6 +6,8 @@ Version 2.0 · July 2026 — v1.2 contract amendments per §10.5: added `run.ite
 **v2.1 (T6.3 Documents & Sources — additive wire changes; proposed to the backend owner by PR). All fields are optional, so a v2.0 consumer that ignores them still conforms; the wire `contractVersion` stays `boardex-contract/0.1`.** (1) `BoardProfile` gains `documents?: BoardDocument[]` where `BoardDocument = { id, label, kind: 'datasheet'|'schematic'|'reference', mimeType }` — profile-attached reference material the runner owns and serves (§4). (2) Two new routes serve documents by reference: `GET /documents/{id}` (content, Content-Type per the document's `mimeType`) and `GET /documents/{id}/meta` (the `BoardDocument`) (§5.3). (3) `MeasurementCheck` gains `sourceDoc?: { documentId, locator? }` — the resolvable form of a citation, beside the existing free-text `sourceRef` (which stays as the fallback rendering) (§4). (4) Runner capabilities, riding along for T6.6: `GET /health` gains `capabilities?: { models?: string[] }`; `POST /runs` (CreateRun) gains `model?: string`; `Run` gains `model?: string` (echoed) (§4/§5.3). Reducer unchanged (optional fields pass through RunView on their entities). Mock, same release: the canned Nucleo-F303RE profile carries two authored documents (a BME280 datasheet excerpt — §5.4.1 addressing + the §6.2 timing spec — and schematic pin-mapping notes), serves them per the new routes, and `/health` advertises `capabilities.models: ['mock-model']`; both fixtures' `i2c_clock`/`device_ack` `check.evaluated` payloads gain `sourceDoc` pointing at the datasheet excerpt with heading locators (payload-only — no new events, no seq changes). Documents-tab/deep-link/model-select UI is T6.3 stage 2.
 
 **v2.2 (T6.2 Workspace as theater — reducer-only, wire unchanged; documented in the T6.5 §9.3 debt pass):** RunView's `logsByStep` values carry a per-line `ts` (`{stream, line, ts}[]`, §5.4). The `ts` is the `step.log` envelope's `ts`, so every line of a batched `lines[]` frame shares one timestamp — the only honest option, since the contract times events, not individual lines. It feeds the workspace LogViewer's optional per-line timestamp column (§6.2/§7.3). No new events, no seq changes; the wire `contractVersion` stays `boardex-contract/0.1`.
+
+**v2.3 (Sprint 7 P0 — visual system only; zero wire/reducer changes):** §6 rewritten to the premium visual system from the external design review (docs/design/Boardex_MVP_UI_Design_Review.docx, 2026-07): a three-layer surface hierarchy (canvas `#F7F7F8` / navigation `#FBFBFC` / primary white) replacing the two-tone `#FAFAF9`/white scheme; the full color set re-pointed (borders `#E2E3E7`/`#D2D4DA`, text `#17171A`/`#5C6068`, accent `#5B4CF0`, pass `#168A4A`, fail `#C73535`, warn `#A86D00`) — old values are RETIRED, not aliased; a rewritten type ladder (page 22px, top-bar/section 15px, card/step titles 14px semibold, metadata 12px, code 12.5px mono) with the 12px state-text floor and the 11px label step reserved for the two machine capsules; geometry on the 8px grid (card radius 8px, control radius 6px, buttons 36/40px, sidebar 208px, right rail 320px, evidence drawer 840px); motion extended (not replaced) with the 280ms FAIL→PASS morph token; §6.2's Badge split into four classes (run-state / risk / verdict / inline step status). D14 reservations, flow, and the contract are unchanged.
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -385,53 +387,73 @@ Rules:
 
 # 6. Design System
 
-## 6.1 Tokens (Tailwind theme extension — exact values)
+## 6.1 Tokens (Tailwind theme extension — exact values; Sprint 7 P0 system)
 
 ```
-Background:        #FAFAF9  (app)    #FFFFFF (panels/cards)
-Border:            #E7E5E4  (1px, never darker than #D6D3D1)
-Text primary:      #1C1917
-Text secondary:    #57534E
-Accent (actions):  #4F46E5  (indigo-600); hover #4338CA
-Pass/success ONLY: #16A34A  (green-600); bg tint #F0FDF4
-Fail/stop ONLY:    #DC2626  (red-600);   bg tint #FEF2F2
-Approval/warn ONLY:#D97706  (amber-600); bg tint #FFFBEB
-Neutral badge:     #78716C on #F5F5F4
-Scrim (overlays):  rgba(28,25,23,0.4)  (--color-scrim; text-primary at 40% alpha, not a new hue — backs dialogs/drawers)
-Radius: 10px cards, 8px buttons/inputs.
-Elevation (T6.1, 3 levels — depth still reads borders + whitespace first):
-  subtle   0 1px 2px rgba(0,0,0,0.05)                      resting cards/panels
-  raised   subtle + 0 3px 10px rgba(0,0,0,0.06)            floating over content
+Surfaces (three layers — white work surfaces read against a tinted shell,
+never white-on-white):
+  Application canvas: #F7F7F8  (the shell background; --color-canvas)
+  Navigation surface: #FBFBFC  (sidebar; --color-nav)
+  Primary surface:    #FFFFFF  (cards, workspace, report, drawer, modals; --color-surface)
+Border:            #E2E3E7 default · #D2D4DA strong (focused cards, tables, approvals)
+Text primary:      #17171A
+Text secondary:    #5C6068
+Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue)
+Pass/success ONLY: #168A4A; bg tint #E8F5EE
+Fail/stop ONLY:    #C73535; bg tint #FBEDED
+Approval/warn ONLY:#A86D00; bg tint #FAF3E4
+Neutral badge:     #3F434B on #E9EAEE  (a FILLED capsule with dark text — a
+  neutral state, e.g. LOW risk, must never read as disabled)
+Scrim (overlays):  rgba(23,23,26,0.35)  (--color-scrim; text-primary at 35%
+  alpha, not a new hue — light enough that the dimmed run stays legible
+  behind the evidence drawer)
+Radius: 8px cards, 6px controls (buttons/inputs); badges stay pill-shaped.
+Elevation (2 levels — depth reads from the surface hierarchy + 1px borders;
+  shadows exist ONLY on floating layers: palette, modals, drawer, demo callout.
+  Resting cards carry NO shadow):
+  raised   0 1px 2px rgba(0,0,0,0.05), 0 3px 10px rgba(0,0,0,0.06)   floating over content
   overlay  0 2px 8px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.12)  dialogs/drawers
-Motion (T6.1): fast 120ms (state flips: badge/dot/button) · medium 200ms
-  (surfaces: drawer/dialog) · gentle 360ms (progress) · ambient 2s
-  (T6.2 — the looping active-step pulse; --motion-ambient in code); eases
+Motion (Sprint 7 extends, never replaces): fast 120ms (hover/focus — the
+  100–140 band) · medium 200ms (badge/state transitions, 160–200 band; and
+  drawer/modal surfaces, 200–240 band, entrance ease = the ease-out) ·
+  gentle 360ms (progress) · morph 280ms (FAIL→PASS verdict: icon morph +
+  ONE restrained background pulse, 240–300 band; --motion-morph) · ambient 2s
+  (the looping active-step pulse; --motion-ambient); eases
   cubic-bezier(0.2,0,0,1) standard, cubic-bezier(0.16,1,0.3,1) entrance;
-  prefers-reduced-motion collapses all motion (final states still land).
-Focus (T6.1): one 2px accent :focus-visible ring, offset 2px, everywhere;
-  text fields keep their accent-border focus instead.
-Spacing rhythm: 4px base; panels padded 20–24px; sections separated 32px.
-Type: Inter (UI), JetBrains Mono (logs, diffs, values, commands);
+  prefers-reduced-motion removes pulses and swaps states instantly.
+Focus: one 2px accent :focus-visible ring, offset 2px, on ALL interactive
+  controls; text fields keep their accent-border focus instead.
+Spacing: 8px grid (4/8/12/16/24/32); panels padded 16–24px; sections 32px.
+Type: Inter (UI), JetBrains Mono (logs, decode, diffs, values, commands);
   tabular numerals app-wide — measurement columns align in either face.
-Scale: 11px uppercase label (+0.05em tracking; badges, chips, table headers),
-  13px meta, 14px body, 16px section titles (−0.01em), 20px page titles
-  (−0.017em), and the Ask Boardex composer at 24px / 32px line-height /
-  −0.019em tracking (the one place type runs 22–24px).
+Scale (the ladder — line-height/tracking fixed per step):
+  composer 24/32 −0.019em (Ask Boardex only) · page 22/28 −0.017em (page
+  titles, report title) · section 15/20 −0.01em (top-bar title, report
+  section headings) · title = 14/20 SEMIBOLD (card + step titles; body
+  metrics, weight is the step) · body 14/20 · meta 13/18 (secondary text) ·
+  metadata 12/16 (timestamps, counts, chips) · code 12.5/19 mono (logs,
+  decode, diff) · label 11/16 +0.05em uppercase — reserved EXCLUSIVELY for
+  the two machine capsules (run-state and risk badges).
 ```
 
-Hard rules: green/red/amber are semantically reserved (D14) — never decorative. One accent. No gradients, no glassmorphism, no dark mode in MVP. Density: calm by default; monospace areas (logs, decode tables) may be dense.
+Hard rules: green/red/amber are semantically reserved (D14) — never decorative. One accent. No gradients, no glassmorphism, no dark mode in MVP. Density: calm by default; monospace areas (logs, decode tables) may be dense. **12px floor:** any state-bearing text renders at ≥12px; the 11px label step exists only inside the run-state and risk capsules. **Color-noise budget:** repeated per-step "Succeeded" is neutral text + a green check icon; green TEXT is reserved for summary and final verdicts. Geometry: buttons 36px standard / 40px gate-primary; minimum interactive target 32px; sidebar 208px expanded / 56px collapsed; top bar 48px; workspace right rail 320px; evidence drawer 840px (capped 47vw). The pre-v2.3 values (#FAFAF9 shell, #4F46E5 accent, 10px cards, 240px sidebar, 340px rail, 16px section titles…) are retired — nothing in the codebase may reference them.
 
 ## 6.2 Primitives to build once (design/):
 
-`Button` (primary/secondary/danger/ghost) · `Card` · `Badge` (risk: low/medium/high/critical; verdict: pass/fail/needs_review; status) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand)
+`Button` (primary/secondary/danger/ghost; heights 36px standard, 40px gate-primary; loading states use specific verbs — Approving…, Flashing…, Validating…, never a bare spinner) · `Card` · `Badge` (four classes, below) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand)
 
-Risk badge mapping: low = neutral, medium = amber outline, high = amber solid, critical = red solid. Verdict mapping: pass = green, fail = red, needs_review = amber.
+**The badge system (v2.3) — four classes, every status chip in the product belongs to exactly one:**
+
+1. **Run-state** — capsule, 20–22px tall, the 11px label step (11px/600/uppercase). The run-status machine only (Draft/Planning/Plan ready/Running/Awaiting approval/Diagnosing/Completed/Failed/Stopped). Colors per the D14 derivation (decisions 2026-07-07): completed = green tint, failed/stopped = red tint, plan_ready/awaiting_approval = amber tint (the human acts), everything else neutral.
+2. **Risk** — capsule, 20px tall, the 11px label step. low = FILLED neutral capsule with dark text (must not read disabled), medium = amber tint, high = amber solid (dark text), critical = red solid (white text).
+3. **Verdict** — icon-led, 24–28px tall, 12px/600 mixed case: icon + "Pass" / "Fail" / "Needs review" / "Not recorded". The icon is ALWAYS present — color is never the only signal. pass = green, fail = red, needs_review = amber, not-recorded = neutral gray with a dash/hollow icon (NEVER red — absence of evidence is not failure).
+4. **Inline step status** — icon + 12.5–13px/500 NEUTRAL text (Succeeded/Active/Pending/Failed/Skipped). The green lives in the check icon, not the word; a timeline of successes reads calm, not lit up.
 
 ## 6.3 Layout (the three zones + evidence band, spec §17.2)
 
-The app frame (T6.1b): a persistent left sidebar (240px, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title + status badge, right-aligned page actions). Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
+The app frame (T6.1b, geometry v2.3): a persistent left sidebar (208px on the navigation surface, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title at the 15px section step + status badge, right-aligned page actions). The shell sits on the application canvas; all work content sits on white primary surfaces. Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
 
-Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1240px of content area — frame-aware, so the sidebar's 240/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 340px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1240px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope. The rails are sticky within the content scroll region (`rail-sticky`, T6.2b — the Status card and Stop stay reachable down a long timeline); sticky is disabled below 1240px, where the right rail stacks and a pinned card could otherwise cover the timeline.
+Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1208px of content area — 280 + 560 + 320 + 2×24 gaps; frame-aware, so the sidebar's 208/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 320px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1208px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope. The rails are sticky within the content scroll region (`rail-sticky`, T6.2b — the Status card and Stop stay reachable down a long timeline); sticky is disabled below 1208px, where the right rail stacks and a pinned card could otherwise cover the timeline. The evidence drawer opens at 840px, capped at 47vw so the dimmed run always stays visible beside it.
 
 ---
 

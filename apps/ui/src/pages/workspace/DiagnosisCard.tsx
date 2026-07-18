@@ -68,9 +68,9 @@ export function DiagnosisCard({
   return (
     <section
       aria-label="Diagnosis"
-      className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle"
+      className="rounded-card border border-border bg-surface p-5"
     >
-      <h2 className="text-section font-semibold text-text-primary">Diagnosis</h2>
+      <h2 className="text-body font-semibold text-text-primary">Diagnosis</h2>
 
       {failedCheckRefs.length > 0 && (
         <ul aria-label="Failed checks" className="mt-3 space-y-2">

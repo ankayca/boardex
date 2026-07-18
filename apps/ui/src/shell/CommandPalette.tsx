@@ -162,7 +162,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={onKeyDown}
-        className="relative flex max-h-[70vh] w-full max-w-xl animate-palette-in flex-col overflow-hidden rounded-card border border-border bg-bg-panel shadow-overlay"
+        className="relative flex max-h-[70vh] w-full max-w-xl animate-palette-in flex-col overflow-hidden rounded-card border border-border bg-surface shadow-overlay"
       >
         <input
           ref={inputRef}
@@ -197,7 +197,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
               return (
                 <li key={item.entry.id}>
                   {showHeader && (
-                    <p className="px-4 pb-1 pt-3 text-label font-medium uppercase text-text-secondary">
+                    <p className="px-4 pb-1 pt-3 text-metadata font-medium uppercase tracking-wide text-text-secondary">
                       {GROUP_LABELS[item.entry.group]}
                     </p>
                   )}
@@ -207,7 +207,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
                     aria-selected={active}
                     onClick={() => select(item)}
                     onMouseMove={() => setActiveIndex(index)}
-                    className={`mx-1 flex cursor-pointer items-center justify-between gap-3 rounded-button px-3 py-2 text-body ${
+                    className={`mx-1 flex cursor-pointer items-center justify-between gap-3 rounded-control px-3 py-2 text-body ${
                       active ? 'bg-neutral-badge-bg text-text-primary' : 'text-text-primary'
                     }`}
                   >

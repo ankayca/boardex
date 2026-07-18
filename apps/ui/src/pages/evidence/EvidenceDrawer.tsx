@@ -68,7 +68,7 @@ export function EvidenceDrawer({ view, documents, onClose }: EvidenceDrawerProps
   const diffArtifact = targetFor('diff') ?? latestOfKind(view.artifacts, 'code_diff');
 
   return (
-    <Drawer open title="Evidence" onClose={onClose} widthPx={760}>
+    <Drawer open title="Evidence" onClose={onClose} widthPx={840}>
       {target.notice && (
         <p role="status" className="mb-4 rounded-card border border-warn bg-warn-bg px-4 py-2 text-meta text-warn">
           {target.notice}

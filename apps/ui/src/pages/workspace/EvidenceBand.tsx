@@ -51,12 +51,12 @@ function useVerdictFlips(checks: readonly { id: string; verdict: CheckVerdict }[
 // Link, so the actions are real anchors carrying an href. Disabled — no artifact of
 // that kind yet — degrades to an inert span, never a dead link.
 const ACTION_BASE =
-  'inline-flex items-center justify-center rounded-button border border-border bg-bg-panel px-4 py-2 text-body font-medium text-text-primary transition-colors';
+  'inline-flex items-center justify-center rounded-control border border-border bg-surface px-4 py-2 text-body font-medium text-text-primary transition-colors';
 
 function BandAction({ label, to }: { label: string; to: string | null }) {
   if (to) {
     return (
-      <Link to={to} className={`${ACTION_BASE} hover:bg-bg-app`}>
+      <Link to={to} className={`${ACTION_BASE} hover:bg-canvas`}>
         {label}
       </Link>
     );
@@ -69,7 +69,7 @@ function BandAction({ label, to }: { label: string; to: string | null }) {
 }
 
 const CHIP_BASE =
-  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-bg-app px-3 py-1';
+  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-canvas px-3 py-1';
 
 export function EvidenceBand({ view }: { view: RunView }) {
   const { run, checks } = view;
@@ -83,7 +83,7 @@ export function EvidenceBand({ view }: { view: RunView }) {
   return (
     <section
       aria-label="Evidence summary"
-      className="mt-6 flex h-[88px] items-center gap-6 rounded-card border border-border bg-bg-panel px-5 shadow-subtle"
+      className="mt-6 flex h-[88px] items-center gap-6 rounded-card border border-border bg-surface px-5"
     >
       {checks.length > 0 ? (
         <ul

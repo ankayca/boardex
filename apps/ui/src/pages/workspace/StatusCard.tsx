@@ -93,11 +93,11 @@ export function StatusCard({
   const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
-    <section aria-label="Run status" className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
+    <section aria-label="Run status" className="rounded-card border border-border bg-surface p-5">
       {/* One instrument block (T6.2): status, elapsed, and plan progress read as a
           single readout, with Stop as the block's escape hatch. */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-section font-semibold text-text-primary">Status</h2>
+        <h2 className="text-body font-semibold text-text-primary">Status</h2>
         <Badge kind="status" value={run.status} />
       </div>
       {elapsed && (
@@ -117,7 +117,7 @@ export function StatusCard({
         // merely attempted.
         <div className="mt-4">
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-label uppercase text-text-secondary">Verified</span>
+            <span className="text-metadata uppercase tracking-wide text-text-secondary">Verified</span>
             <span className="font-mono text-meta text-text-primary">
               {progress.completed} / {progress.total}
             </span>
