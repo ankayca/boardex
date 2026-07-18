@@ -51,7 +51,7 @@ function useVerdictFlips(checks: readonly { id: string; verdict: CheckVerdict }[
 // Link, so the actions are real anchors carrying an href. Disabled — no artifact of
 // that kind yet — degrades to an inert span, never a dead link.
 const ACTION_BASE =
-  'inline-flex items-center justify-center rounded-control border border-border bg-surface px-4 py-2 text-body font-medium text-text-primary transition-colors';
+  'inline-flex h-9 items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors';
 
 function BandAction({ label, to }: { label: string; to: string | null }) {
   if (to) {
@@ -68,8 +68,10 @@ function BandAction({ label, to }: { label: string; to: string | null }) {
   );
 }
 
+// 28px chips (§6.2 v2.3): the 24px icon-led verdict badge plus 2px breathing
+// room each side; the icon inside the badge means color is never the only signal.
 const CHIP_BASE =
-  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-canvas px-3 py-1';
+  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-canvas px-3 py-0.5';
 
 export function EvidenceBand({ view }: { view: RunView }) {
   const { run, checks } = view;

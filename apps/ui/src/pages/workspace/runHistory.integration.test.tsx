@@ -139,7 +139,7 @@ describe('run history cold-loads (T5.2, integration)', () => {
     const band = screen.getByRole('region', { name: 'Evidence summary' });
     const chips = within(band).getAllByRole('listitem');
     expect(chips).toHaveLength(3);
-    for (const chip of chips) expect(within(chip).getByText('PASS')).toBeInTheDocument();
+    for (const chip of chips) expect(within(chip).getByText('Pass')).toBeInTheDocument();
   }, 60000);
 
   it('renders a stopped run fully from replay: evidence-so-far retained, report disabled', async () => {

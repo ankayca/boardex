@@ -116,7 +116,7 @@ export function StatusApprovalRail({
       {reportTarget && (
         <Link
           to={reportHrefAt(base)}
-          className="flex w-full items-center justify-center rounded-control bg-accent px-4 py-2 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+          className="flex h-10 w-full items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-white transition-colors hover:bg-accent-hover"
         >
           Open Validation Report
         </Link>
@@ -127,6 +127,11 @@ export function StatusApprovalRail({
           gate={gate}
           diffHref={diffTarget && evidenceHrefAt(base, diffTarget)}
           resolving={gate.kind === 'ready' && resolvingFor(gate.approval)}
+          resolvingStatus={
+            gate.kind === 'ready' && resolvingFor(gate.approval)
+              ? (resolve.variables?.status ?? null)
+              : null
+          }
           resolveError={commandError(
             resolve.error,
             'Could not resolve the approval — check that the runner is online, then try again.',

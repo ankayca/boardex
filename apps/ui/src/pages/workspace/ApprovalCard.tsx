@@ -18,6 +18,11 @@ export interface ApprovalCardProps {
   diffHref: string | null;
   /** Resolve command in flight, or accepted and awaiting the approval.resolved event. */
   resolving: boolean;
+  /**
+   * Which resolution is in flight, so the loading verb is specific (§6.2 v2.3:
+   * Approving… / Rejecting…, never a generic "Resolving…"). Null when idle.
+   */
+  resolvingStatus?: 'approved' | 'rejected' | null;
   resolveError: string | null;
   onResolve: (approval: Approval, status: 'approved' | 'rejected') => void;
 }
@@ -26,7 +31,7 @@ export interface ApprovalCardProps {
 // Link, so Review Diff is a real anchor carrying an href — same treatment as the
 // evidence band's actions.
 const REVIEW_DIFF_BASE =
-  'flex-1 inline-flex items-center justify-center rounded-control border border-border bg-surface px-4 py-2 text-body font-medium text-text-primary transition-colors';
+  'inline-flex h-9 w-full items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors';
 
 const NO_DIFF_TOOLTIP = 'No code diff has been produced for this run yet.';
 
@@ -77,6 +82,7 @@ export function ApprovalCard({
   gate,
   diffHref,
   resolving,
+  resolvingStatus = null,
   resolveError,
   onResolve,
 }: ApprovalCardProps) {
@@ -134,25 +140,28 @@ export function ApprovalCard({
         </p>
       )}
 
+      {/* §6.2 v2.3 gate hierarchy: ONE primary (full-width, 40px gate size),
+          Review Diff as the bordered secondary, and Reject demoted to a
+          tertiary destructive text action — never boxed equal to Review Diff. */}
       <div className="mt-5 flex flex-col gap-2">
         <Button
           variant="primary"
+          size="gate"
+          className="w-full"
           disabled={resolving}
           onClick={() => onResolve(approval, 'approved')}
         >
-          {resolving ? 'Resolving…' : 'Approve & Continue'}
+          {resolvingStatus === 'approved' ? 'Approving…' : 'Approve & Continue'}
         </Button>
-        <div className="flex gap-2">
-          <ReviewDiff diffHref={diffHref} />
-          <Button
-            variant="secondary"
-            className="flex-1"
-            disabled={resolving}
-            onClick={() => onResolve(approval, 'rejected')}
-          >
-            Reject
-          </Button>
-        </div>
+        <ReviewDiff diffHref={diffHref} />
+        <Button
+          variant="tertiary-danger"
+          className="w-full"
+          disabled={resolving}
+          onClick={() => onResolve(approval, 'rejected')}
+        >
+          {resolvingStatus === 'rejected' ? 'Rejecting…' : 'Reject'}
+        </Button>
       </div>
     </section>
   );

@@ -92,7 +92,7 @@ describe('DiagnosisCard', () => {
     const failed = within(screen.getByRole('list', { name: 'Failed checks' }));
     expect(failed.getByText('BME280 must ACK at address 0x76')).toBeInTheDocument();
     expect(failed.getByText('Serial must show TEMP/HUM readings')).toBeInTheDocument();
-    expect(failed.getAllByText('FAIL')).toHaveLength(2);
+    expect(failed.getAllByText('Fail')).toHaveLength(2);
     const links = failed.getAllByRole('link', { name: 'View evidence' });
     // Each link carries its own check's artifact — the drawer routes the id to that
     // artifact kind's tab (decode / logs), so the link lands on the exact evidence.
@@ -170,7 +170,7 @@ describe('DiagnosisCard', () => {
 
   it('disables Approve Fix Plan while a resolution is pending', () => {
     renderCard({ fixApproval: approval('apr_fix'), resolving: true });
-    expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled();
   });
 
   it('surfaces a non-conflict resolve error as an alert', () => {
@@ -190,7 +190,7 @@ describe('DiagnosisCard', () => {
     expect(failed.getByText('BME280 must ACK at address 0x76')).toBeInTheDocument();
     expect(failed.getByText('Referenced check unavailable')).toBeInTheDocument();
     // The unavailable line carries no verdict badge and no evidence link.
-    expect(failed.getAllByText('FAIL')).toHaveLength(1);
+    expect(failed.getAllByText('Fail')).toHaveLength(1);
     expect(failed.getAllByRole('link', { name: 'View evidence' })).toHaveLength(1);
   });
 });

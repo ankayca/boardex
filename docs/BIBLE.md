@@ -440,7 +440,7 @@ Hard rules: green/red/amber are semantically reserved (D14) — never decorative
 
 ## 6.2 Primitives to build once (design/):
 
-`Button` (primary/secondary/danger/ghost; heights 36px standard, 40px gate-primary; loading states use specific verbs — Approving…, Flashing…, Validating…, never a bare spinner) · `Card` · `Badge` (four classes, below) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand)
+`Button` (primary / secondary (white surface, strong border) / tertiary-danger (text button — red only under hover/focus intent; the Approval card's Reject) / danger / outline-danger / ghost; heights 36px standard, 40px gate-primary; loading states use specific verbs — Approving…, Rejecting…, Validating…, never a bare spinner) · `Card` · `Badge` (four classes, below) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand)
 
 **The badge system (v2.3) — four classes, every status chip in the product belongs to exactly one:**
 

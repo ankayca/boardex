@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type {
-  BenchDeviceState,
-  CheckVerdict,
-  RiskLevel,
-  RunStatus,
-  StepStatus,
-} from '@boardex/contract';
+import type { BenchDeviceState, RiskLevel, RunStatus, StepStatus } from '@boardex/contract';
+import type { VerdictValue } from './Badge';
 import { CommandPalette } from '../shell/CommandPalette';
 import { ShortcutsHelp } from '../shell/ShortcutsHelp';
 import { Badge } from './Badge';
@@ -24,7 +19,7 @@ import { StepStatusIcon } from './StepStatusIcon';
 
 // Typed against the contract enums so a contract change breaks typecheck here.
 const RISK_LEVELS: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
-const VERDICTS: CheckVerdict[] = ['pass', 'fail', 'needs_review'];
+const VERDICTS: VerdictValue[] = ['pass', 'fail', 'needs_review', 'not_recorded'];
 const RUN_STATUSES: RunStatus[] = [
   'draft',
   'planning',
@@ -182,8 +177,12 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Button">
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="primary">Approve &amp; Continue</Button>
+            <Button variant="primary" size="gate">
+              Approve &amp; Continue
+            </Button>
+            <Button variant="primary">New Run</Button>
             <Button variant="secondary">Review Diff</Button>
+            <Button variant="tertiary-danger">Reject</Button>
             <Button variant="danger">Stop Run</Button>
             <Button variant="outline-danger">Stop Run</Button>
             <Button variant="ghost">Edit task</Button>
@@ -206,9 +205,10 @@ export default function DesignGalleryPage() {
             </Button>
           </div>
           <p className="text-meta text-text-secondary">
-            outline-danger is the resting form for ever-present destructive controls (Stop
-            Run) — solid red only under hover intent. Disabled buttons keep 60% presence so
-            a gated CTA never vanishes.
+            36px standard, 40px gate-primary. outline-danger is the resting form for
+            ever-present destructive controls (Stop Run) — solid red only under hover intent;
+            tertiary-danger is the text form (Reject) — red only under hover/focus. Disabled
+            buttons keep 60% presence so a gated CTA never vanishes.
           </p>
         </GallerySection>
 
@@ -223,23 +223,30 @@ export default function DesignGalleryPage() {
           </Card>
         </GallerySection>
 
-        <GallerySection title="Badge — risk">
+        <GallerySection title="Badge — risk capsule">
           <div className="flex flex-wrap items-center gap-3">
             {RISK_LEVELS.map((risk) => (
               <Badge key={risk} kind="risk" value={risk} />
             ))}
           </div>
+          <p className="text-meta text-text-secondary">
+            LOW is a filled neutral capsule with dark text — a neutral state, not a disabled one.
+          </p>
         </GallerySection>
 
-        <GallerySection title="Badge — verdict">
+        <GallerySection title="Badge — verdict (icon-led)">
           <div className="flex flex-wrap items-center gap-3">
             {VERDICTS.map((verdict) => (
               <Badge key={verdict} kind="verdict" value={verdict} />
             ))}
           </div>
+          <p className="text-meta text-text-secondary">
+            Icon always present — color is never the only signal. Not recorded is neutral with a
+            dash: absence of evidence is not failure.
+          </p>
         </GallerySection>
 
-        <GallerySection title="Badge — status">
+        <GallerySection title="Badge — run-state capsule">
           <div className="flex flex-wrap items-center gap-3">
             {RUN_STATUSES.map((status) => (
               <Badge key={status} kind="status" value={status} />

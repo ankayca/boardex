@@ -49,10 +49,14 @@ const statusLabels: Record<StepStatus, string> = {
 // steps that have no output yet.
 const NO_LOGS: readonly StepLogLine[] = [];
 
+// Inline step status class (§6.2 v2.3): the word stays NEUTRAL for succeeded —
+// the green lives in the check icon beside it, so a timeline of successes reads
+// calm; green TEXT is reserved for summary/final verdicts. Red keeps marking a
+// real failure; accent marks the live focus.
 const statusTextClasses: Record<StepStatus, string> = {
   pending: 'text-text-secondary',
   active: 'text-accent',
-  succeeded: 'text-pass',
+  succeeded: 'text-text-secondary',
   failed: 'text-fail',
   skipped: 'text-text-secondary',
 };

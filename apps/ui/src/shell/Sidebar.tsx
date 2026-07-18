@@ -217,7 +217,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-medium ease-motion ${
+      className={`flex shrink-0 flex-col border-r border-border bg-nav transition-[width] duration-medium ease-motion ${
         collapsed ? 'w-14' : 'w-52'
       }`}
     >
@@ -234,7 +234,7 @@ export function Sidebar() {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
           onClick={toggle}
-          className="rounded-control p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
+          className="rounded-control p-2 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
         >
           <CollapseIcon collapsed={collapsed} />
         </button>
@@ -259,7 +259,7 @@ export function Sidebar() {
                 to="/runs/new"
                 aria-label="New run"
                 title="New run"
-                className="shrink-0 rounded-control p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
+                className="shrink-0 rounded-control p-2 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
               >
                 <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none">
                   <path

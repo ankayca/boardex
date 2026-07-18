@@ -152,11 +152,12 @@ export function DiagnosisCard({
       {fixApproval ? (
         <Button
           variant="primary"
+          size="gate"
           className="mt-4 w-full"
           disabled={resolving}
           onClick={() => onApproveFix(fixApproval)}
         >
-          {resolving ? 'Resolving…' : 'Approve Fix Plan'}
+          {resolving ? 'Approving…' : 'Approve Fix Plan'}
         </Button>
       ) : (
         <p className="mt-4 text-meta text-text-secondary">

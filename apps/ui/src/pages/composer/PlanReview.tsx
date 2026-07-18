@@ -136,7 +136,7 @@ export function PlanReview({
       )}
 
       <div className="mt-6 flex items-center gap-3">
-        <Button variant="primary" disabled={!approvable || approving} onClick={onApprove}>
+        <Button variant="primary" size="gate" disabled={!approvable || approving} onClick={onApprove}>
           {approving ? 'Approving…' : 'Approve Plan'}
         </Button>
         <Button variant="secondary" onClick={onEditTask}>

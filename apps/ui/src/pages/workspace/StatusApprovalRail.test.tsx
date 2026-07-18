@@ -210,7 +210,7 @@ describe('approval resolution', () => {
     await user.click(screen.getByRole('button', { name: 'Approve & Continue' }));
     expect(resolveApproval).toHaveBeenCalledWith(RUN_ID, 'apr_flash', 'approved');
     // Idempotency window: 204 received, approval.resolved not yet in view.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled());
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
     expect(resolveApproval).toHaveBeenCalledTimes(1);
   });
@@ -262,7 +262,7 @@ describe('diagnosis interplay', () => {
 
     await user.click(screen.getByRole('button', { name: 'Approve Fix Plan' }));
     expect(resolveApproval).toHaveBeenCalledWith(RUN_ID, 'apr_fix', 'approved');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled());
     expect(resolveApproval).toHaveBeenCalledTimes(1);
   });
 

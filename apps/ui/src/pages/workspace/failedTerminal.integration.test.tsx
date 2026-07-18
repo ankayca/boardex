@@ -121,10 +121,10 @@ describe('failed-terminal workspace (--fail-variant, integration)', () => {
     const chips = within(band).getAllByRole('listitem');
     expect(chips).toHaveLength(3);
     const badgeTexts = chips.flatMap((chip) =>
-      ['PASS', 'FAIL'].filter((label) => within(chip).queryByText(label) !== null),
+      ['Pass', 'Fail'].filter((label) => within(chip).queryByText(label) !== null),
     );
-    expect(badgeTexts.filter((label) => label === 'FAIL')).toHaveLength(2);
-    expect(badgeTexts.filter((label) => label === 'PASS')).toHaveLength(1);
+    expect(badgeTexts.filter((label) => label === 'Fail')).toHaveLength(2);
+    expect(badgeTexts.filter((label) => label === 'Pass')).toHaveLength(1);
 
     // The timeline (the run's history) is still on screen, not blanked.
     expect(screen.getByRole('list', { name: 'Run timeline' })).toBeInTheDocument();
