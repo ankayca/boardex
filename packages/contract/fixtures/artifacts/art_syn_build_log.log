@@ -1,0 +1,5 @@
+arm-none-eabi-gcc -mcpu=cortex-m4 -O2 -c main.c -o build/main.o
+arm-none-eabi-gcc -T STM32F303RETx_FLASH.ld build/main.o -o build/bme280-f303re.elf
+   text	   data	    bss	    dec	    hex	filename
+   9184	    120	   1648	  10952	   2ac8	build/bme280-f303re.elf
+Build finished: exit code 0
