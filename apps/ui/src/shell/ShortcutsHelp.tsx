@@ -2,8 +2,9 @@
 // every shortcut in the app. Same overlay treatment as the palette — overlay
 // elevation, medium motion in, instant dismiss, Esc closes, focus trapped while open
 // and restored on close (the parent owns restoration, as with the palette).
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useFocusTrap } from '../design/focusTrap';
 
 interface Shortcut {
   keys: string[];
@@ -52,19 +53,20 @@ export interface ShortcutsHelpProps {
 
 export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
+  // Shared modal focus trap (§6.2 v2.3): seeds focus on the close button (the
+  // only tabbable), cycles Tab inside, and restores the invoking control on
+  // close — the trap must run before anything else moves focus, so it can
+  // capture the invoker.
+  useFocusTrap(dialogRef);
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Escape') {
+      // Esc convention: consume with stopPropagation — topmost surface only.
       event.preventDefault();
+      event.stopPropagation();
       onClose();
-    } else if (event.key === 'Tab') {
-      // Focus trap: the close button is the only tabbable element — keep focus on it.
-      event.preventDefault();
-      closeRef.current?.focus();
     }
   };
 
@@ -72,11 +74,13 @@ export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 animate-overlay-in bg-scrim" onClick={onClose} aria-hidden="true" />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"
+        tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="relative w-full max-w-md animate-palette-in rounded-card border border-border bg-surface p-6 shadow-overlay"
+        className="relative w-full max-w-md animate-palette-in rounded-card border border-border bg-surface p-6 shadow-overlay outline-none"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-section font-semibold text-text-primary">Keyboard shortcuts</h2>

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { Artifact } from '@boardex/contract';
+import type { Artifact, RunView } from '@boardex/contract';
 import { Button, EmptyState } from '../../design';
 import { api } from '../../lib/api';
 import { useRunView } from '../../lib/runStore';
@@ -17,9 +17,38 @@ import { useRunStream } from '../../lib/useRunStream';
 import { downloadArtifact, downloadFilename } from '../evidence/raw';
 import { useArtifactContent } from '../evidence/ArtifactContent';
 import { evidenceTargets } from '../workspace/evidence';
+import { coverageLine, deriveDualOutcome, executionLabel } from '../workspace/outcome';
 import { ReportView } from './ReportView';
 
 const PAGE = 'mx-auto max-w-3xl px-6 py-8';
+
+// The dual-outcome split in the report header (v2.4, PRESENTATION ONLY — the
+// report artifact's markdown is the agent's and is never rewritten): what the
+// run did vs what the recorded evidence covers, from the same RunView
+// derivation as the status card.
+function OutcomeSummary({ view }: { view: RunView }) {
+  const outcome = deriveDualOutcome(view);
+  if (!outcome) return null;
+  return (
+    <dl className="mt-2 space-y-0.5 text-meta">
+      <div>
+        <dt className="inline font-medium text-text-primary">Run execution</dt>
+        <dd className="inline text-text-secondary">
+          {' — '}
+          {executionLabel(outcome)}
+          {outcome.execution.reason && ` · ${outcome.execution.reason}`}
+        </dd>
+      </div>
+      <div>
+        <dt className="inline font-medium text-text-primary">Validation coverage</dt>
+        <dd className="inline text-text-secondary">
+          {' — '}
+          {coverageLine(outcome.coverage)}
+        </dd>
+      </div>
+    </dl>
+  );
+}
 
 function BackLink({ runId }: { runId: string }) {
   return (
@@ -130,6 +159,7 @@ export default function ReportPage() {
       <BackLink runId={run.id} />
       <h1 className="mt-2 text-page font-semibold text-text-primary">Validation Report</h1>
       <p className="mt-1 text-meta text-text-secondary">{run.title}</p>
+      <OutcomeSummary view={view} />
     </header>
   );
 
@@ -174,6 +204,7 @@ export default function ReportPage() {
               </>
             )}
           </p>
+          <OutcomeSummary view={view} />
         </div>
         {content.isSuccess && content.data.trim() !== '' && (
           <div className="flex items-center gap-2">

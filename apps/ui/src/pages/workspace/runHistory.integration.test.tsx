@@ -162,10 +162,12 @@ describe('run history cold-loads (T5.2, integration)', () => {
     renderColdWorkspace(runId);
     await expectTerminalWorkspace(view, 'Stopped');
 
-    // Stopped before any check evaluated or report produced: the band still renders,
-    // quiet, and Open Report degrades to an inert action — never a dead link.
+    // Stopped before any check evaluated or report produced: the band renders the
+    // v2.4 truth — every registered check is Not recorded (neutral, never red) —
+    // and Open Report degrades to an inert action, never a dead link.
     const band = screen.getByRole('region', { name: 'Evidence summary' });
-    expect(within(band).getByText('No checks evaluated yet.')).toBeInTheDocument();
+    expect(within(band).getAllByText('Not recorded').length).toBeGreaterThan(0);
+    expect(within(band).queryByText('No checks evaluated yet.')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open Report' })).not.toBeInTheDocument();
     expect(within(band).getByText('Open Report')).toBeInTheDocument();
   }, 60000);

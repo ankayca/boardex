@@ -75,7 +75,7 @@ const statusClasses: Record<RunStatus, string> = {
   stopped: 'bg-fail-bg text-fail',
 };
 
-const statusLabels: Record<RunStatus, string> = {
+export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   draft: 'Draft',
   planning: 'Planning',
   plan_ready: 'Plan ready',
@@ -129,7 +129,7 @@ export function Badge(props: BadgeProps) {
       data-value={props.value}
       className={`${BASE} h-[22px] ${CAPSULE} ${statusClasses[props.value]}`}
     >
-      {statusLabels[props.value]}
+      {RUN_STATUS_LABELS[props.value]}
     </span>
   );
 }

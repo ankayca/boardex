@@ -145,8 +145,12 @@ export function LogViewer({
     if (event.key === 'Enter') {
       event.preventDefault();
       cycleMatch();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === 'Escape' && query !== '') {
+      // Esc convention (§6.2 v2.3): a consuming handler stops propagation so
+      // only the topmost surface closes — clearing an active find must not
+      // also dismiss the Drawer hosting it. An EMPTY find lets Esc bubble.
       event.preventDefault();
+      event.stopPropagation();
       changeQuery('');
     }
   };
@@ -211,6 +215,10 @@ export function LogViewer({
           ref={scrollRef}
           role="log"
           aria-label={label}
+          // §6.2 v2.3: run-state changes and approvals are announced (the rail's
+          // live region) — streamed log lines are NOT. role="log" implies polite
+          // announcements by default; off silences the per-line chatter.
+          aria-live="off"
           onScroll={handleScroll}
           className="overflow-auto py-1 font-mono text-meta text-text-primary"
           style={{ height }}

@@ -5,6 +5,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { Approval, BenchStatus, RunView } from '@boardex/contract';
+import { RUN_STATUS_LABELS } from '../../design';
 import { StateConflict } from '../../lib/apiErrors';
 import { useRunCommands } from '../../lib/runCommands';
 import { benchIssues } from '../../lib/benchReadiness';
@@ -15,6 +16,7 @@ import { DiagnosisCard } from './DiagnosisCard';
 import { isTerminalStatus } from './elapsed';
 import { evidenceHrefAt, evidenceTargets, reportHrefAt } from './evidence';
 import { useEvidenceBase } from './evidenceBase';
+import { deriveDualOutcome } from './outcome';
 import { deriveProgress } from './progress';
 import { StatusCard } from './StatusCard';
 
@@ -106,12 +108,21 @@ export function StatusApprovalRail({
 
   return (
     <div className="h-full space-y-4">
+      {/* §6.2 v2.3 aria-live: run-state changes and approval arrivals are
+          announced — exactly these, never streamed log lines (the LogViewer is
+          aria-live="off"). One polite region; its text change is the announcement. */}
+      <p aria-live="polite" className="sr-only">
+        {gate?.kind === 'ready'
+          ? `Approval required: ${gate.approval.proposal.title}`
+          : `Run status: ${RUN_STATUS_LABELS[run.status]}`}
+      </p>
       <div className="rail-sticky">
         <StatusCard
           run={run}
           endedAt={view.endedAt}
           warnings={view.warnings}
           progress={deriveProgress(view)}
+          outcome={deriveDualOutcome(view)}
           stopping={stopping}
           stopError={commandError(
             stop.error,

@@ -340,7 +340,9 @@ describe('bme280_run_002_partial_synthetic.jsonl (v2.4 partial coverage)', () =>
 
   it('is marked synthetic in its run title — never mistakable for a recording', () => {
     const created = synEvents[0];
-    if (created.type !== 'run.created') throw new Error('first event must be run.created');
+    if (created === undefined || created.type !== 'run.created') {
+      throw new Error('first event must be run.created');
+    }
     expect(created.payload.run.title).toContain('SYNTHETIC');
   });
 });

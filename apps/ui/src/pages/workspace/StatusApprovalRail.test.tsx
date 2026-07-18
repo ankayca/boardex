@@ -496,3 +496,25 @@ describe('reserved action slot (Sprint 7 P0)', () => {
     }
   });
 });
+
+// §6.2 v2.3: one polite live region announcing run-state changes and approval
+// arrivals — never streamed log lines (the LogViewer is aria-live="off").
+describe('aria-live announcements (Sprint 7 P0)', () => {
+  const liveRegion = (): HTMLElement | null =>
+    document.querySelector('p[aria-live="polite"].sr-only');
+
+  it('announces the run state while no approval is pending', () => {
+    renderRail(runningView());
+    expect(liveRegion()).toHaveTextContent('Run status: Running');
+  });
+
+  it('announces an approval arrival with the proposal title', () => {
+    renderRail(awaitingView());
+    expect(liveRegion()?.textContent).toMatch(/^Approval required: /);
+  });
+
+  it('announces the terminal state', () => {
+    renderRail(stoppedView());
+    expect(liveRegion()).toHaveTextContent('Run status: Stopped');
+  });
+});

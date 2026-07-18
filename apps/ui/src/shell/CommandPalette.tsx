@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useFocusTrap } from '../design/focusTrap';
 import { useRunView } from '../lib/runStore';
 import { recentRuns } from './recentRuns';
 import { evidenceTargets } from '../pages/workspace/evidence';
@@ -57,6 +58,10 @@ function HighlightedLabel({ label, indices }: { label: string; indices: number[]
 export function CommandPalette({ onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Shared modal focus trap (§6.2 v2.3): Tab stays inside; focus restores to
+  // the invoking control on close.
+  useFocusTrap(dialogRef);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -130,15 +135,14 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         select(ranked[activeIndex]);
         break;
       case 'Escape':
+        // Esc convention (§6.2 v2.3): consume with stopPropagation — only the
+        // topmost surface closes, never one beneath it.
         event.preventDefault();
+        event.stopPropagation();
         onClose('dismiss');
         break;
-      case 'Tab':
-        // Focus trap: the input is the only tabbable element; keep focus here so Tab
-        // can never leave the open palette (§8 T6.4 item 4).
-        event.preventDefault();
-        inputRef.current?.focus();
-        break;
+      // Tab is owned by the shared focus trap (design/focusTrap): the input is
+      // the palette's only tabbable, so the cycle keeps focus there.
       default:
         break;
     }
@@ -158,11 +162,13 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         aria-hidden="true"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="relative flex max-h-[70vh] w-full max-w-xl animate-palette-in flex-col overflow-hidden rounded-card border border-border bg-surface shadow-overlay"
+        className="relative flex max-h-[70vh] w-full max-w-xl animate-palette-in flex-col overflow-hidden rounded-card border border-border bg-surface shadow-overlay outline-none"
       >
         <input
           ref={inputRef}

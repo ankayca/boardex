@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
+import { useFocusTrap } from './focusTrap';
 import { useExitPresence } from './motion';
 
 export interface DrawerProps {
@@ -20,18 +21,24 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
   // mounted through the exit animation (instant under reduced motion).
   const { mounted, closing } = useExitPresence(open, panelRef);
 
-  useEffect(() => {
-    if (!open) {
-      return;
+  // Shared modal focus trap (§6.2 v2.3): active only while open AND mounted —
+  // exit-presence mounts the panel one render after `open` flips, so engaging
+  // on `open` alone would run against a null ref and never trap. Deactivating
+  // on `open` restores focus to the invoking control the moment closing
+  // starts, not after the exit animation unmounts the panel.
+  useFocusTrap(panelRef, { active: open && mounted });
+
+  // Esc convention: the surface's OWN element consumes Escape with
+  // stopPropagation — only the topmost surface closes. (Element-level, not a
+  // window listener: with focus trapped inside, the event always reaches the
+  // panel, and a surface stacked above it stops it before it gets here.)
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  };
 
   if (!mounted) {
     return null;
@@ -55,7 +62,9 @@ export function Drawer({ open, title, onClose, widthPx = 480, children }: Drawer
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-surface shadow-overlay ${closing ? 'animate-drawer-out' : 'animate-drawer-in'}`}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-border bg-surface shadow-overlay outline-none ${closing ? 'animate-drawer-out' : 'animate-drawer-in'}`}
         // §6.3 v2.3: capped at 47vw so the dimmed content underneath stays visible.
         style={{ maxWidth: `min(${widthPx}px, 47vw)` }}
       >

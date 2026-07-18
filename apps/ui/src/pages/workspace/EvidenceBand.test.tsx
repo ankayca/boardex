@@ -192,3 +192,80 @@ describe('EvidenceBand empty state', () => {
     }
   });
 });
+
+// v2.4 (Sprint 7 P0 stage 4): registered-but-never-recorded expectations render
+// one neutral chip each — gray with the dash icon, NEVER red, linking nowhere.
+describe('EvidenceBand not-recorded chips (v2.4)', () => {
+  const partialView = (): RunView =>
+    viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'run.plan_generated', {
+        plan: [],
+        riskSummary: 'risk',
+        checks: [
+          { requirementId: 'build_exit_code', description: 'Build exits 0' },
+          { requirementId: 'device_ack', description: 'ACK at 0x76' },
+          { requirementId: 'i2c_clock', description: 'SCL 100 kHz ±10%' },
+          { requirementId: 'serial_output', description: 'TEMP/HUM on serial' },
+        ],
+      }),
+      envelope(3, 'artifact.created', { artifact: artifactOf('art_build', 'build_log') }),
+      envelope(4, 'check.evaluated', {
+        check: checkOf('chk_build', 'build_exit_code', 'art_build', 'pass'),
+      }),
+      envelope(5, 'run.failed', { summary: 'turn bound exceeded' }),
+    ]);
+
+  const renderBand = (view: RunView) =>
+    render(
+      <MemoryRouter>
+        <EvidenceBand view={view} />
+      </MemoryRouter>,
+    );
+
+  it('renders one neutral not-recorded chip per unrecorded registered check', () => {
+    renderBand(partialView());
+    const chips = screen.getAllByText('Not recorded');
+    expect(chips).toHaveLength(3);
+    for (const badge of chips) {
+      expect(badge).toHaveClass('bg-neutral-badge-bg', 'text-neutral-badge');
+      expect(badge.classList.contains('text-fail')).toBe(false);
+      expect(badge.querySelector('[data-verdict-icon="not_recorded"]')).not.toBeNull();
+    }
+    expect(screen.getByText('I2C clock')).toBeInTheDocument();
+    expect(screen.getByText('Serial output')).toBeInTheDocument();
+  });
+
+  it('not-recorded chips link nowhere — there is no artifact to open', () => {
+    renderBand(partialView());
+    const chip = screen.getByText('I2C clock').closest('li') as HTMLElement;
+    expect(within(chip).queryByRole('link')).toBeNull();
+  });
+
+  it('a run without a registry renders NO not-recorded chips — nothing is invented', () => {
+    const view = viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'artifact.created', { artifact: artifactOf('art_build', 'build_log') }),
+      envelope(3, 'check.evaluated', {
+        check: checkOf('chk_build', 'build_exit_code', 'art_build', 'pass'),
+      }),
+      envelope(4, 'run.failed', { summary: 'turn bound exceeded' }),
+    ]);
+    renderBand(view);
+    expect(screen.queryByText('Not recorded')).not.toBeInTheDocument();
+  });
+
+  it('while the run is live, registered checks render no chips yet — coverage is a terminal statement', () => {
+    const view = viewFrom([
+      envelope(1, 'run.created', { run }),
+      envelope(2, 'run.plan_generated', {
+        plan: [],
+        riskSummary: 'risk',
+        checks: [{ requirementId: 'i2c_clock', description: 'SCL 100 kHz ±10%' }],
+      }),
+    ]);
+    renderBand(view);
+    expect(screen.queryByText('Not recorded')).not.toBeInTheDocument();
+    expect(screen.getByText('No checks evaluated yet.')).toBeInTheDocument();
+  });
+});
