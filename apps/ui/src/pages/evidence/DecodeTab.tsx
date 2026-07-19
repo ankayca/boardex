@@ -31,7 +31,10 @@ function AnnotationCell({ text }: { text: string }) {
       aria-expanded={expanded}
       title={expanded ? 'Collapse annotation' : 'Expand annotation'}
       onClick={() => setExpanded((value) => !value)}
-      className={`block w-full text-left text-text-secondary ${expanded ? '' : 'line-clamp-2'}`}
+      // Collapsed uses line-clamp's own -webkit-box display; expanded falls back
+      // to block. (A shared `block` would override line-clamp's display and defeat
+      // the clamp — the two set `display` to different values.)
+      className={`w-full text-left text-text-secondary ${expanded ? 'block' : 'line-clamp-2'}`}
     >
       {text}
     </button>
