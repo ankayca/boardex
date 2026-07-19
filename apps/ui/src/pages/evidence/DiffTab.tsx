@@ -1,9 +1,11 @@
 // Code Diff tab (BIBLE §7.4): the code_diff artifact's structured JSON rendered
 // as per-file unified diffs — per-file reason line, hunk headers, old/new line
-// numbers, restrained C syntax highlighting. Colors stay inside §6.1 with the
-// D14 reservations intact (decisions.md 2026-07-09): added/removed lines do NOT
-// use green/red — removals render dimmed on the neutral tint, additions render
-// full-contrast, both behind +/- gutters. Rollback is visible here per §7.4:
+// numbers, restrained C syntax highlighting. Colors stay inside §6.1: changed
+// lines carry subtle D14-COMPLIANT tints (Sprint 7 P1 #7, REVERSING the
+// 2026-07-09 neutral-tint ruling) — an addition is the passing/new state
+// (pass-bg), a removal the removed state (fail-bg); the changed-ness IS the
+// semantic, not decoration. Both keep their +/- gutters; removals stay dimmed.
+// Rollback is visible here per §7.4:
 // enabled only while the run is non-terminal, disabled with an explanatory
 // tooltip otherwise; MVP surfaces the affordance only (no client-side revert,
 // no contract route yet). Malformed JSON fails the tab closed; a malformed
@@ -46,8 +48,14 @@ function CodeText({ text, highlight }: { text: string; highlight: boolean }) {
 const NUM_CELL = 'w-12 select-none px-2 text-right text-text-secondary';
 
 function DiffLineRow({ line }: { line: DiffLine }) {
+  // Changed-line tints (D14-compliant, P1 #7): removals on the fail tint stay
+  // dimmed; additions on the pass tint render full-contrast; context is plain.
   const rowClass =
-    line.kind === 'del' ? 'bg-neutral-badge-bg text-text-secondary' : 'text-text-primary';
+    line.kind === 'del'
+      ? 'bg-fail-bg text-text-secondary'
+      : line.kind === 'add'
+        ? 'bg-pass-bg text-text-primary'
+        : 'text-text-primary';
   return (
     <tr data-diff={line.kind} className={rowClass}>
       <td className={NUM_CELL}>{line.oldNo ?? ''}</td>
@@ -67,13 +75,18 @@ function FileDiff({ file }: { file: DiffFile }) {
   const parsed = useMemo(() => parseUnifiedDiff(file.diff), [file.diff]);
   return (
     <section aria-label={`Diff for ${file.path}`} className="mt-4 first:mt-0">
-      <p className="font-mono text-body font-medium text-text-primary">{file.path}</p>
-      <p className="mt-0.5 text-meta text-text-secondary">{file.reason}</p>
+      {/* Sticky filename header (P1 #7): the path stays pinned above its own diff
+          as it scrolls, so a long file never loses its identity. */}
+      <div className="sticky top-0 z-10 bg-surface pb-1">
+        <p className="font-mono text-body font-medium text-text-primary">{file.path}</p>
+        <p className="mt-0.5 text-meta text-text-secondary">{file.reason}</p>
+      </div>
       {parsed.ok ? (
+        // No wrapping — a diff line keeps its shape; the box scrolls horizontally.
         <div className="mt-2 overflow-x-auto rounded-control border border-border bg-surface">
           <table
             aria-label={`Unified diff for ${file.path}`}
-            className="w-full border-collapse font-mono text-meta leading-5"
+            className="w-full border-collapse font-mono text-code"
           >
             <tbody>
               {parsed.hunks.map((hunk, hunkIndex) => (

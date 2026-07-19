@@ -111,6 +111,25 @@ describe('the nack_at rule (fixture-notes.md — binding)', () => {
     expect(rows.filter((row) => row.ack === 'NACK (final byte)')).toHaveLength(6);
   });
 
+  it('groups a write with the read that follows it to the same address (P1 #6)', () => {
+    const decode = {
+      protocol: 'i2c',
+      sample_rate_hz: 4_000_000,
+      annotations: [],
+      transactions: [
+        // set register (write) then read it back (read) at 0x76 — one pair.
+        { addr_7bit: 118, rw: 'w' as const, write: [0xd0], read: [], nack_at: null },
+        { addr_7bit: 118, rw: 'r' as const, write: [], read: [0x60], nack_at: 'data' as const },
+        // a second write to the same address opens its own group (W W stays split).
+        { addr_7bit: 118, rw: 'w' as const, write: [0xf4], read: [], nack_at: null },
+        // a read at a DIFFERENT address does not pair with the preceding write.
+        { addr_7bit: 100, rw: 'r' as const, write: [], read: [0x01], nack_at: 'data' as const },
+      ],
+    };
+    const rows = decodeRows(decode);
+    expect(rows.map((row) => row.groupStart)).toEqual([true, false, true, true]);
+  });
+
   it('iteration 1 of the real fixture — the unanswered address — is all failed rows', () => {
     const parsed = parseProtocolDecode(fixtureArtifact('art_i2c_decode_iter1.json'));
     expect(parsed.ok).toBe(true);

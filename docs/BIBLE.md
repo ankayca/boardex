@@ -401,7 +401,9 @@ never white-on-white):
 Border:            #E2E3E7 default · #D2D4DA strong (focused cards, tables, approvals)
 Text primary:      #17171A
 Text secondary:    #5C6068
-Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue)
+Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue);
+  bg tint #ECEBFB (Sprint 7 P1 — the cited-source highlight's resting tint; a
+  light tint of the accent, NOT a D14 semantic, so a citation may wear it)
 Pass/success ONLY: #168A4A; bg tint #E8F5EE
 Fail/stop ONLY:    #C73535; bg tint #FBEDED
 Approval/warn ONLY:#A86D00; bg tint #FAF3E4
@@ -420,7 +422,9 @@ Motion (Sprint 7 extends, never replaces): fast 120ms (hover/focus — the
   100–140 band) · medium 200ms (badge/state transitions, 160–200 band; and
   drawer/modal surfaces, 200–240 band, entrance ease = the ease-out) ·
   gentle 360ms (progress) · morph 280ms (FAIL→PASS verdict: icon morph +
-  ONE restrained background pulse, 240–300 band; --motion-morph) · ambient 2s
+  ONE restrained background pulse, 240–300 band; --motion-morph) · arrival 700ms
+  (Sprint 7 P1 — a one-shot "you landed here" wash, 600–800 band, slower than a
+  state flip so it reads as settling; --motion-arrival) · ambient 2s
   (the looping active-step pulse; --motion-ambient); eases
   cubic-bezier(0.2,0,0,1) standard, cubic-bezier(0.16,1,0.3,1) entrance;
   prefers-reduced-motion removes pulses and swaps states instantly.

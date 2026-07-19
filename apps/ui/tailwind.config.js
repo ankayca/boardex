@@ -20,6 +20,7 @@ export default {
         'text-secondary': 'var(--color-text-secondary)',
         accent: 'var(--color-accent)',
         'accent-hover': 'var(--color-accent-hover)',
+        'accent-bg': 'var(--color-accent-bg)',
         pass: 'var(--color-pass)',
         'pass-bg': 'var(--color-pass-bg)',
         fail: 'var(--color-fail)',
