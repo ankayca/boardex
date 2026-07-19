@@ -153,6 +153,21 @@ describe('§6.1 v2.3 token migration', () => {
     }
   });
 
+  // Sprint 7 P1 #14: reduced motion re-verified. The one global rule collapses
+  // BOTH animations and transitions to near-zero — so everything this pass added
+  // (the cited-source arrival wash, the on-token hover transitions) settles
+  // instantly for a reduced-motion user without any per-component handling.
+  it('index.css collapses all animation + transition motion under prefers-reduced-motion', () => {
+    const css = readFileSync(join(UI_ROOT, 'src', 'index.css'), 'utf8');
+    const block = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(block).toContain('@media (prefers-reduced-motion: reduce)');
+    // Applies to every element and pseudo-element, not a hand-listed set.
+    expect(block).toContain('*,');
+    expect(block).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
+    expect(block).toMatch(/animation-iteration-count:\s*1\s*!important/);
+    expect(block).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
+  });
+
   it('the geometry tokens hold: sidebar 208px, rail 320px, breakpoint 1208px', () => {
     const css = readFileSync(join(UI_ROOT, 'src', 'index.css'), 'utf8');
     expect(css).toContain('min-width: 1208px');

@@ -31,7 +31,7 @@ export interface ApprovalCardProps {
 // Link, so Review Diff is a real anchor carrying an href — same treatment as the
 // evidence band's actions.
 const REVIEW_DIFF_BASE =
-  'inline-flex h-9 w-full items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors';
+  'inline-flex h-9 w-full items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors duration-fast ease-motion';
 
 const NO_DIFF_TOOLTIP = 'No code diff has been produced for this run yet.';
 

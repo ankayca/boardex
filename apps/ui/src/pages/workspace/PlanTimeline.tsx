@@ -144,7 +144,9 @@ function ExecutedStepRow({ step, logs, artifacts, expanded, onToggle }: Executed
         <Collapsible>
           <div className="mt-2 space-y-3">
             <ArtifactChips artifacts={artifacts} />
-            <StepLogTabs stepTitle={step.title} logs={logs} />
+            {/* Only the active step streams — its log gets the "Resume live"
+                affordance (P1 #7); settled steps show "Jump to latest". */}
+            <StepLogTabs stepTitle={step.title} logs={logs} streaming={active} />
           </div>
         </Collapsible>
       )}

@@ -86,7 +86,7 @@ export function EvidenceDrawer({ view, documents, onClose }: EvidenceDrawerProps
               aria-selected={selected}
               aria-controls={`evidence-panel-${tab.id}`}
               onClick={() => setTabState({ paramKey, resolvedId, tab: tab.id })}
-              className={`-mb-px rounded-t-button border-b-2 px-4 py-2 text-body font-medium transition-colors ${
+              className={`-mb-px rounded-t-button border-b-2 px-4 py-2 text-body font-medium transition-colors duration-fast ease-motion ${
                 selected
                   ? 'border-accent text-accent'
                   : 'border-transparent text-text-secondary hover:text-text-primary'

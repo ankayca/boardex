@@ -79,7 +79,7 @@ function ProfileRow({ profile, bench }: { profile: BoardProfile; bench: BenchSta
       </div>
       <Link
         to={`/boards/${profile.id}`}
-        className="shrink-0 rounded-control border border-border px-4 py-2 text-body font-medium text-text-primary transition-colors hover:bg-canvas"
+        className="shrink-0 rounded-control border border-border px-4 py-2 text-body font-medium text-text-primary transition-colors duration-fast ease-motion hover:bg-canvas"
       >
         Edit
       </Link>

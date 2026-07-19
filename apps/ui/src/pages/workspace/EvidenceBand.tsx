@@ -52,7 +52,7 @@ function useVerdictFlips(checks: readonly { id: string; verdict: CheckVerdict }[
 // Link, so the actions are real anchors carrying an href. Disabled — no artifact of
 // that kind yet — degrades to an inert span, never a dead link.
 const ACTION_BASE =
-  'inline-flex h-9 items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors';
+  'inline-flex h-9 items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors duration-fast ease-motion';
 
 function BandAction({ label, to }: { label: string; to: string | null }) {
   if (to) {
@@ -116,7 +116,7 @@ export function EvidenceBand({ view }: { view: RunView }) {
                 {artifactIds.has(check.artifactId) ? (
                   <Link
                     to={evidenceHrefAt(base, check.artifactId)}
-                    className={`${CHIP_BASE} transition-colors hover:border-accent`}
+                    className={`${CHIP_BASE} transition-colors duration-fast ease-motion hover:border-accent`}
                   >
                     {body}
                   </Link>
