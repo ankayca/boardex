@@ -83,18 +83,36 @@ interface NavItemProps {
   collapsed: boolean;
 }
 
+// A small filled play triangle for the demo affordance (P1 #1) — matches the
+// home hero's marker so "Watch a demo run" reads consistently across zones.
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" className="shrink-0">
+      <path d="M5 3.5v9l7-4.5-7-4.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function NavItem({ to, label, icon, active, collapsed }: NavItemProps) {
   return (
     <NavLink
       to={to}
       aria-current={active ? 'page' : undefined}
       title={collapsed ? label : undefined}
-      className={`flex items-center gap-2.5 rounded-control px-2 py-1.5 text-body font-medium transition-colors duration-fast ease-motion ${
+      className={`relative flex items-center gap-2.5 rounded-control px-2 py-1.5 text-body font-medium transition-colors duration-fast ease-motion ${
         active
           ? 'bg-neutral-badge-bg text-text-primary'
           : 'text-text-secondary hover:bg-canvas hover:text-text-primary'
       } ${collapsed ? 'justify-center' : ''}`}
     >
+      {/* Collapsed rail (P1 #1): the icon background alone reads too quiet, so the
+          active item also carries a 2px accent rail at the sidebar's left edge. */}
+      {active && collapsed && (
+        <span
+          aria-hidden="true"
+          className="absolute -left-2 bottom-1 top-1 w-0.5 rounded-r bg-accent"
+        />
+      )}
       <span className="shrink-0">{icon}</span>
       {!collapsed && <span className="truncate">{label}</span>}
     </NavLink>
@@ -122,31 +140,20 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
   });
 
   const recent = useMemo(() => recentRuns(runsQuery.data ?? []), [runsQuery.data]);
-  // No runs yet: the sidebar's quiet onboarding equivalent of Home's demo action
-  // (§7.1 / T6.5). Gated on runsQuery.isSuccess exactly like Home's first-use hero —
-  // a genuine empty response, never a still-pending or failed fetch, so a cold start
-  // with the runner down doesn't misread as "no runs, watch the demo". Hidden on the
-  // icon rail, where the top of the app already shows the primary affordances.
-  if (recent.length === 0) {
-    if (collapsed || !runsQuery.isSuccess) return null;
-    return (
-      <div className="mt-6">
-        <NavLink
-          to="/demo"
-          className="block rounded-control px-2 py-1.5 text-meta text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
-        >
-          Watch a demo run
-        </NavLink>
-      </div>
-    );
-  }
+  // Demo-affordance cleanup (P1 #1): the demo entry is prominent on the empty-state
+  // hero (Home), so the sidebar no longer duplicates it there. The sidebar link
+  // renders only AFTER runs exist — the moment the hero is gone — keeping a quiet
+  // onboarding entry available without two demo affordances competing on one screen.
+  // (Chosen over the "add a play icon" alternative; the play icon rides along for
+  // consistency with the hero.) Hidden on the icon rail, where space is scarce.
+  if (recent.length === 0) return null;
 
   return (
-    <div className="mt-6 min-h-0 overflow-y-auto">
+    <div className="mt-6 flex min-h-0 flex-col">
       {!collapsed && (
         <p className="px-2 text-metadata font-medium uppercase tracking-wide text-text-secondary">Recent</p>
       )}
-      <ul aria-label="Recent runs" className="mt-1 space-y-0.5">
+      <ul aria-label="Recent runs" className="mt-1 min-h-0 space-y-0.5 overflow-y-auto">
         {recent.map((run) => (
           <li key={run.id}>
             <NavLink
@@ -166,6 +173,15 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
           </li>
         ))}
       </ul>
+      {!collapsed && (
+        <NavLink
+          to="/demo"
+          className="mt-2 flex items-center gap-2 rounded-control px-2 py-1.5 text-meta text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
+        >
+          <PlayIcon />
+          Watch a demo run
+        </NavLink>
+      )}
     </div>
   );
 }
@@ -232,6 +248,7 @@ export function Sidebar() {
         <button
           type="button"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
           onClick={toggle}
           className="rounded-control p-2 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"

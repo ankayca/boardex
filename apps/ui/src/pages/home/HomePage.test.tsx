@@ -100,6 +100,8 @@ describe('HomePage (BIBLE §7.1)', () => {
     expect(screen.getAllByRole('button', { name: 'New Run' })).toHaveLength(1);
     // T6.5: the hero's secondary action opens the offline-capable demo run.
     expect(screen.getByRole('button', { name: 'Watch a demo run' })).toBeInTheDocument();
+    // P1 #1: the process line gives the hero's whitespace a product-specific purpose.
+    expect(screen.getByText('Plan → Flash → Measure → Verify')).toBeInTheDocument();
   });
 
   it('orders needs-attention runs above active and terminal ones', async () => {

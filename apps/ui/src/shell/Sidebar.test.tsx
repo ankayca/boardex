@@ -1,8 +1,8 @@
-// Sidebar recent-runs onboarding (T6.5, P4). The "Watch a demo run" affordance appears
-// only on a GENUINE empty runs response (runsQuery.isSuccess) — never while the fetch is
-// still pending or after it failed — matching Home's first-use hero. A cold start with
-// the runner down must not misread "we haven't loaded any runs yet" as "there are no
-// runs, watch the demo".
+// Sidebar recent-runs onboarding. Demo-affordance cleanup (Sprint 7 P1 #1): the demo
+// entry is prominent on Home's empty-state hero, so the sidebar no longer duplicates it
+// there — the sidebar "Watch a demo run" link renders only AFTER runs exist, alongside
+// the recent list. On empty / pending / failed responses the sidebar shows no demo link
+// (the hero owns that entry on the empty state).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -46,11 +46,21 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Sidebar "Watch a demo run" gating (P4)', () => {
-  it('shows the demo link on a genuine empty runs response', async () => {
+const aRun: RunSummary = {
+  id: 'r1',
+  title: 'BME280 bring-up',
+  status: 'running',
+  boardProfileId: 'bp',
+  updatedAt: '2026-07-14T10:00:00Z',
+};
+
+describe('Sidebar "Watch a demo run" cleanup (P1 #1)', () => {
+  it('does not show the demo link on a genuine empty runs response (the hero owns it)', async () => {
     listRuns.mockResolvedValue([]);
     renderSidebar();
-    expect(await screen.findByRole('link', { name: DEMO_LINK })).toBeInTheDocument();
+    // Let the empty response settle; the sidebar stays quiet — no duplicate demo entry.
+    await waitFor(() => expect(listRuns).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: DEMO_LINK })).toBeNull();
   });
 
   it('does not show it while the runs fetch is still pending', () => {
@@ -68,12 +78,10 @@ describe('Sidebar "Watch a demo run" gating (P4)', () => {
     expect(screen.queryByRole('link', { name: DEMO_LINK })).toBeNull();
   });
 
-  it('shows the recent list instead of the demo link once runs exist', async () => {
-    listRuns.mockResolvedValue([
-      { id: 'r1', title: 'BME280 bring-up', status: 'running', boardProfileId: 'bp', updatedAt: '2026-07-14T10:00:00Z' },
-    ]);
+  it('shows the recent list AND the demo link once runs exist', async () => {
+    listRuns.mockResolvedValue([aRun]);
     renderSidebar();
     expect(await screen.findByRole('list', { name: 'Recent runs' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: DEMO_LINK })).toBeNull();
+    expect(screen.getByRole('link', { name: DEMO_LINK })).toHaveAttribute('href', '/demo');
   });
 });
