@@ -464,9 +464,9 @@ Run Workspace grid: the three-zone split keys on CONTENT width via container que
 
 # 7. Screen Specifications (MVP screen set, spec §17.6)
 
-Six screens. Each lists purpose, content, states, and what "done" means.
+Seven screens (Settings added in T6.6). Each lists purpose, content, states, and what "done" means.
 
-Beside the six product screens, a **/demo route family** (T6.5): `/demo`, `/demo/evidence`, `/demo/report` sit OUTSIDE the app frame in their own read-only DemoShell (a "Demo — replaying a recorded agent run" badge, playback controls, an exit) and replay the bundled fixture through the real Run Workspace / Evidence / Report surfaces — onboarding that works offline. It is a replay, not a run: it issues no runner command (see the demo command-safety ruling in decisions.md, T6.5) — Stop leaves the replay, and Reject (which would end a live run as Stopped) exits with an honest notice since the recording was approved.
+Beside the seven product screens, a **/demo route family** (T6.5): `/demo`, `/demo/evidence`, `/demo/report` sit OUTSIDE the app frame in their own read-only DemoShell (a "Demo — replaying a recorded agent run" badge, playback controls, an exit) and replay the bundled fixture through the real Run Workspace / Evidence / Report surfaces — onboarding that works offline. It is a replay, not a run: it issues no runner command (see the demo command-safety ruling in decisions.md, T6.5) — Stop leaves the replay, and Reject (which would end a live run as Stopped) exits with an honest notice since the recording was approved.
 
 ## 7.1 Home / Runs
 
@@ -499,6 +499,10 @@ Purpose: guided, reusable board setup. A single vertical form in 7 sections (not
 ## 7.6 Validation Report
 
 Purpose: the deliverable. The header carries the v2.4 dual-outcome split (Run execution / Validation coverage — presentation only, same derivation as the status card, §7.3). Renders the `report_md` artifact with Boardex styling; sections (generated runner-side, displayed here): Objective · Board & firmware context · Procedure · Measurement results table (with verdicts) · Root cause & fix explanation · Code changes summary · Artifacts index · Reproduction steps. Actions: Copy Markdown, Download .md. Done when: the fixture's completed run yields a report a firmware engineer would attach to a PR without embarrassment.
+
+## 7.7 Settings (T6.6)
+
+Purpose: connection and preferences, one sectioned prose page (reading column) reachable from the sidebar nav and the command palette. Content: **Runner connection** — the runner base URL as a RUNTIME setting (precedence user override > `VITE_RUNNER_URL` > §5.6 default), a Test Connection probe against `/health` reporting online / version-mismatch / degraded / offline inline, and Use-environment-default to clear the override; a change re-points the api singleton and both WS clients (§5.3/§5.4). **Model** — the runner's advertised `capabilities.models`, read-only (the composer's feature-detected picker, §7.2/T6.3, is what actually chooses among them). **Appearance & behavior** — collapse-sidebar-by-default and a replay-onboarding reset (clears the demo tour-seen flag). Persistence is module memory (the sidebar/tour mechanism), so settings live for the session and reset on reload — no storage. States: default (env base, no override), custom override, probe online/offline/version-mismatch. Colors: D14 reserved — only an online probe is green; every failed probe verdict (offline, mismatch, degraded) is an amber warning to resolve, never red. Done when: pointing the UI at a different runner URL at runtime reconnects cleanly with no code change, and the env default still wins when unset.
 
 ---
 

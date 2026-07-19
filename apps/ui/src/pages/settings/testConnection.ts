@@ -1,4 +1,4 @@
-// Test Connection classification (T6.6, §7.x Settings). Pure and React-free so the
+// Test Connection classification (T6.6, BIBLE §7.7 Settings). Pure and React-free so the
 // online / version-mismatch / degraded verdicts are unit-testable without a DOM — the
 // unreachable ('offline') case is the component's, since it is the fetch itself
 // throwing, not a payload to classify. D14 (T6.6 review F1): only `pass` is green;
