@@ -7,6 +7,7 @@
 // error (retryable), or empty content each render an explicit state instead of a
 // blank or a crash.
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Artifact, RunView } from '@boardex/contract';
@@ -18,9 +19,14 @@ import { downloadArtifact, downloadFilename } from '../evidence/raw';
 import { useArtifactContent } from '../evidence/ArtifactContent';
 import { evidenceTargets } from '../workspace/evidence';
 import { coverageLine, deriveDualOutcome, executionLabel } from '../workspace/outcome';
+import { reportSummary } from './summary';
 import { ReportView } from './ReportView';
 
-const PAGE = 'mx-auto max-w-3xl px-6 py-8';
+// §7.6 / P1 #9: the report reads as a document — an off-white page canvas with the
+// centred white report surface (max width in the 820–860 band). The container
+// width is shared by the sticky header bar and the body so they align.
+const CONTAINER = 'mx-auto w-full max-w-[840px] px-6';
+const BODY = `${CONTAINER} py-8`;
 
 // The dual-outcome split in the report header (v2.4, PRESENTATION ONLY — the
 // report artifact's markdown is the agent's and is never rewritten): what the
@@ -55,6 +61,46 @@ function BackLink({ runId }: { runId: string }) {
     <Link to={`/runs/${runId}`} className="text-meta text-accent hover:underline">
       ← Back to run
     </Link>
+  );
+}
+
+// The document page (P1 #9): off-white canvas, a sticky "Back to run" bar that
+// persists down a long report, and the centred white surface below.
+function PageShell({ runId, children }: { runId: string; children: ReactNode }) {
+  return (
+    <main className="min-h-full bg-canvas">
+      <div className="sticky top-0 z-10 border-b border-border bg-canvas">
+        <div className={`${CONTAINER} flex items-center py-2.5`}>
+          <BackLink runId={runId} />
+        </div>
+      </div>
+      <div className={BODY}>{children}</div>
+    </main>
+  );
+}
+
+// The compact metadata row (P1 #9): Run ID · date · iterations. Result and checks
+// live in the dual-outcome split (OutcomeSummary) below, where the reason shows.
+function SummaryRow({ view }: { view: RunView }) {
+  const summary = reportSummary(view);
+  const items: ReactNode[] = [
+    <span className="font-mono text-text-primary">Run {summary.runId}</span>,
+  ];
+  if (summary.date) items.push(summary.date);
+  items.push(`${summary.iterations} iteration${summary.iterations === 1 ? '' : 's'}`);
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-metadata text-text-secondary">
+      {items.map((item, index) => (
+        <span key={index} className="inline-flex items-center gap-2">
+          {index > 0 && (
+            <span aria-hidden="true" className="text-border-strong">
+              ·
+            </span>
+          )}
+          <span>{item}</span>
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -146,9 +192,9 @@ export default function ReportPage() {
 
   if (!view) {
     return (
-      <main className={PAGE}>
+      <PageShell runId={id}>
         <p className="text-body text-text-secondary">Connecting to run…</p>
-      </main>
+      </PageShell>
     );
   }
 
@@ -156,9 +202,9 @@ export default function ReportPage() {
 
   const header = (
     <header className="mb-6">
-      <BackLink runId={run.id} />
-      <h1 className="mt-2 text-page font-semibold text-text-primary">Validation Report</h1>
+      <h1 className="text-page font-semibold text-text-primary">Validation Report</h1>
       <p className="mt-1 text-meta text-text-secondary">{run.title}</p>
+      <SummaryRow view={view} />
       <OutcomeSummary view={view} />
     </header>
   );
@@ -166,7 +212,7 @@ export default function ReportPage() {
   // No report artifact: honest for a run that never produced one (e.g. run.failed).
   if (!artifact) {
     return (
-      <main className={PAGE}>
+      <PageShell runId={run.id}>
         {header}
         <EmptyState
           title="No report for this run"
@@ -184,16 +230,15 @@ export default function ReportPage() {
             </Link>
           }
         />
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className={PAGE}>
+    <PageShell runId={run.id}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <BackLink runId={run.id} />
-          <h1 className="mt-2 text-page font-semibold text-text-primary">Validation Report</h1>
+          <h1 className="text-page font-semibold text-text-primary">Validation Report</h1>
           <p className="mt-1 text-meta text-text-secondary">
             {run.title}
             {/* Model attribution (T6.3/T6.6) — only when the runner echoed one. */}
@@ -204,6 +249,7 @@ export default function ReportPage() {
               </>
             )}
           </p>
+          <SummaryRow view={view} />
           <OutcomeSummary view={view} />
         </div>
         {content.isSuccess && content.data.trim() !== '' && (
@@ -249,6 +295,6 @@ export default function ReportPage() {
             documents={documents}
           />
         ))}
-    </main>
+    </PageShell>
   );
 }

@@ -82,7 +82,8 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
 
   return (
     <form
-      className="space-y-8"
+      // P1 #10: 24px section rhythm (down from 32) tightens the long form.
+      className="space-y-6"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -181,19 +182,6 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
           hint="Optional — leave blank if this board is validated without one."
           bench={bench}
         />
-
-        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-          <Button variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}>
-            {validate.isPending ? 'Validating…' : 'Validate Profile'}
-          </Button>
-          {validate.isError && (
-            <p role="alert" className="text-meta text-warn">
-              Could not reach the runner to read the bench. Check that it is online, then
-              validate again.
-            </p>
-          )}
-        </div>
-        {matches && <ValidationPanel matches={matches} />}
       </FormSection>
 
       <FormSection title="Safety">
@@ -243,6 +231,16 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
         />
       </FormSection>
 
+      {/* Validation results (P1 #10): co-located with the sticky footer's Validate
+          action, not buried in the Instruments section. */}
+      {validate.isError && (
+        <p role="alert" className="text-meta text-warn">
+          Could not reach the runner to read the bench. Check that it is online, then
+          validate again.
+        </p>
+      )}
+      {matches && <ValidationPanel matches={matches} />}
+
       {errorCount > 0 && (
         <p role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3 text-body text-warn">
           {errorCount === 1
@@ -260,7 +258,12 @@ export function ProfileForm({ mode, initial, onSaved }: ProfileFormProps) {
         </p>
       )}
 
-      <div className="flex items-center gap-3">
+      {/* Sticky action footer (P1 #10): Validate + Save stay reachable all the way
+          down the long form; the -mx-6 lets the top border span the reading column. */}
+      <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-end gap-3 border-t border-border bg-canvas px-6 py-3">
+        <Button variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}>
+          {validate.isPending ? 'Validating…' : 'Validate Profile'}
+        </Button>
         <Button type="submit" variant="primary" disabled={save.isPending}>
           {save.isPending ? 'Saving…' : mode === 'new' ? 'Create Profile' : 'Save Profile'}
         </Button>

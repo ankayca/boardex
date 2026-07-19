@@ -26,8 +26,10 @@ function PlayIcon() {
 
 // The first-run hero's two actions (§7.1 / T6.5): start a real run, or watch the
 // recorded demo run — the latter works offline, which is exactly when onboarding
-// happens (the runner may not be up yet). These two ARE the app's entry gate for a
-// first-time user, so they carry the 40px gate height (P1 #1: "both buttons 38–40px").
+// happens (the runner may not be up yet). They render at the 40px button height to
+// meet the review's 38–40px hero spec (P1 #1) — a size choice for the empty-state
+// hero, not a claim of gate-primary semantics (§6.1 reserves 40px's MEANING, not
+// the height itself, for approval gates).
 function HeroActions() {
   const navigate = useNavigate();
   return (

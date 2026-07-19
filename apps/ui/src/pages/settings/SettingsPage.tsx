@@ -139,7 +139,8 @@ export default function SettingsPage() {
   const collapsed = getSidebarCollapsed();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 pb-16 pt-10">
+    // §7.7 / P1 #11: a 680–760px reading column for the sectioned prose page.
+    <main className="mx-auto max-w-[720px] px-6 pb-16 pt-10">
       <p className="text-body text-text-secondary">
         Connection and preferences. Changes apply immediately and reset on reload.
       </p>
