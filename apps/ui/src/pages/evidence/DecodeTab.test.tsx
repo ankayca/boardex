@@ -40,13 +40,17 @@ describe('DecodeTab annotation clamp/expand (P1 #6)', () => {
     renderDecode();
 
     const annotation = await screen.findByRole('button', { name: /ADDRESS WRITE: 76 ACK/ });
-    // Resting: clamped to two lines and collapsed.
+    // Resting: clamped to two lines and collapsed. The clamp rides line-clamp-2's
+    // own -webkit-box display, so the collapsed cell must NOT carry a display-
+    // overriding class — a `block` alongside line-clamp-2 defeats the clamp.
     expect(annotation).toHaveClass('line-clamp-2');
+    expect(annotation).not.toHaveClass('block');
     expect(annotation).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(annotation);
-    // Expanded: the clamp is gone.
+    // Expanded: the clamp is gone and the cell falls back to a plain block display.
     expect(annotation).not.toHaveClass('line-clamp-2');
+    expect(annotation).toHaveClass('block');
     expect(annotation).toHaveAttribute('aria-expanded', 'true');
   });
 });

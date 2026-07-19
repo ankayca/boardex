@@ -34,7 +34,7 @@ export interface RawTabProps {
 
 export function RawTab({ view, highlightArtifactId }: RawTabProps) {
   const highlightRef = useRef<HTMLTableRowElement | null>(null);
-  const [failedDownloadId, setFailedDownloadId] = useState<string | null>(null);
+  const [failedDownloadIds, setFailedDownloadIds] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     highlightRef.current?.scrollIntoView?.({ block: 'center' });
@@ -48,17 +48,27 @@ export function RawTab({ view, highlightArtifactId }: RawTabProps) {
     );
   }
 
+  // A download clears only its OWN failure marker before (re)trying, then re-marks
+  // that same id on failure. Scoping the clear to the artifact's own id is what
+  // lets Download-all accumulate: a later artifact's success never wipes an earlier
+  // one's failure, and a single-row retry still clears only its own mark (P1 #8).
   const download = async (artifact: Artifact) => {
-    setFailedDownloadId(null);
+    setFailedDownloadIds((prev) => {
+      if (!prev.has(artifact.id)) return prev;
+      const next = new Set(prev);
+      next.delete(artifact.id);
+      return next;
+    });
     try {
       await downloadArtifact(artifact, api.getArtifactBlob);
     } catch {
-      setFailedDownloadId(artifact.id);
+      setFailedDownloadIds((prev) => new Set(prev).add(artifact.id));
     }
   };
 
   // Download all: fetch-and-save each in turn (P1 #8). Sequential so a browser
-  // doesn't cancel overlapping saves; a failure marks that artifact's row.
+  // doesn't cancel overlapping saves; each failure accumulates on its own row and
+  // persists — a subsequent artifact succeeding does not clear it.
   const downloadAll = async () => {
     for (const artifact of view.artifacts) {
       await download(artifact);
@@ -136,7 +146,7 @@ export function RawTab({ view, highlightArtifactId }: RawTabProps) {
                       >
                         <DownloadGlyph />
                       </button>
-                      {failedDownloadId === artifact.id && (
+                      {failedDownloadIds.has(artifact.id) && (
                         <p role="alert" className="mt-1 text-meta text-warn">
                           Download failed — the artifact could not be fetched.
                         </p>
