@@ -748,11 +748,30 @@ describe('terminalSummary (v2.4, reducer-only)', () => {
     expect(overridden.terminalSummary).toBe('turn bound exceeded: max_turns=40');
   });
 
-  it('run.stopped sets no summary — byUser is the whole story', () => {
-    const view = reduce([
+  it('a stopped run suppresses the generic reason — the badge is the story (both wire shapes)', () => {
+    // Bare run.stopped: byUser is the whole story, no summary.
+    const bare = reduce([
       envelope(1, 'run.created', { run: sampleRun }),
       envelope(2, 'run.stopped', { byUser: true }),
     ]);
-    expect(view.terminalSummary).toBeUndefined();
+    expect(bare.terminalSummary).toBeUndefined();
+
+    // The mock's sequence: status_changed carrying the "Stopped by user"
+    // boilerplate, then the dedicated event. The boilerplate is suppressed —
+    // "Stopped · Stopped by user" would say it twice.
+    const mockShape = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.status_changed', { status: 'stopped', reason: 'Stopped by user' }),
+      envelope(3, 'run.stopped', { byUser: true }),
+    ]);
+    expect(mockShape.terminalSummary).toBeUndefined();
+
+    // A NON-generic reason is real information and survives as the summary.
+    const rejected = reduce([
+      envelope(1, 'run.created', { run: sampleRun }),
+      envelope(2, 'run.status_changed', { status: 'stopped', reason: 'Approval rejected' }),
+      envelope(3, 'run.stopped', { byUser: true }),
+    ]);
+    expect(rejected.terminalSummary).toBe('Approval rejected');
   });
 });

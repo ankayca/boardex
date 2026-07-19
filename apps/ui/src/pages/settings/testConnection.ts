@@ -1,8 +1,9 @@
 // Test Connection classification (T6.6, §7.x Settings). Pure and React-free so the
 // online / version-mismatch / degraded verdicts are unit-testable without a DOM — the
 // unreachable ('offline') case is the component's, since it is the fetch itself
-// throwing, not a payload to classify. D14 colors follow from `tone`: pass=green,
-// warn=amber, fail=red — reserved, never decorative.
+// throwing, not a payload to classify. D14 (T6.6 review F1): only `pass` is green;
+// every non-pass probe verdict — mismatch, degraded, and the caller's offline — is an
+// amber WARNING to resolve, never red. A failed reachability test is not a fail/stop.
 import { CONTRACT_VERSION, type HealthResponse } from '@boardex/contract';
 
 export type ConnectionResult =

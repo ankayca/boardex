@@ -145,6 +145,61 @@ describe('ReportPage — fail-variant run with no report', () => {
   });
 });
 
+// v2.4 (Sprint 7 review F1): the report header carries the dual-outcome split — the
+// same derivation as the status card (§7.6, presentation only) — pinned to the three
+// coverage shapes: full (3 of 3), 2-of-6 partial, and the no-registry fallback line.
+describe('ReportPage — dual-outcome header split (§7.6 v2.4)', () => {
+  it('renders the execution/coverage split for full, partial, and no-registry runs', async () => {
+    // Full coverage: completed, 3 declared, 3 recorded.
+    getArtifactText.mockResolvedValue(REPORT_MD);
+    seedRun('bme280_run_001.jsonl');
+    let page = renderPage();
+    expect((await screen.findByText('Run execution')).parentElement).toHaveTextContent(
+      'Run execution — Completed · BME280 bring-up validated on iteration 2',
+    );
+    expect(screen.getByText('Validation coverage').parentElement).toHaveTextContent(
+      'Validation coverage — 3 of 3 checks recorded',
+    );
+    page.unmount();
+    useRunStore.getState().resetAll();
+
+    // Partial coverage: failed on the turn budget, 2 of 6 recorded — no report
+    // artifact exists, and the header still carries the split.
+    seedRun('bme280_run_002_partial_synthetic.jsonl');
+    page = renderPage();
+    expect((await screen.findByText('Run execution')).parentElement).toHaveTextContent(
+      'Run execution — Failed · Run terminated by harness: turn bound exceeded: max_turns=40 (4 of 6 registered checks were never recorded)',
+    );
+    expect(screen.getByText('Validation coverage').parentElement).toHaveTextContent(
+      'Validation coverage — 2 of 6 checks recorded',
+    );
+    page.unmount();
+    useRunStore.getState().resetAll();
+
+    // No registry declared (a pre-v2.4 stream): the no-denominator fallback line.
+    const stripped = fixtureFile('bme280_run_001.jsonl')
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map((line) => JSON.parse(line).event as WireEvent)
+      .map((event): WireEvent =>
+        event.type === 'run.plan_generated'
+          ? ({
+              ...event,
+              payload: {
+                plan: (event.payload as { plan: unknown }).plan,
+                riskSummary: (event.payload as { riskSummary: string }).riskSummary,
+              },
+            } as WireEvent)
+          : event,
+      );
+    useRunStore.getState().ingestMany(RUN_ID, stripped);
+    renderPage();
+    expect((await screen.findByText('Validation coverage')).parentElement).toHaveTextContent(
+      'Validation coverage — 3 checks recorded · no check registry declared',
+    );
+  });
+});
+
 // T6.3/T6.6: model attribution renders in the report header when the run echoed one.
 describe('ReportPage — model attribution (T6.3)', () => {
   it('renders the run model in the header when echoed', async () => {

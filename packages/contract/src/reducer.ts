@@ -228,8 +228,13 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
           endedAt = event.ts;
           // The transition's reason is the terminal summary only until a
           // dedicated terminal event states its own (which takes precedence,
-          // same rule as endedAt).
-          if (event.payload.reason !== undefined) {
+          // same rule as endedAt). For a stopped run the badge is the story
+          // (§5.4 v2.4 ruling): the "Stopped by user" boilerplate riding the
+          // mock's transition adds nothing and is suppressed — only a
+          // non-generic reason survives as the summary.
+          const stoppedBoilerplate =
+            event.payload.status === 'stopped' && event.payload.reason === 'Stopped by user';
+          if (event.payload.reason !== undefined && !stoppedBoilerplate) {
             terminalSummary = event.payload.reason;
           }
         }

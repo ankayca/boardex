@@ -64,16 +64,21 @@ function TestResult({ test }: { test: TestState }) {
     );
   }
   if (test.status === 'offline') {
+    // A failed reachability probe is a WARNING to resolve, not a fail/stop (D14, T6.6
+    // review F1): amber dot + amber text (StatusDot 'offline' is the amber state, and
+    // its sr-only label reads "offline"), never red — red stays reserved for pass/fail.
     return (
-      <p role="status" className="flex items-center gap-2 text-meta text-fail">
+      <p role="status" className="flex items-center gap-2 text-meta text-warn">
         <StatusDot state="offline" />
         Offline — could not reach {test.base}
       </p>
     );
   }
   const { result } = test;
+  // pass → green; every other verdict (mismatch/degraded) is an amber warning, dot and
+  // text agreeing on the amber 'offline' state — no probe verdict ever paints red.
   const tone = result.tone === 'pass' ? 'text-pass' : 'text-warn';
-  const dot = result.tone === 'pass' ? 'online' : 'error';
+  const dot = result.tone === 'pass' ? 'online' : 'offline';
   const message =
     result.kind === 'online'
       ? `Online · ${result.runnerKind} · ${result.contractVersion}`
