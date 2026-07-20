@@ -16,8 +16,10 @@ run as failed; the MCP servers are not even spawned before plan approval.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -42,6 +44,40 @@ from .workspace import (
 TOOL_RESULT_CAP = 16_000
 MAX_IDLE_TURNS = 3  # consecutive assistant turns with no tool call
 DEFAULT_MAX_TURNS = 60
+
+# Inline-echo size policy: the artifact in the ArtifactStore is NEVER truncated;
+# only the copy of a tool result echoed to the model is bounded. Measured on the
+# BMP180 hardware run, a single 29KB protocol decode echoed inline (capped at
+# TOOL_RESULT_CAP) rides in the message list for every remaining turn.
+DECODE_MAX_ANNOTATIONS_DEFAULT = 40
+LOG_TAIL_LINES_DEFAULT = 60
+LOG_ERROR_LINES_DEFAULT = 20
+_ERROR_LINE_RE = re.compile(r"error|fatal|fail|warning", re.IGNORECASE)
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit(f"{name} must be an integer")
+    if value <= 0:
+        raise SystemExit(f"{name} must be a positive integer")
+    return value
+
+
+def decode_max_annotations() -> int:
+    return _positive_int_env("AGENT_DECODE_MAX_ANNOTATIONS", DECODE_MAX_ANNOTATIONS_DEFAULT)
+
+
+def log_tail_lines() -> int:
+    return _positive_int_env("AGENT_LOG_TAIL_LINES", LOG_TAIL_LINES_DEFAULT)
+
+
+def log_error_lines() -> int:
+    return _positive_int_env("AGENT_LOG_ERROR_LINES", LOG_ERROR_LINES_DEFAULT)
 PROTOCOL_DECODE_FIELDS = {
     "protocol",
     "device_id",
@@ -583,7 +619,10 @@ class AgentRunEngine(RunEngine):
         self._emit(
             outcome_event, {"stepId": step_id, "summary": summary, "artifactIds": artifact_ids}
         )
-        payload = {"result": result, "artifactIds": artifact_ids}
+        payload = {
+            "result": _shape_inline_result(name, result, artifact_ids),
+            "artifactIds": artifact_ids,
+        }
         return _cap(json.dumps(payload, default=str))
 
     async def _gate_tool(self, name: str, args: dict[str, Any]) -> None:
@@ -847,6 +886,64 @@ def _cap(text: str) -> str:
     if len(text) <= TOOL_RESULT_CAP:
         return text
     return text[:TOOL_RESULT_CAP] + f"... [truncated {len(text) - TOOL_RESULT_CAP} chars]"
+
+
+def _artifact_ref(artifact_ids: list[str], kind: str) -> str | None:
+    return next((a for a in artifact_ids if a.endswith(f"_{kind}")), None)
+
+
+def _shape_inline_result(
+    name: str, result: dict[str, Any], artifact_ids: list[str]
+) -> dict[str, Any]:
+    """Bound the copy of ``result`` echoed to the model; the stored artifact
+    keeps the full data. Protocol decodes keep the complete transactions list
+    and a bounded slice of annotations; build/flash/serial log text keeps its
+    error lines plus a bounded tail."""
+    data = result.get("data") if isinstance(result.get("data"), dict) else None
+    if data is None:
+        return result
+    inline = copy.deepcopy(result)
+    data = inline["data"]
+    holder = data
+    if name == "verify_bringup":
+        evidence = data.get("evidence") if isinstance(data.get("evidence"), dict) else {}
+        holder = evidence.get("i2c") if isinstance(evidence.get("i2c"), dict) else {}
+
+    annotations = holder.get("annotations")
+    max_annotations = decode_max_annotations()
+    if isinstance(annotations, list) and len(annotations) > max_annotations:
+        ref = _artifact_ref(artifact_ids, "protocol_decode")
+        holder["annotations"] = annotations[:max_annotations]
+        holder["annotationsElided"] = len(annotations) - max_annotations
+        holder["annotationsNote"] = (
+            f"harness: showing {max_annotations} of {len(annotations)} annotations; "
+            f"the transactions list is complete. The full decode is stored as "
+            f"artifact {ref or 'of this step'} — cite that id in record_check. For "
+            "deeper annotation detail, re-run the capture/decode tool with a "
+            "narrower window or channel filter."
+        )
+
+    log_kind = {"build_firmware": "build_log", "flash_firmware": "flash_log"}.get(
+        name, "serial_log"
+    )
+    for key in ("stdout", "stderr", "text", "output", "log"):
+        value = data.get(key)
+        if isinstance(value, str):
+            data[key] = _bounded_log_text(value, _artifact_ref(artifact_ids, log_kind))
+    return inline
+
+
+def _bounded_log_text(text: str, artifact_ref: str | None) -> str:
+    lines = text.splitlines()
+    tail = log_tail_lines()
+    if len(lines) <= tail:
+        return text
+    head = lines[:-tail]
+    errors = [line for line in head if _ERROR_LINE_RE.search(line)][: log_error_lines()]
+    elided = len(head) - len(errors)
+    where = f"; full log stored as artifact {artifact_ref}" if artifact_ref else ""
+    note = f"[harness: {elided} lines elided — error lines + last {tail} lines kept{where}]"
+    return "\n".join([note, *errors, *lines[-tail:]])
 
 
 def _humanize(name: str, args: dict[str, Any]) -> str:
