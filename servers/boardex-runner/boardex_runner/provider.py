@@ -18,6 +18,41 @@ from typing import Any, Protocol
 
 DEFAULT_MODEL = "openrouter/anthropic/claude-sonnet-4.6"
 
+# Anthropic-style prompt caching (rides through OpenRouter unchanged). The
+# request prefix is tools -> system -> messages, so a breakpoint on the system
+# prompt caches the tool schemas with it — ~12k tokens re-sent on every turn
+# of an agent run otherwise. A second, rolling breakpoint on the newest stable
+# message caches the append-only conversation history incrementally.
+CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def _as_cached_block(text: str) -> list[dict[str, Any]]:
+    return [{"type": "text", "text": text, "cache_control": dict(CACHE_CONTROL)}]
+
+
+def with_cache_breakpoints(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of ``messages`` carrying the two cache breakpoints.
+
+    Only str-content system/user/tool messages are eligible; assistant turns
+    (raw model_dump dicts) are never touched. The input list and its dicts are
+    not mutated — the engine owns the running message list.
+    """
+    out = [dict(message) for message in messages]
+    if out and out[0].get("role") == "system" and isinstance(out[0].get("content"), str):
+        out[0]["content"] = _as_cached_block(out[0]["content"])
+    for i in range(len(out) - 1, 0, -1):
+        if out[i].get("role") in ("user", "tool") and isinstance(out[i].get("content"), str):
+            out[i]["content"] = _as_cached_block(out[i]["content"])
+            break
+    return out
+
+
+def _model_supports_prompt_caching(litellm: Any, model: str) -> bool:
+    try:
+        return bool(litellm.supports_prompt_caching(model))
+    except Exception:
+        return False
+
 
 def _max_tokens_from_env() -> int | None:
     """AGENT_MAX_TOKENS caps per-request output tokens.
@@ -88,6 +123,7 @@ class LiteLLMProvider:
     def __init__(self, model: str, max_tokens: int | None = None) -> None:
         self.model = model
         self.max_tokens = max_tokens if max_tokens is not None else _max_tokens_from_env()
+        self._cache_prompts: bool | None = None  # resolved lazily, needs litellm
 
     async def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -95,6 +131,10 @@ class LiteLLMProvider:
         import litellm
 
         litellm.suppress_debug_info = True
+        if self._cache_prompts is None:
+            self._cache_prompts = _model_supports_prompt_caching(litellm, self.model)
+        if self._cache_prompts:
+            messages = with_cache_breakpoints(messages)
         extra: dict[str, Any] = {}
         if self.max_tokens is not None:
             extra["max_tokens"] = self.max_tokens
