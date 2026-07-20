@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type {
-  BenchDeviceState,
-  CheckVerdict,
-  RiskLevel,
-  RunStatus,
-  StepStatus,
-} from '@boardex/contract';
+import type { BenchDeviceState, RiskLevel, RunStatus, StepStatus } from '@boardex/contract';
+import type { VerdictValue } from './Badge';
 import { CommandPalette } from '../shell/CommandPalette';
 import { ShortcutsHelp } from '../shell/ShortcutsHelp';
 import { Badge } from './Badge';
@@ -24,7 +19,7 @@ import { StepStatusIcon } from './StepStatusIcon';
 
 // Typed against the contract enums so a contract change breaks typecheck here.
 const RISK_LEVELS: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
-const VERDICTS: CheckVerdict[] = ['pass', 'fail', 'needs_review'];
+const VERDICTS: VerdictValue[] = ['pass', 'fail', 'needs_review', 'not_recorded'];
 const RUN_STATUSES: RunStatus[] = [
   'draft',
   'planning',
@@ -103,7 +98,7 @@ export default function DesignGalleryPage() {
   });
 
   return (
-    <main className="min-h-screen bg-bg-app font-sans text-text-primary">
+    <main className="min-h-screen bg-canvas font-sans text-text-primary">
       <div className="mx-auto max-w-5xl space-y-8 px-8 py-10">
         <header>
           <h1 className="text-page font-semibold">Design primitives</h1>
@@ -115,12 +110,17 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Type scale & rhythm">
           <Card className="space-y-3">
-            <p className="text-page font-semibold">Page title — 20/26, −0.017em</p>
-            <p className="text-section font-semibold">Section title — 16/22, −0.01em</p>
+            <p className="text-page font-semibold">Page title — 22/28, −0.017em</p>
+            <p className="text-section font-semibold">Section / top-bar title — 15/20, −0.01em</p>
+            <p className="text-body font-semibold">Card & step title — 14/20 semibold</p>
             <p className="text-body">Body — 14/20. The plan executes against the bench.</p>
             <p className="text-meta text-text-secondary">Meta — 13/18. Updated 2 minutes ago.</p>
+            <p className="text-metadata text-text-secondary">Metadata — 12/16. seq 141 · iteration 2</p>
+            <p className="font-mono text-code text-text-secondary">
+              Code — 12.5/19 mono. i2c_clock=99.611kHz ack=1
+            </p>
             <p className="text-label font-medium uppercase text-text-secondary">
-              Label — 11/16, +0.05em, uppercase
+              Label — 11/16, +0.05em, uppercase — machine capsules only
             </p>
           </Card>
           <Card heading="Tabular numerals" className="max-w-md">
@@ -136,25 +136,28 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Elevation">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
-              <p className="text-body font-medium">1 · subtle</p>
-              <p className="mt-1 text-meta text-text-secondary">Resting cards and panels.</p>
-            </div>
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-raised">
-              <p className="text-body font-medium">2 · raised</p>
+            <div className="rounded-card border border-border bg-surface p-5">
+              <p className="text-body font-medium">resting</p>
               <p className="mt-1 text-meta text-text-secondary">
-                Floating over content — popovers, jump-to-latest.
+                Cards and panels — no shadow; surface + 1px border carry the depth.
               </p>
             </div>
-            <div className="rounded-card border border-border bg-bg-panel p-5 shadow-overlay">
-              <p className="text-body font-medium">3 · overlay</p>
+            <div className="rounded-card border border-border bg-surface p-5 shadow-raised">
+              <p className="text-body font-medium">raised</p>
               <p className="mt-1 text-meta text-text-secondary">
-                Modal surfaces — dialogs and drawers.
+                Floating over content — popovers, jump-to-latest, demo callout.
+              </p>
+            </div>
+            <div className="rounded-card border border-border bg-surface p-5 shadow-overlay">
+              <p className="text-body font-medium">overlay</p>
+              <p className="mt-1 text-meta text-text-secondary">
+                Modal surfaces — dialogs, drawers, palette.
               </p>
             </div>
           </div>
           <p className="text-meta text-text-secondary">
-            Depth still reads borders-first (§6.1) — shadows only separate layers.
+            Shadows exist only on floating layers (§6.1 v2.3) — resting cards read against the
+            canvas by border and surface alone.
           </p>
         </GallerySection>
 
@@ -174,8 +177,12 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Button">
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="primary">Approve &amp; Continue</Button>
+            <Button variant="primary" size="gate">
+              Approve &amp; Continue
+            </Button>
+            <Button variant="primary">New Run</Button>
             <Button variant="secondary">Review Diff</Button>
+            <Button variant="tertiary-danger">Reject</Button>
             <Button variant="danger">Stop Run</Button>
             <Button variant="outline-danger">Stop Run</Button>
             <Button variant="ghost">Edit task</Button>
@@ -198,16 +205,17 @@ export default function DesignGalleryPage() {
             </Button>
           </div>
           <p className="text-meta text-text-secondary">
-            outline-danger is the resting form for ever-present destructive controls (Stop
-            Run) — solid red only under hover intent. Disabled buttons keep 60% presence so
-            a gated CTA never vanishes.
+            36px standard, 40px gate-primary. outline-danger is the resting form for
+            ever-present destructive controls (Stop Run) — solid red only under hover intent;
+            tertiary-danger is the text form (Reject) — red only under hover/focus. Disabled
+            buttons keep 60% presence so a gated CTA never vanishes.
           </p>
         </GallerySection>
 
         <GallerySection title="Card">
           <Card heading="Board Context">
             <p className="text-body text-text-secondary">
-              Panel on white with 1px border, 10px radius, subtle shadow only.
+              White surface with 1px border, 8px radius, no shadow — depth is the canvas behind.
             </p>
           </Card>
           <Card>
@@ -215,23 +223,30 @@ export default function DesignGalleryPage() {
           </Card>
         </GallerySection>
 
-        <GallerySection title="Badge — risk">
+        <GallerySection title="Badge — risk capsule">
           <div className="flex flex-wrap items-center gap-3">
             {RISK_LEVELS.map((risk) => (
               <Badge key={risk} kind="risk" value={risk} />
             ))}
           </div>
+          <p className="text-meta text-text-secondary">
+            LOW is a filled neutral capsule with dark text — a neutral state, not a disabled one.
+          </p>
         </GallerySection>
 
-        <GallerySection title="Badge — verdict">
+        <GallerySection title="Badge — verdict (icon-led)">
           <div className="flex flex-wrap items-center gap-3">
             {VERDICTS.map((verdict) => (
               <Badge key={verdict} kind="verdict" value={verdict} />
             ))}
           </div>
+          <p className="text-meta text-text-secondary">
+            Icon always present — color is never the only signal. Not recorded is neutral with a
+            dash: absence of evidence is not failure.
+          </p>
         </GallerySection>
 
-        <GallerySection title="Badge — status">
+        <GallerySection title="Badge — run-state capsule">
           <div className="flex flex-wrap items-center gap-3">
             {RUN_STATUSES.map((status) => (
               <Badge key={status} kind="status" value={status} />
@@ -358,8 +373,9 @@ export default function DesignGalleryPage() {
 
         <GallerySection title="Motion">
           <p className="text-meta text-text-secondary">
-            Tokens: fast 120ms (state flips) · medium 200ms (drawer/dialog surfaces) · gentle
-            360ms (progress). All motion collapses under prefers-reduced-motion — final states
+            Tokens: fast 120ms (hover/focus, state flips) · medium 200ms (badge transitions,
+            drawer/dialog surfaces) · gentle 360ms (progress) · morph 280ms (the FAIL→PASS
+            verdict moment). All motion collapses under prefers-reduced-motion — final states
             still land.
           </p>
           <Card heading="Badge state flip — fast" className="max-w-md">

@@ -100,24 +100,45 @@ describe('Test Connection', () => {
     expect(createApiClientSpy).toHaveBeenCalledWith('http://custom:5555');
   });
 
-  it('reports offline when the runner is unreachable', async () => {
+  // D14 (T6.6 review F1, standing ruling): a probe verdict is a warning to resolve,
+  // never a fail/stop — the amber dot and amber text must AGREE, and red appears
+  // nowhere. The dot is the aria-hidden span inside the verdict line.
+  const expectWarnVerdict = (verdict: HTMLElement) => {
+    expect(verdict).toHaveClass('text-warn');
+    expect(verdict).not.toHaveClass('text-fail');
+    const dot = verdict.querySelector('[aria-hidden="true"]');
+    expect(dot).toHaveClass('bg-warn');
+    expect(dot).not.toHaveClass('bg-fail');
+  };
+
+  it('reports offline as an AMBER warning, dot and text agreeing, never red (D14)', async () => {
     const user = userEvent.setup();
     probeHealth.mockRejectedValue(new Error('network down'));
     renderPage();
 
     await user.click(screen.getByRole('button', { name: 'Test connection' }));
 
-    expect(await screen.findByText(/Offline — could not reach/)).toBeInTheDocument();
+    expectWarnVerdict(await screen.findByText(/Offline — could not reach/));
   });
 
-  it('reports a version mismatch as a warning', async () => {
+  it('reports a version mismatch as an AMBER warning, dot and text agreeing, never red (D14)', async () => {
     const user = userEvent.setup();
     probeHealth.mockResolvedValue({ ...onlineHealth, contractVersion: 'boardex-contract/9.9' });
     renderPage();
 
     await user.click(screen.getByRole('button', { name: 'Test connection' }));
 
-    expect(await screen.findByText(/≠ expected/)).toBeInTheDocument();
+    expectWarnVerdict(await screen.findByText(/≠ expected/));
+  });
+
+  it('reports a not-ready runner (degraded) as an AMBER warning, dot and text agreeing, never red (D14)', async () => {
+    const user = userEvent.setup();
+    probeHealth.mockResolvedValue({ ...onlineHealth, ok: false });
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+
+    expectWarnVerdict(await screen.findByText(/reports not ready/));
   });
 });
 

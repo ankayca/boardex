@@ -42,14 +42,14 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
               // verdict); the log text itself is never color-coded (D14).
               className={`rounded-t-lg border border-b-0 px-3 py-1.5 text-meta font-medium ${
                 selected
-                  ? 'border-border bg-bg-panel text-text-primary shadow-[inset_0_-2px_0_0_var(--color-accent)]'
+                  ? 'border-border bg-surface text-text-primary shadow-[inset_0_-2px_0_0_var(--color-accent)]'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
             >
               {STREAM_LABELS[stream]}
               {/* T6.1c: line count as a small neutral chip, not appended text. */}
               {count > 0 && (
-                <span className="ml-1.5 inline-flex items-center rounded-full bg-neutral-badge-bg px-1.5 text-label font-medium text-neutral-badge">
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-neutral-badge-bg px-1.5 text-metadata font-medium text-neutral-badge">
                   {count}
                 </span>
               )}

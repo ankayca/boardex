@@ -37,9 +37,28 @@ const event = <Type extends string, Payload extends z.ZodTypeAny>(type: Type, pa
 
 export const RunCreatedEventSchema = event('run.created', z.object({ run: RunSchema }));
 
+/**
+ * v2.4 (Sprint 7 P0, additive per §10.5): the plan's declared check registry —
+ * what the run INTENDS to verify, registered at plan time (the runner's
+ * declare_plan already captures this list; here it reaches the wire). Optional:
+ * a v2.0 producer that omits it still conforms, and recordings that predate it
+ * (records/bmp180-run) reduce unchanged. Validation coverage = recorded
+ * check.evaluated results measured against this registry — the denominator is
+ * declared up front, never parsed from plan prose or report markdown.
+ */
+export const CheckExpectationSchema = z.object({
+  requirementId: z.string(),
+  description: z.string(),
+});
+export type CheckExpectation = z.infer<typeof CheckExpectationSchema>;
+
 export const RunPlanGeneratedEventSchema = event(
   'run.plan_generated',
-  z.object({ plan: z.array(PlanStepSchema), riskSummary: z.string() }),
+  z.object({
+    plan: z.array(PlanStepSchema),
+    riskSummary: z.string(),
+    checks: z.array(CheckExpectationSchema).optional(),
+  }),
 );
 
 export const RunStatusChangedEventSchema = event(

@@ -13,6 +13,7 @@ import type { CheckVerdict, RunView } from '@boardex/contract';
 import { Badge } from '../../design';
 import { checkLabel, evidenceHrefAt, evidenceTargets, reportHrefAt } from './evidence';
 import { useEvidenceBase } from './evidenceBase';
+import { deriveDualOutcome } from './outcome';
 
 // The iteration-2 verdict-flip moment (T6.2 item 3): when a check the reducer
 // upserts by id flips FAIL → PASS on re-evaluation, its badge plays a one-shot
@@ -51,12 +52,12 @@ function useVerdictFlips(checks: readonly { id: string; verdict: CheckVerdict }[
 // Link, so the actions are real anchors carrying an href. Disabled — no artifact of
 // that kind yet — degrades to an inert span, never a dead link.
 const ACTION_BASE =
-  'inline-flex items-center justify-center rounded-button border border-border bg-bg-panel px-4 py-2 text-body font-medium text-text-primary transition-colors';
+  'inline-flex h-9 items-center justify-center rounded-control border border-border-strong bg-surface px-4 text-body font-medium text-text-primary transition-colors';
 
 function BandAction({ label, to }: { label: string; to: string | null }) {
   if (to) {
     return (
-      <Link to={to} className={`${ACTION_BASE} hover:bg-bg-app`}>
+      <Link to={to} className={`${ACTION_BASE} hover:bg-canvas`}>
         {label}
       </Link>
     );
@@ -68,8 +69,10 @@ function BandAction({ label, to }: { label: string; to: string | null }) {
   );
 }
 
+// 28px chips (§6.2 v2.3): the 24px icon-led verdict badge plus 2px breathing
+// room each side; the icon inside the badge means color is never the only signal.
 const CHIP_BASE =
-  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-bg-app px-3 py-1';
+  'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-canvas px-3 py-0.5';
 
 export function EvidenceBand({ view }: { view: RunView }) {
   const { run, checks } = view;
@@ -79,13 +82,19 @@ export function EvidenceBand({ view }: { view: RunView }) {
   // RunView gets a link; the reducer has already downgraded the miss to needs_review.
   const artifactIds = new Set(view.artifacts.map((artifact) => artifact.id));
   const flipped = useVerdictFlips(checks);
+  // Registered-but-never-recorded expectations (v2.4): one neutral chip each,
+  // on a terminal run with a declared registry. Absence of evidence is not
+  // failure — the chip is gray with a dash, never red, and links nowhere
+  // (there is no artifact to open).
+  const outcome = deriveDualOutcome(view);
+  const notRecorded = outcome?.coverage.kind === 'registered' ? outcome.coverage.notRecorded : [];
 
   return (
     <section
       aria-label="Evidence summary"
-      className="mt-6 flex h-[88px] items-center gap-6 rounded-card border border-border bg-bg-panel px-5 shadow-subtle"
+      className="mt-6 flex h-[88px] items-center gap-6 rounded-card border border-border bg-surface px-5"
     >
-      {checks.length > 0 ? (
+      {checks.length > 0 || notRecorded.length > 0 ? (
         <ul
           aria-label="Evidence checks"
           className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1"
@@ -119,6 +128,16 @@ export function EvidenceBand({ view }: { view: RunView }) {
               </li>
             );
           })}
+          {notRecorded.map((expectation) => (
+            <li key={`nr_${expectation.requirementId}`} className="shrink-0">
+              <span title={expectation.description} className={CHIP_BASE}>
+                <span className="text-meta font-medium text-text-primary">
+                  {checkLabel(expectation.requirementId)}
+                </span>
+                <Badge kind="verdict" value="not_recorded" />
+              </span>
+            </li>
+          ))}
         </ul>
       ) : (
         <p className="min-w-0 flex-1 text-meta text-text-secondary">No checks evaluated yet.</p>

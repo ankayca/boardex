@@ -37,7 +37,7 @@ function KindSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value as DocumentRow['kind'])}
-        className="mt-1 w-full rounded-button border border-border bg-bg-panel px-3 py-2 text-body text-text-primary focus:border-accent focus:outline-none"
+        className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-text-primary focus:border-accent focus:outline-none"
       >
         {DOCUMENT_KINDS.map((kind) => (
           <option key={kind} value={kind}>

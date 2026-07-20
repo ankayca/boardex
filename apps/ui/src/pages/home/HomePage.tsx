@@ -144,20 +144,20 @@ export default function HomePage() {
       {attention > 0 && <BenchAttentionLine count={attention} />}
 
       {runs.length > 0 ? (
-        <div className="overflow-hidden rounded-card border border-border bg-bg-panel">
+        <div className="overflow-hidden rounded-card border border-border bg-surface">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                <th className="px-4 py-2.5 text-metadata font-medium uppercase tracking-wide text-text-secondary">
                   Status
                 </th>
-                <th className="w-2/5 px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                <th className="w-2/5 px-4 py-2.5 text-metadata font-medium uppercase tracking-wide text-text-secondary">
                   Run
                 </th>
-                <th className="w-1/5 px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                <th className="w-1/5 px-4 py-2.5 text-metadata font-medium uppercase tracking-wide text-text-secondary">
                   Board
                 </th>
-                <th className="px-4 py-2.5 text-label font-medium uppercase text-text-secondary">
+                <th className="px-4 py-2.5 text-metadata font-medium uppercase tracking-wide text-text-secondary">
                   Updated
                 </th>
                 <th className="px-4 py-2.5">

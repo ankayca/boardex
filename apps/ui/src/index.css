@@ -3,52 +3,60 @@
 @tailwind utilities;
 
 /*
- * BIBLE §6.1 design tokens — EXACT values. These are the only colors in the system.
- * Semantic reservation (D14): green = pass/success only, red = fail/stop only,
- * amber = approval-needed/warning only. One accent. No gradients, no dark mode.
+ * BIBLE §6.1 design tokens (v2.3, Sprint 7 P0) — EXACT values. These are the
+ * only colors in the system. Semantic reservation (D14): green = pass/success
+ * only, red = fail/stop only, amber = approval-needed/warning only. One accent.
+ * No gradients, no dark mode. Three surface layers: canvas (shell) → nav
+ * (sidebar) → surface (all work content) — white never sits on white.
  */
 :root {
-  --color-bg-app: #fafaf9;
-  --color-bg-panel: #ffffff;
-  --color-border: #e7e5e4;
-  --color-border-strong: #d6d3d1;
-  --color-text-primary: #1c1917;
-  --color-text-secondary: #57534e;
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-pass: #16a34a;
-  --color-pass-bg: #f0fdf4;
-  --color-fail: #dc2626;
-  --color-fail-bg: #fef2f2;
-  --color-warn: #d97706;
-  --color-warn-bg: #fffbeb;
-  --color-neutral-badge: #78716c;
-  --color-neutral-badge-bg: #f5f5f4;
-  /* Overlay scrim — text-primary at 40% alpha, not a new hue. */
-  --color-scrim: rgba(28, 25, 23, 0.4);
+  --color-canvas: #f7f7f8;
+  --color-nav: #fbfbfc;
+  --color-surface: #ffffff;
+  --color-border: #e2e3e7;
+  --color-border-strong: #d2d4da;
+  --color-text-primary: #17171a;
+  --color-text-secondary: #5c6068;
+  --color-accent: #5b4cf0;
+  --color-accent-hover: #4a3bd8;
+  --color-pass: #168a4a;
+  --color-pass-bg: #e8f5ee;
+  --color-fail: #c73535;
+  --color-fail-bg: #fbeded;
+  --color-warn: #a86d00;
+  --color-warn-bg: #faf3e4;
+  /* A filled neutral capsule with dark text — a neutral state (LOW risk,
+     "Not recorded") must never read as disabled. */
+  --color-neutral-badge: #3f434b;
+  --color-neutral-badge-bg: #e9eaee;
+  /* Overlay scrim — text-primary at 35% alpha, not a new hue: light enough
+     that the dimmed run stays legible behind the evidence drawer. */
+  --color-scrim: rgba(23, 23, 26, 0.35);
 
-  --radius-card: 10px;
-  --radius-button: 8px;
+  --radius-card: 8px;
+  --radius-control: 6px;
 
   /*
-   * Elevation (T6.1) — three levels, borders-first per §6.1: shadows stay faint
-   * and depth still reads primarily from the 1px border + whitespace.
-   *   1 subtle:  resting cards and panels
-   *   2 raised:  elements floating over content (popovers, "jump to latest")
-   *   3 overlay: modal surfaces (dialogs, drawers)
+   * Elevation (v2.3) — shadows exist ONLY on floating layers (palette, modals,
+   * drawer, demo callout). Resting cards carry no shadow: depth reads from the
+   * canvas/surface hierarchy plus the 1px border.
+   *   raised:  elements floating over content (popovers, "jump to latest")
+   *   overlay: modal surfaces (dialogs, drawers)
    */
-  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 10px rgba(0, 0, 0, 0.06);
   --shadow-overlay: 0 2px 8px rgba(0, 0, 0, 0.07), 0 16px 40px rgba(0, 0, 0, 0.12);
 
   /*
-   * Motion (T6.1) — fast for state flips (badge/dot/button color), medium for
-   * surface transitions (drawer, dialog), gentle for continuous feedback
-   * (progress). prefers-reduced-motion collapses all of it (see below).
+   * Motion (v2.3 extends T6.1, never replaces) — fast for hover/focus and
+   * state flips, medium for badge/state transitions and surfaces (drawer,
+   * dialog), gentle for continuous feedback (progress), morph for the
+   * FAIL→PASS verdict moment (icon morph + one restrained pulse).
+   * prefers-reduced-motion collapses all of it (see below).
    */
   --motion-fast: 120ms;
   --motion-medium: 200ms;
   --motion-gentle: 360ms;
+  --motion-morph: 280ms;
   /* Ambient loop — the active-step pulse (T6.2). Distinct from the one-shot
      durations above: it is a slow, repeating breath, not a transition. */
   --motion-ambient: 2s;
@@ -58,7 +66,7 @@
 
 body {
   margin: 0;
-  background-color: var(--color-bg-app);
+  background-color: var(--color-canvas);
   color: var(--color-text-primary);
   font-family: 'Inter', system-ui, sans-serif;
   /* Lab-instrument numerals: every measurement, duration, and seq lines up in
@@ -133,13 +141,21 @@ body {
     transform: scale(1.12);
   }
 }
-/* The deliberate iteration-2 verdict-flip moment: the badge pulses once. */
+/* The deliberate FAIL→PASS verdict moment (v2.3): the icon/badge morphs in
+   place at the morph token — a scale settle plus ONE restrained background
+   pulse of the pass tint. No bounce, no celebration; reduced motion removes
+   the pulse entirely (global override below). */
 @keyframes verdict-flip {
   0% {
     transform: scale(1);
+    background-color: var(--color-pass-bg);
   }
   40% {
-    transform: scale(1.18);
+    transform: scale(1.12);
+    background-color: var(--color-pass-bg);
+  }
+  100% {
+    background-color: transparent;
   }
 }
 
@@ -177,15 +193,16 @@ body {
   animation: icon-settle var(--motion-medium) var(--ease-standard);
 }
 .animate-verdict-flip {
-  animation: verdict-flip var(--motion-gentle) var(--ease-standard);
+  animation: verdict-flip var(--motion-morph) var(--ease-standard);
+  border-radius: 9999px;
 }
 
 /* Workspace three-zone grid (§6.3) under the frame (T6.1b): the 3-column split
    keys on CONTENT width via container query, not the viewport — the sidebar
-   (240px expanded, 56px collapsed) participates automatically, where a viewport
-   breakpoint would overflow the right rail on laptop widths. 1240px ≈ 280 rail
-   + 560 center minimum + 340 rail + 2×24 gaps. Below it, the right rail stacks
-   under center (the §6.3 sub-1280 behavior). */
+   (208px expanded, 56px collapsed) participates automatically, where a viewport
+   breakpoint would overflow the right rail on laptop widths. 1208px = 280 rail
+   + 560 center minimum + 320 rail + 2×24 gaps. Below it, the right rail stacks
+   under center (the §6.3 stacking behavior). */
 .workspace-container {
   container-type: inline-size;
 }
@@ -197,17 +214,25 @@ body {
 .workspace-rail {
   grid-column: 2;
 }
-@container (min-width: 1240px) {
+@container (min-width: 1208px) {
   .workspace-grid {
-    grid-template-columns: 280px minmax(560px, 1fr) 340px;
+    grid-template-columns: 280px minmax(560px, 1fr) 320px;
   }
   .workspace-rail {
     grid-column: 3;
+    /* v2.3 rail composition: the rail reads as its own zone on the canvas —
+       a 1px divider at the start of the grid gap. The negative margin borrows
+       the 24px gap so the divider sits mid-gutter and the cards keep their
+       320px width. Only in the three-zone layout: stacked below 1208px, a
+       left border would read as a stray rule. */
+    border-left: 1px solid var(--color-border);
+    margin-left: -24px;
+    padding-left: 23px;
   }
   /* Sticky rails (T6.2b): the board card and the status card follow the scroll on
      long timelines (Stop Run stays reachable), pinned just below the frame's top
      bar. Only in the three-zone layout — when the right rail stacks under center
-     (< 1240px content), sticky is off so a pinned card can't cover the timeline.
+     (< 1208px content), sticky is off so a pinned card can't cover the timeline.
      `align-self: start` keeps the card content-height inside its stretched grid
      area, so it has room to travel. */
   .rail-sticky {

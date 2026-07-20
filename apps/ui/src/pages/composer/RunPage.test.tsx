@@ -129,13 +129,13 @@ describe('RunPage profile-blocked state (fail-closed, T1.3 review finding 1)', (
 
     // Blocked card, with Approve Plan absent from the DOM — not merely disabled.
     expect(await screen.findByText('Board profile unavailable')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Approve Plan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve plan/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     // Retry refetches; on success the D12 gate renders normally: checklist present,
     // Approve rendered but disabled until each line is confirmed.
     await user.click(screen.getByRole('button', { name: 'Retry' }));
-    const approve = await screen.findByRole('button', { name: 'Approve Plan' });
+    const approve = await screen.findByRole('button', { name: /approve plan/i });
     expect(approve).toBeDisabled();
     expect(screen.getAllByRole('checkbox')).toHaveLength(PROFILE.connectionChecklist.length);
     expect(listBoardProfiles).toHaveBeenCalledTimes(2);
@@ -146,6 +146,6 @@ describe('RunPage profile-blocked state (fail-closed, T1.3 review finding 1)', (
     renderRunPage();
 
     expect(await screen.findByText('Board profile unavailable')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Approve Plan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve plan/i })).not.toBeInTheDocument();
   });
 });

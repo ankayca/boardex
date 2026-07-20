@@ -6,6 +6,10 @@ Version 2.0 · July 2026 — v1.2 contract amendments per §10.5: added `run.ite
 **v2.1 (T6.3 Documents & Sources — additive wire changes; proposed to the backend owner by PR). All fields are optional, so a v2.0 consumer that ignores them still conforms; the wire `contractVersion` stays `boardex-contract/0.1`.** (1) `BoardProfile` gains `documents?: BoardDocument[]` where `BoardDocument = { id, label, kind: 'datasheet'|'schematic'|'reference', mimeType }` — profile-attached reference material the runner owns and serves (§4). (2) Two new routes serve documents by reference: `GET /documents/{id}` (content, Content-Type per the document's `mimeType`) and `GET /documents/{id}/meta` (the `BoardDocument`) (§5.3). (3) `MeasurementCheck` gains `sourceDoc?: { documentId, locator? }` — the resolvable form of a citation, beside the existing free-text `sourceRef` (which stays as the fallback rendering) (§4). (4) Runner capabilities, riding along for T6.6: `GET /health` gains `capabilities?: { models?: string[] }`; `POST /runs` (CreateRun) gains `model?: string`; `Run` gains `model?: string` (echoed) (§4/§5.3). Reducer unchanged (optional fields pass through RunView on their entities). Mock, same release: the canned Nucleo-F303RE profile carries two authored documents (a BME280 datasheet excerpt — §5.4.1 addressing + the §6.2 timing spec — and schematic pin-mapping notes), serves them per the new routes, and `/health` advertises `capabilities.models: ['mock-model']`; both fixtures' `i2c_clock`/`device_ack` `check.evaluated` payloads gain `sourceDoc` pointing at the datasheet excerpt with heading locators (payload-only — no new events, no seq changes). Documents-tab/deep-link/model-select UI is T6.3 stage 2.
 
 **v2.2 (T6.2 Workspace as theater — reducer-only, wire unchanged; documented in the T6.5 §9.3 debt pass):** RunView's `logsByStep` values carry a per-line `ts` (`{stream, line, ts}[]`, §5.4). The `ts` is the `step.log` envelope's `ts`, so every line of a batched `lines[]` frame shares one timestamp — the only honest option, since the contract times events, not individual lines. It feeds the workspace LogViewer's optional per-line timestamp column (§6.2/§7.3). No new events, no seq changes; the wire `contractVersion` stays `boardex-contract/0.1`.
+
+**v2.3 (Sprint 7 P0 — visual system only; zero wire/reducer changes):** §6 rewritten to the premium visual system from the external design review (docs/design/Boardex_MVP_UI_Design_Review.docx, 2026-07): a three-layer surface hierarchy (canvas `#F7F7F8` / navigation `#FBFBFC` / primary white) replacing the two-tone `#FAFAF9`/white scheme; the full color set re-pointed (borders `#E2E3E7`/`#D2D4DA`, text `#17171A`/`#5C6068`, accent `#5B4CF0`, pass `#168A4A`, fail `#C73535`, warn `#A86D00`) — old values are RETIRED, not aliased; a rewritten type ladder (page 22px, top-bar/section 15px, card/step titles 14px semibold, metadata 12px, code 12.5px mono) with the 12px state-text floor and the 11px label step reserved for the two machine capsules; geometry on the 8px grid (card radius 8px, control radius 6px, buttons 36/40px, sidebar 208px, right rail 320px, evidence drawer 840px); motion extended (not replaced) with the 280ms FAIL→PASS morph token; §6.2's Badge split into four classes (run-state / risk / verdict / inline step status). D14 reservations, flow, and the contract are unchanged.
+
+**v2.4 (Sprint 7 P0 stage 4 — the declared check registry; ONE additive wire field per §10.5, proposed to the backend owner by PR; the wire `contractVersion` stays `boardex-contract/0.1`):** `run.plan_generated` gains `checks?: CheckExpectation[]` where `CheckExpectation = { requirementId, description }` — the plan DECLARES what the run intends to verify (the runner's `declare_plan(steps, risk_summary, checks)` already captures this list; it now reaches the wire). Reducer, same release: RunView gains `registeredChecks?` (the declared registry, verbatim) and `terminalSummary?` (the terminal event's `summary`; a terminal `run.status_changed.reason` is the fallback, the dedicated event takes precedence — the "why it ended" beside v1.5's `endedAt` "when"). These feed the §7.3/§7.6 dual-outcome split: *Run execution* (status + terminal reason) vs *Validation coverage* (recorded `check.evaluated` results measured against the declared registry). A producer that declares no registry (any pre-v2.4 recording, e.g. records/bmp180-run) reduces unchanged, and consumers MUST then report coverage without a denominator ("N checks recorded · no check registry declared") — the denominator is never parsed from plan prose or report markdown, and never invented. Fixtures: the authored `bme280_run_001.jsonl` declares its three checks; the new SYNTHETIC partial-coverage fixture `bme280_run_002_partial_synthetic.jsonl` (§5.5 — clearly marked, not a recording) declares six and records two, exercising the Not-recorded presentation end to end.
 Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
@@ -255,7 +259,7 @@ Rules: `seq` is per-run and gapless — the UI treats a gap as a protocol error 
 | type | payload (summary) | emitted when |
 |---|---|---|
 | `run.created` | `{ run: Run }` | run row exists |
-| `run.plan_generated` | `{ plan: PlanStep[], riskSummary: string }` | plan ready for approval |
+| `run.plan_generated` | `{ plan: PlanStep[], riskSummary: string, checks?: CheckExpectation[] }` — `CheckExpectation = { requirementId, description }`, the declared check registry (v2.4, optional/additive) | plan ready for approval |
 | `run.status_changed` | `{ status: RunStatus, reason?: string }` | any status transition |
 | `step.started` | `{ step: RunStep }` | step begins |
 | `step.log` | `{ stepId, stream: 'build'\|'flash'\|'serial'\|'rtt'\|'agent', line: string }` | one log line (batching allowed: `lines: string[]`) |
@@ -312,13 +316,14 @@ reduceRun(events: WireEvent[]): RunView | null
 // gap or a KNOWN-typed stream that starts before run.created.
 // RunView = { run, steps[], artifacts[], checks[], approvals[],
 //             diagnosis?: Diagnosis & { fixApprovalId?: string },
-//             riskSummary?: string, endedAt?: string,
+//             riskSummary?: string, registeredChecks?: CheckExpectation[],
+//             terminalSummary?: string, endedAt?: string,
 //             logsByStep: Map<stepId, {stream, line, ts}[]>,
 //             iterations: {iteration, reason, firstStepIndex}[], lastSeq,
 //             warnings: string[] }   // contract violations observed while reducing
 ```
 
-Pure, deterministic, unit-tested against the fixture. Legal-ordering reconciliation (v2.0/T5.0): seq is ordered but §5.2 does not promise an `artifact.created` precedes the check citing it, a `step.started` precedes its outcome, or an `approval.requested` precedes its resolution — the reducer buffers such early references and reconciles them when the entity arrives; a check the evidence law downgraded to `needs_review` gets its wire verdict back when its artifact lands; only what the stream never reconciles remains in `RunView.warnings`. `logsByStep` values are `{stream, line, ts}[]` (v2.2/T6.2): each line carries the `ts` of the `step.log` envelope it arrived on, so the lines of one batched `lines[]` frame share a timestamp — the contract times events, not individual lines. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`, or a `run.status_changed` carrying a terminal status; the dedicated terminal events take precedence) and is undefined while the run is non-terminal. `diagnosis.fixApprovalId` is the id of the first `approval.requested` whose seq follows the `diagnosis.created`, and is undefined until that approval arrives — it is how the UI knows which pending approval is the fix approval. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
+Pure, deterministic, unit-tested against the fixture. Legal-ordering reconciliation (v2.0/T5.0): seq is ordered but §5.2 does not promise an `artifact.created` precedes the check citing it, a `step.started` precedes its outcome, or an `approval.requested` precedes its resolution — the reducer buffers such early references and reconciles them when the entity arrives; a check the evidence law downgraded to `needs_review` gets its wire verdict back when its artifact lands; only what the stream never reconciles remains in `RunView.warnings`. `logsByStep` values are `{stream, line, ts}[]` (v2.2/T6.2): each line carries the `ts` of the `step.log` envelope it arrived on, so the lines of one batched `lines[]` frame share a timestamp — the contract times events, not individual lines. `riskSummary` is populated from `run.plan_generated` and is undefined before the plan exists. `registeredChecks` (v2.4) is `run.plan_generated.checks` verbatim — undefined when the producer declared none, in which case coverage renders WITHOUT a denominator. `terminalSummary` (v2.4) is the terminal event's `summary` (a terminal `run.status_changed.reason` is the fallback; the dedicated event wins; `run.stopped` sets none — `byUser` is the whole story — and a stopped run's fallback survives only when it is non-generic: the "Stopped by user" boilerplate riding the mock's transition is suppressed, since the Stopped badge already says exactly that; Sprint 7 review ruling, 2026-07-19). `endedAt` is the envelope `ts` of the terminal event (`run.completed` / `run.failed` / `run.stopped`, or a `run.status_changed` carrying a terminal status; the dedicated terminal events take precedence) and is undefined while the run is non-terminal. `diagnosis.fixApprovalId` is the id of the first `approval.requested` whose seq follows the `diagnosis.created`, and is undefined until that approval arrives — it is how the UI knows which pending approval is the fix approval. The UI NEVER derives run state any other way — if the UI needs data RunView lacks, extend RunView via the reducer; never read the event list directly.
 
 ## 5.5 Fixture: `bme280_run_001.jsonl`
 
@@ -385,61 +390,83 @@ Rules:
 
 # 6. Design System
 
-## 6.1 Tokens (Tailwind theme extension — exact values)
+## 6.1 Tokens (Tailwind theme extension — exact values; Sprint 7 P0 system)
 
 ```
-Background:        #FAFAF9  (app)    #FFFFFF (panels/cards)
-Border:            #E7E5E4  (1px, never darker than #D6D3D1)
-Text primary:      #1C1917
-Text secondary:    #57534E
-Accent (actions):  #4F46E5  (indigo-600); hover #4338CA
-Pass/success ONLY: #16A34A  (green-600); bg tint #F0FDF4
-Fail/stop ONLY:    #DC2626  (red-600);   bg tint #FEF2F2
-Approval/warn ONLY:#D97706  (amber-600); bg tint #FFFBEB
-Neutral badge:     #78716C on #F5F5F4
-Scrim (overlays):  rgba(28,25,23,0.4)  (--color-scrim; text-primary at 40% alpha, not a new hue — backs dialogs/drawers)
-Radius: 10px cards, 8px buttons/inputs.
-Elevation (T6.1, 3 levels — depth still reads borders + whitespace first):
-  subtle   0 1px 2px rgba(0,0,0,0.05)                      resting cards/panels
-  raised   subtle + 0 3px 10px rgba(0,0,0,0.06)            floating over content
+Surfaces (three layers — white work surfaces read against a tinted shell,
+never white-on-white):
+  Application canvas: #F7F7F8  (the shell background; --color-canvas)
+  Navigation surface: #FBFBFC  (sidebar; --color-nav)
+  Primary surface:    #FFFFFF  (cards, workspace, report, drawer, modals; --color-surface)
+Border:            #E2E3E7 default · #D2D4DA strong (focused cards, tables, approvals)
+Text primary:      #17171A
+Text secondary:    #5C6068
+Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue)
+Pass/success ONLY: #168A4A; bg tint #E8F5EE
+Fail/stop ONLY:    #C73535; bg tint #FBEDED
+Approval/warn ONLY:#A86D00; bg tint #FAF3E4
+Neutral badge:     #3F434B on #E9EAEE  (a FILLED capsule with dark text — a
+  neutral state, e.g. LOW risk, must never read as disabled)
+Scrim (overlays):  rgba(23,23,26,0.35)  (--color-scrim; text-primary at 35%
+  alpha, not a new hue — light enough that the dimmed run stays legible
+  behind the evidence drawer)
+Radius: 8px cards, 6px controls (buttons/inputs); badges stay pill-shaped.
+Elevation (2 levels — depth reads from the surface hierarchy + 1px borders;
+  shadows exist ONLY on floating layers: palette, modals, drawer, demo callout.
+  Resting cards carry NO shadow):
+  raised   0 1px 2px rgba(0,0,0,0.05), 0 3px 10px rgba(0,0,0,0.06)   floating over content
   overlay  0 2px 8px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.12)  dialogs/drawers
-Motion (T6.1): fast 120ms (state flips: badge/dot/button) · medium 200ms
-  (surfaces: drawer/dialog) · gentle 360ms (progress) · ambient 2s
-  (T6.2 — the looping active-step pulse; --motion-ambient in code); eases
+Motion (Sprint 7 extends, never replaces): fast 120ms (hover/focus — the
+  100–140 band) · medium 200ms (badge/state transitions, 160–200 band; and
+  drawer/modal surfaces, 200–240 band, entrance ease = the ease-out) ·
+  gentle 360ms (progress) · morph 280ms (FAIL→PASS verdict: icon morph +
+  ONE restrained background pulse, 240–300 band; --motion-morph) · ambient 2s
+  (the looping active-step pulse; --motion-ambient); eases
   cubic-bezier(0.2,0,0,1) standard, cubic-bezier(0.16,1,0.3,1) entrance;
-  prefers-reduced-motion collapses all motion (final states still land).
-Focus (T6.1): one 2px accent :focus-visible ring, offset 2px, everywhere;
-  text fields keep their accent-border focus instead.
-Spacing rhythm: 4px base; panels padded 20–24px; sections separated 32px.
-Type: Inter (UI), JetBrains Mono (logs, diffs, values, commands);
+  prefers-reduced-motion removes pulses and swaps states instantly.
+Focus: one 2px accent :focus-visible ring, offset 2px, on ALL interactive
+  controls; text fields keep their accent-border focus instead.
+Spacing: 8px grid (4/8/12/16/24/32); panels padded 16–24px; sections 32px.
+Type: Inter (UI), JetBrains Mono (logs, decode, diffs, values, commands);
   tabular numerals app-wide — measurement columns align in either face.
-Scale: 11px uppercase label (+0.05em tracking; badges, chips, table headers),
-  13px meta, 14px body, 16px section titles (−0.01em), 20px page titles
-  (−0.017em), and the Ask Boardex composer at 24px / 32px line-height /
-  −0.019em tracking (the one place type runs 22–24px).
+Scale (the ladder — line-height/tracking fixed per step):
+  composer 24/32 −0.019em (Ask Boardex only) · page 22/28 −0.017em (page
+  titles, report title) · section 15/20 −0.01em (top-bar title, report
+  section headings) · title = 14/20 SEMIBOLD (card + step titles; body
+  metrics, weight is the step) · body 14/20 · meta 13/18 (secondary text) ·
+  metadata 12/16 (timestamps, counts, chips) · code 12.5/19 mono (logs,
+  decode, diff) · label 11/16 +0.05em uppercase — reserved EXCLUSIVELY for
+  the two machine capsules (run-state and risk badges).
 ```
 
-Hard rules: green/red/amber are semantically reserved (D14) — never decorative. One accent. No gradients, no glassmorphism, no dark mode in MVP. Density: calm by default; monospace areas (logs, decode tables) may be dense.
+Hard rules: green/red/amber are semantically reserved (D14) — never decorative. One accent. No gradients, no glassmorphism, no dark mode in MVP. Density: calm by default; monospace areas (logs, decode tables) may be dense. **12px floor:** any state-bearing text renders at ≥12px; the 11px label step exists only inside the run-state and risk capsules. **Color-noise budget:** repeated per-step "Succeeded" is neutral text + a green check icon; green TEXT is reserved for summary and final verdicts. Geometry: buttons 36px standard / 40px gate-primary; minimum interactive target 32px; sidebar 208px expanded / 56px collapsed; top bar 48px; workspace right rail 320px; evidence drawer 840px (capped 47vw). The pre-v2.3 values (#FAFAF9 shell, #4F46E5 accent, 10px cards, 240px sidebar, 340px rail, 16px section titles…) are retired — nothing in the codebase may reference them.
 
 ## 6.2 Primitives to build once (design/):
 
-`Button` (primary/secondary/danger/ghost) · `Card` · `Badge` (risk: low/medium/high/critical; verdict: pass/fail/needs_review; status) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand)
+`Button` (primary / secondary (white surface, strong border) / tertiary-danger (text button — red only under hover/focus intent; the Approval card's Reject) / danger / outline-danger / ghost; heights 36px standard, 40px gate-primary; loading states use specific verbs — Approving…, Rejecting…, Validating…, never a bare spinner) · `Card` · `Badge` (four classes, below) · `StatusDot` (online/offline/error) · `KeyValue` row · `Progress` (thin bar) · `LogViewer` (virtualized, monospace, auto-follow with pause-on-scroll; plus, T6.2, an optional per-line timestamp column when timestamps are supplied and client-side find-in-log with case-insensitive match highlighting and next/prev navigation) · `EmptyState` · `ConfirmDialog` · `Drawer` (right-side, for details-on-demand) · `useFocusTrap` (v2.4 — THE modal focus behavior, one implementation: CommandPalette, ShortcutsHelp, Drawer, and ConfirmDialog all trap Tab inside themselves and restore focus to the invoking control on close)
 
-Risk badge mapping: low = neutral, medium = amber outline, high = amber solid, critical = red solid. Verdict mapping: pass = green, fail = red, needs_review = amber.
+**Interaction conventions (v2.4):** Esc closes ONLY the topmost surface — every consuming handler is element-level and calls stopPropagation (no window-level Escape listeners); the find-in-log field consumes Esc only while it has a query. One polite aria-live region announces run-state changes and approval arrivals — never streamed log lines (the LogViewer log region is `aria-live="off"`). prefers-reduced-motion removes pulses and swaps states instantly (global, §6.1).
+
+**The badge system (v2.3) — four classes, every status chip in the product belongs to exactly one:**
+
+1. **Run-state** — capsule, 20–22px tall, the 11px label step (11px/600/uppercase). The run-status machine only (Draft/Planning/Plan ready/Running/Awaiting approval/Diagnosing/Completed/Failed/Stopped). Colors per the D14 derivation (decisions 2026-07-07): completed = green tint, failed/stopped = red tint, plan_ready/awaiting_approval = amber tint (the human acts), everything else neutral.
+2. **Risk** — capsule, 20px tall, the 11px label step. low = FILLED neutral capsule with dark text (must not read disabled), medium = amber tint, high = amber solid (dark text), critical = red solid (white text).
+3. **Verdict** — icon-led, 24–28px tall, 12px/600 mixed case: icon + "Pass" / "Fail" / "Needs review" / "Not recorded". The icon is ALWAYS present — color is never the only signal. pass = green, fail = red, needs_review = amber, not-recorded = neutral gray with a dash/hollow icon (NEVER red — absence of evidence is not failure).
+4. **Inline step status** — icon + 12.5–13px/500 NEUTRAL text (Succeeded/Active/Pending/Failed/Skipped). The green lives in the check icon, not the word; a timeline of successes reads calm, not lit up.
 
 ## 6.3 Layout (the three zones + evidence band, spec §17.2)
 
-The app frame (T6.1b): a persistent left sidebar (240px, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title + status badge, right-aligned page actions). Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
+The app frame (T6.1b, geometry v2.3): a persistent left sidebar (208px on the navigation surface, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title at the 15px section step + status badge, right-aligned page actions). The shell sits on the application canvas; all work content sits on white primary surfaces. Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
 
-Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1240px of content area — frame-aware, so the sidebar's 240/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 340px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1240px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope. The rails are sticky within the content scroll region (`rail-sticky`, T6.2b — the Status card and Stop stay reachable down a long timeline); sticky is disabled below 1240px, where the right rail stacks and a pinned card could otherwise cover the timeline.
+Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1208px of content area — 280 + 560 + 320 + 2×24 gaps; frame-aware, so the sidebar's 208/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 320px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1208px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope. The rails are sticky within the content scroll region (`rail-sticky`, T6.2b — the Status card and Stop stay reachable down a long timeline); sticky is disabled below 1208px, where the right rail stacks and a pinned card could otherwise cover the timeline. The evidence drawer opens at 840px, capped at 47vw so the dimmed run always stays visible beside it.
 
 ---
 
 # 7. Screen Specifications (MVP screen set, spec §17.6)
 
-Six screens. Each lists purpose, content, states, and what "done" means.
+Seven screens (Settings added in T6.6). Each lists purpose, content, states, and what "done" means.
 
-Beside the six product screens, a **/demo route family** (T6.5): `/demo`, `/demo/evidence`, `/demo/report` sit OUTSIDE the app frame in their own read-only DemoShell (a "Demo — replaying a recorded agent run" badge, playback controls, an exit) and replay the bundled fixture through the real Run Workspace / Evidence / Report surfaces — onboarding that works offline. It is a replay, not a run: it issues no runner command (see the demo command-safety ruling in decisions.md, T6.5) — Stop leaves the replay, and Reject (which would end a live run as Stopped) exits with an honest notice since the recording was approved.
+Beside the seven product screens, a **/demo route family** (T6.5): `/demo`, `/demo/evidence`, `/demo/report` sit OUTSIDE the app frame in their own read-only DemoShell (a "Demo — replaying a recorded agent run" badge, playback controls, an exit) and replay the bundled fixture through the real Run Workspace / Evidence / Report surfaces — onboarding that works offline. It is a replay, not a run: it issues no runner command (see the demo command-safety ruling in decisions.md, T6.5) — Stop leaves the replay, and Reject (which would end a live run as Stopped) exits with an honest notice since the recording was approved.
 
 ## 7.1 Home / Runs
 
@@ -447,7 +474,7 @@ Purpose: land, orient, resume. Content: the runner status pill (online/offline +
 
 ## 7.2 New Run Composer
 
-Purpose: delegate a task. Content: the **hero** — a large "Ask Boardex" textarea (placeholder: *"Bring up the BME280 sensor over I2C on this STM32 board. Verify timing and confirm valid temperature/humidity readings over serial."*), board profile selector (context chips below the textarea: Board · Repo · Instruments · Safety — each chip opens the drawer with detail), detected bench readiness inline (compact, from `runner.status`), primary action **Create Run Plan**. Plan renders in place when `run.plan_generated` arrives: numbered plain-language steps, per-step risk badge + hardware-action marker, risk summary line, then **Approve Plan** (primary) / Edit task (secondary, returns to composer). States: draft, awaiting plan, plan ready, degraded bench (amber inline warning listing the bench's offline/error devices AND any profile instrument no bench device answers to, each with its own copy — "<name> is on the bench but offline/in error" vs. "<reference> was not found on the bench", so an unplugged instrument never reads like a mistyped one; composing allowed, warning repeated at approval adjacent to the D12 checklist). Done when: task → plan → approval works end-to-end against the mock runner with no console errors.
+Purpose: delegate a task. Content: the **hero** — a large "Ask Boardex" textarea (placeholder: *"Bring up the BME280 sensor over I2C on this STM32 board. Verify timing and confirm valid temperature/humidity readings over serial."*), board profile selector (context chips below the textarea: Board · Repo · Instruments · Safety — each chip opens the drawer with detail), detected bench readiness inline (compact, from `runner.status`), primary action **Create Run Plan**. Plan renders in place when `run.plan_generated` arrives: numbered plain-language steps, per-step risk badge + hardware-action marker, risk summary line, then **Approve Plan** (primary) / Edit task (secondary, returns to composer). The D12 checklist is a **visible safety gate** (v2.3): a live "N of M bench connections confirmed" line above it, 18px checkboxes on ≥32px row targets, and the disabled primary reading "Approve Plan · N/M confirmed" — switching to plain "Approve Plan" plus a check icon (button-foreground, not the semantic green) at completion. The risk summary sits on a quiet neutral surface carrying a narrow amber left rail only when a medium-or-higher-risk action exists. States: draft, awaiting plan, plan ready, degraded bench (amber inline warning listing the bench's offline/error devices AND any profile instrument no bench device answers to, each with its own copy — "<name> is on the bench but offline/in error" vs. "<reference> was not found on the bench", so an unplugged instrument never reads like a mistyped one; composing allowed, warning repeated at approval adjacent to the D12 checklist). Done when: task → plan → approval works end-to-end against the mock runner with no console errors.
 
 ## 7.3 Run Workspace (the core screen)
 
@@ -455,14 +482,15 @@ Purpose: watch and control the active run; embodies §2.2's six states. Layout p
 
 - **Left rail — Board Context:** compact card: board name, MCU, repo (basename), instrument list resolved by reference against the live bench (found = green dot + the DEVICE NAME, the thing an operator recognises on the bench — the stable registry id it resolved to lives in the "View details" drawer, where it is the thing you copy into a bug report; degraded = the device's own StatusDot, amber offline / red error; missing = no dot, the profile's reference, amber "<reference> was not found on the bench"; serial resolves by kind; and with NO bench snapshot the list is unknown — no dots, plain instrument names, one neutral "Bench status unavailable." line, matching §7.2: never an assumed anything, since a pessimistic amber reports a healthy instrument as unplugged every time the socket blinks), safety line ("Flash requires approval · Max 3 iterations · Manual power: 3V3 confirmed"), "View details" → drawer with full profile incl. connection checklist.
 - **Center — Plan & Progress:** task prompt (collapsed to 2 lines, expandable); the plan as a vertical timeline — each step shows status (pending/active/succeeded/failed), title, and when expanded: summary, artifact chips, and a log pane (LogViewer, per-stream tabs — the five §5.2 streams: agent/build/flash/serial/rtt, the selected tab carrying a 2px accent underline at the seam; log text is never colour-coded, D14). The pane offers an optional per-line timestamp column (each line's `step.log` envelope `ts`, §5.4/v2.2) and client-side find-in-log with match highlighting (T6.2). Active step auto-expanded. Iteration ≥2 renders a divider: "Iteration 2 — applying fix" (driven by the `run.iteration_started` event).
-- **Right rail — Status & Approval:** current status card (status badge, elapsed, Stop Run — danger, always visible while non-terminal, with ConfirmDialog). When `awaiting_approval`: the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When the pending approval proposes hardware actions and the bench is degraded, the §7.2 warning repeats on the rail (v2.0, Kerem's ruling) — advisory, never gating, and profile-independent: mid-run approvals report the bench's own unhealthy devices only, they never re-resolve profile references. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
+- **Status card dual outcome (v2.4):** once a run is terminal, the status card separates two dimensions directly below the run-state badge (which stays — it IS the run state): *Run execution* — terminal status + `terminalSummary` (the why), and *Validation coverage* — recorded checks vs `registeredChecks` ("2 of 6 checks recorded"), or the no-denominator fallback ("2 checks recorded · no check registry declared") when the stream declared none. The evidence band renders one NEUTRAL gray chip (dash icon, never red) per registered-but-never-recorded expectation; the same split heads the Validation Report (presentation only — the report markdown is the agent's). A budget-killed run whose firmware worked must never read as a hardware failure, and a missing check must never hide inside "Failed".
+- **Right rail — Status & Approval (composition v2.3):** the rail reads as its own zone — canvas tone behind white cards, separated from the center by a 1px divider mid-gutter. The **status card sticks at the top**; directly below it sits the **reserved action slot**, ONE stable region whose content swaps in place (zero layout jump when states change): while autonomous, the quiet state — "No approval required · Boardex is executing *[active step title]*", live from RunView; when a gate activates, the approval surface occupies the same slot; on a terminal state, the completion module (status heading + Open Validation Report when the `report_md` artifact exists; a failed/stopped run without one states "Evidence collected so far is retained" — never an empty slot, never a dead end). When `awaiting_approval`, the slot holds the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When the pending approval proposes hardware actions and the bench is degraded, the §7.2 warning repeats on the rail (v2.0, Kerem's ruling) — advisory, never gating, and profile-independent: mid-run approvals report the bench's own unhealthy devices only, they never re-resolve profile references. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
 - **Bottom — Evidence Summary band:** one chip per MeasurementCheck (verdict badge + short name, e.g. "I2C clock · PASS"), plus Open Logs / Open Diff / Open Report buttons. Clicking a chip opens Evidence Detail.
 
 States: all six from §2.2 plus `stopped`/`failed` terminal (muted summary + evidence retained). Reconnect: on WS drop show a thin amber "reconnecting" bar; on reconnect, HTTP replay from `lastSeq` then resume WS — no data loss, no duplicate rendering (reducer idempotence by seq). Done when: the full fixture plays start-to-finish with both approvals, the failure/diagnosis pass, iteration 2, and completion — and a mid-run page refresh restores identical state.
 
 ## 7.4 Evidence Detail (drawer/panel over the workspace)
 
-Purpose: proof on demand. Tabs per artifact kind: **Checks** (default — table: requirement, expected window, actual value w/ unit, verdict badge, source ref, "view evidence" link; a check's `sourceDoc` makes the source ref a deep link into Sources at the cited document/locator — v2.1/T6.3), **Sources** (v2.1/T6.3 — lists `BoardProfile.documents`; renders the selected one: markdown via the report renderer, PDF via native embed, fail-closed when unfetchable), **Protocol Decode** (monospace table from structured JSON: time, addr, r/w, ack, data, annotation; failed transactions tinted red), **Serial / Build / Flash logs** (LogViewer), **Code Diff** (per-file unified diff, syntax-highlighted, per-file reason line, "Rollback" visible but MVP behavior = instructs runner-side revert only if run non-terminal, else disabled with tooltip), **Raw artifacts** (list with kind, size, Download; logic captures download as sigrok .sr for PulseView). Every check's "view evidence" deep-links to the exact tab + artifact. Done when: every verdict in the fixture is traceable to its artifact in ≤2 clicks.
+Purpose: proof on demand. Tabs per artifact kind: **Checks** (default — table: requirement, expected window, actual value w/ unit, verdict badge, source ref, "view evidence" link; a check's `sourceDoc` makes the source ref a deep link into Sources at the cited document/locator — v2.1/T6.3), **Sources** (v2.1/T6.3 — lists `BoardProfile.documents`; renders the selected one: markdown via the report renderer, PDF via native embed, fail-closed when unfetchable), **Protocol Decode** (monospace table from structured JSON: time, addr, r/w, ack, data, annotation; failed transactions tinted red), **Serial / Build / Flash logs** (LogViewer; navigation v2.3: two compact selectors — Iteration [1|2] × Type [Build|Flash|Serial] — that can never wrap, replacing per-artifact sub-tabs; a cell holds the latest artifact of that kind in that iteration, deep links still land on their exact artifact, and iteration-unresolvable logs stay reachable in an explicit Unassigned list; find-in-log stays directly above the output), **Code Diff** (per-file unified diff, syntax-highlighted, per-file reason line, "Rollback" visible but MVP behavior = instructs runner-side revert only if run non-terminal, else disabled with tooltip), **Raw artifacts** (list with kind, size, Download; logic captures download as sigrok .sr for PulseView). Every check's "view evidence" deep-links to the exact tab + artifact. Done when: every verdict in the fixture is traceable to its artifact in ≤2 clicks.
 
 ## 7.5 Board Profile Builder
 
@@ -470,7 +498,11 @@ Purpose: guided, reusable board setup. A single vertical form in 7 sections (not
 
 ## 7.6 Validation Report
 
-Purpose: the deliverable. Renders the `report_md` artifact with Boardex styling; sections (generated runner-side, displayed here): Objective · Board & firmware context · Procedure · Measurement results table (with verdicts) · Root cause & fix explanation · Code changes summary · Artifacts index · Reproduction steps. Actions: Copy Markdown, Download .md. Done when: the fixture's completed run yields a report a firmware engineer would attach to a PR without embarrassment.
+Purpose: the deliverable. The header carries the v2.4 dual-outcome split (Run execution / Validation coverage — presentation only, same derivation as the status card, §7.3). Renders the `report_md` artifact with Boardex styling; sections (generated runner-side, displayed here): Objective · Board & firmware context · Procedure · Measurement results table (with verdicts) · Root cause & fix explanation · Code changes summary · Artifacts index · Reproduction steps. Actions: Copy Markdown, Download .md. Done when: the fixture's completed run yields a report a firmware engineer would attach to a PR without embarrassment.
+
+## 7.7 Settings (T6.6)
+
+Purpose: connection and preferences, one sectioned prose page (reading column) reachable from the sidebar nav and the command palette. Content: **Runner connection** — the runner base URL as a RUNTIME setting (precedence user override > `VITE_RUNNER_URL` > §5.6 default), a Test Connection probe against `/health` reporting online / version-mismatch / degraded / offline inline, and Use-environment-default to clear the override; a change re-points the api singleton and both WS clients (§5.3/§5.4). **Model** — the runner's advertised `capabilities.models`, read-only (the composer's feature-detected picker, §7.2/T6.3, is what actually chooses among them). **Appearance & behavior** — collapse-sidebar-by-default and a replay-onboarding reset (clears the demo tour-seen flag). Persistence is module memory (the sidebar/tour mechanism), so settings live for the session and reset on reload — no storage. States: default (env base, no override), custom override, probe online/offline/version-mismatch. Colors: D14 reserved — only an online probe is green; every failed probe verdict (offline, mismatch, degraded) is an amber warning to resolve, never red. Done when: pointing the UI at a different runner URL at runtime reconnects cleanly with no code change, and the env default still wins when unset.
 
 ---
 

@@ -24,7 +24,7 @@ export function RunRow({ run, boardName }: RunRowProps) {
   return (
     <tr
       onClick={() => navigate(`/runs/${run.id}`)}
-      className="cursor-pointer transition-colors duration-fast ease-motion hover:bg-bg-app"
+      className="cursor-pointer transition-colors duration-fast ease-motion hover:bg-canvas"
     >
       <td className="px-4 py-3">
         <span className="flex items-center gap-2 whitespace-nowrap">

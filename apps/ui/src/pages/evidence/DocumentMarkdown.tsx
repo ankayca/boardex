@@ -170,7 +170,7 @@ function DocumentBlock({
       );
     case 'code':
       return (
-        <pre className="my-4 overflow-x-auto rounded-card border border-border bg-bg-app p-4">
+        <pre className="my-4 overflow-x-auto rounded-card border border-border bg-canvas p-4">
           <code className="font-mono text-meta text-text-primary">{block.text}</code>
         </pre>
       );

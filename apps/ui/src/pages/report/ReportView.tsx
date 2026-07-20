@@ -204,7 +204,7 @@ function BlockNode({ block, hrefs }: { block: Block; hrefs: Map<string, string> 
     }
     case 'code':
       return (
-        <pre className="my-4 overflow-x-auto rounded-card border border-border bg-bg-app p-4">
+        <pre className="my-4 overflow-x-auto rounded-card border border-border bg-canvas p-4">
           <code className="font-mono text-meta text-text-primary">{block.text}</code>
         </pre>
       );
@@ -218,7 +218,7 @@ export function ReportView({ markdown, runId, artifacts, checks, documents }: Re
   const blocks = parseMarkdown(markdown);
   const hrefs = linkIndex(runId, artifacts, checks ?? [], documents ?? []);
   return (
-    <article className="rounded-card border border-border bg-bg-panel p-8 shadow-subtle">
+    <article className="rounded-card border border-border bg-surface p-8">
       {blocks.map((block, index) => (
         <BlockNode key={index} block={block} hrefs={hrefs} />
       ))}

@@ -809,6 +809,25 @@
             },
             "riskSummary": {
               "type": "string"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "requirementId": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "requirementId",
+                  "description"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [

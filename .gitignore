@@ -46,5 +46,7 @@ coverage/
 /records/*
 !/records/bmp180-run/
 
+# Demo/walkthrough video captures — large local binaries, never repo content
+demo-video/
 # graphify (local knowledge graph cache)
 graphify-out/

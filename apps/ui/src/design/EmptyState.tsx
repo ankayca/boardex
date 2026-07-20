@@ -18,12 +18,14 @@ export function EmptyState({
   frameless = false,
   className = '',
 }: EmptyStateProps) {
-  const frame = frameless ? '' : 'rounded-card border border-border bg-bg-panel';
+  const frame = frameless ? '' : 'rounded-card border border-border bg-surface';
   return (
     <div
       className={`flex flex-col items-center justify-center gap-2 px-6 py-12 text-center ${frame} ${className}`}
     >
-      <p className="text-section font-medium text-text-primary">{title}</p>
+      {/* First-use heroes carry page-title authority (§6.1 v2.3): the empty
+          state is the page's one message, not a card caption. */}
+      <p className="text-page font-semibold text-text-primary">{title}</p>
       {description && <p className="max-w-md text-body text-text-secondary">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>

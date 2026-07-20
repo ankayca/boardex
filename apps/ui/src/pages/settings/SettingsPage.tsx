@@ -46,7 +46,7 @@ function Section({
 }) {
   return (
     <section className="border-t border-border pt-8">
-      <h2 className="text-section font-semibold text-text-primary">{title}</h2>
+      <h2 className="text-body font-semibold text-text-primary">{title}</h2>
       <p className="mt-1 max-w-prose text-meta text-text-secondary">{description}</p>
       <div className="mt-4">{children}</div>
     </section>
@@ -64,16 +64,21 @@ function TestResult({ test }: { test: TestState }) {
     );
   }
   if (test.status === 'offline') {
+    // A failed reachability probe is a WARNING to resolve, not a fail/stop (D14, T6.6
+    // review F1): amber dot + amber text (StatusDot 'offline' is the amber state, and
+    // its sr-only label reads "offline"), never red — red stays reserved for pass/fail.
     return (
-      <p role="status" className="flex items-center gap-2 text-meta text-fail">
+      <p role="status" className="flex items-center gap-2 text-meta text-warn">
         <StatusDot state="offline" />
         Offline — could not reach {test.base}
       </p>
     );
   }
   const { result } = test;
+  // pass → green; every other verdict (mismatch/degraded) is an amber warning, dot and
+  // text agreeing on the amber 'offline' state — no probe verdict ever paints red.
   const tone = result.tone === 'pass' ? 'text-pass' : 'text-warn';
-  const dot = result.tone === 'pass' ? 'online' : 'error';
+  const dot = result.tone === 'pass' ? 'online' : 'offline';
   const message =
     result.kind === 'online'
       ? `Online · ${result.runnerKind} · ${result.contractVersion}`
@@ -144,7 +149,7 @@ export default function SettingsPage() {
           title="Runner connection"
           description="Where Boardex reaches the runner. A value here overrides the environment default; leave it empty to use the default. The change re-points every request and live stream."
         >
-          <label htmlFor="runner-url" className="text-label font-medium uppercase text-text-secondary">
+          <label htmlFor="runner-url" className="text-metadata font-medium uppercase tracking-wide text-text-secondary">
             Runner URL
           </label>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -156,7 +161,7 @@ export default function SettingsPage() {
               placeholder={envBase}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              className="min-w-0 flex-1 rounded-button border border-border bg-bg-panel px-3 py-1.5 font-mono text-body text-text-primary focus:border-accent focus:outline-none"
+              className="min-w-0 flex-1 rounded-control border border-border bg-surface px-3 py-1.5 font-mono text-body text-text-primary focus:border-accent focus:outline-none"
             />
             <Button variant="secondary" onClick={() => void runTest()}>
               Test connection
@@ -199,7 +204,7 @@ export default function SettingsPage() {
                 <li key={model} className="flex items-center gap-2 text-body text-text-primary">
                   <span className="font-mono">{model}</span>
                   {index === 0 && (
-                    <span className="text-label font-medium uppercase text-text-secondary">
+                    <span className="text-metadata font-medium uppercase tracking-wide text-text-secondary">
                       default
                     </span>
                   )}

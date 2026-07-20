@@ -10,7 +10,13 @@ import type {
   RunStatus,
   RunStep,
 } from './entities';
-import { isKnownEvent, type Event, type StepLogStream, type WireEvent } from './events';
+import {
+  isKnownEvent,
+  type CheckExpectation,
+  type Event,
+  type StepLogStream,
+  type WireEvent,
+} from './events';
 
 // RunView's diagnosis carries the reducer-derived link to its fix approval: the id
 // of the first approval.requested whose seq follows the diagnosis.created (§5.4
@@ -48,6 +54,14 @@ export interface RunView {
   diagnosis?: DiagnosisView;
   // From run.plan_generated (§5.2); undefined before the plan exists.
   riskSummary?: string;
+  // The plan's declared check registry (run.plan_generated.checks, v2.4);
+  // undefined when the producer declared none — a consumer must then report
+  // coverage without a denominator, never invent one.
+  registeredChecks?: CheckExpectation[];
+  // The terminal event's summary (run.completed / run.failed), or a terminal
+  // run.status_changed's reason when no dedicated terminal event carried one
+  // (v2.4, reducer-only — the "why it ended" beside endedAt's "when").
+  terminalSummary?: string;
   // Envelope ts of the terminal event (run.completed / run.failed / run.stopped,
   // or a run.status_changed carrying a terminal status — the dedicated terminal
   // events take precedence); undefined while non-terminal (§5.4 v1.5).
@@ -98,6 +112,8 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
   let run: Run | undefined;
   let diagnosis: DiagnosisView | undefined;
   let riskSummary: string | undefined;
+  let registeredChecks: CheckExpectation[] | undefined;
+  let terminalSummary: string | undefined;
   let endedAt: string | undefined;
   // True once a dedicated terminal event set endedAt; a run.status_changed with a
   // terminal status never overrides it.
@@ -203,12 +219,24 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
       case 'run.plan_generated': {
         run = { ...requireRun(event), plan: event.payload.plan };
         riskSummary = event.payload.riskSummary;
+        registeredChecks = event.payload.checks;
         break;
       }
       case 'run.status_changed': {
         run = { ...requireRun(event), status: event.payload.status };
         if (TERMINAL_STATUSES.has(event.payload.status) && !endedAtFromTerminalEvent) {
           endedAt = event.ts;
+          // The transition's reason is the terminal summary only until a
+          // dedicated terminal event states its own (which takes precedence,
+          // same rule as endedAt). For a stopped run the badge is the story
+          // (§5.4 v2.4 ruling): the "Stopped by user" boilerplate riding the
+          // mock's transition adds nothing and is suppressed — only a
+          // non-generic reason survives as the summary.
+          const stoppedBoilerplate =
+            event.payload.status === 'stopped' && event.payload.reason === 'Stopped by user';
+          if (event.payload.reason !== undefined && !stoppedBoilerplate) {
+            terminalSummary = event.payload.reason;
+          }
         }
         break;
       }
@@ -347,12 +375,14 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
         run = { ...requireRun(event), status: 'completed' };
         endedAt = event.ts;
         endedAtFromTerminalEvent = true;
+        terminalSummary = event.payload.summary;
         break;
       }
       case 'run.failed': {
         run = { ...requireRun(event), status: 'failed' };
         endedAt = event.ts;
         endedAtFromTerminalEvent = true;
+        terminalSummary = event.payload.summary;
         break;
       }
       case 'run.stopped': {
@@ -404,6 +434,8 @@ export function reduceRun(events: readonly WireEvent[]): RunView | null {
     approvals,
     diagnosis,
     riskSummary,
+    registeredChecks,
+    terminalSummary,
     endedAt,
     logsByStep,
     iterations,

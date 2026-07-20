@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import type { Run } from '@boardex/contract';
 import { Badge, Button, ConfirmDialog, Progress } from '../../design';
 import { elapsedLabel, isTerminalStatus } from './elapsed';
+import { coverageLine, executionLabel, type DualOutcome } from './outcome';
 import type { PlanProgress } from './progress';
 
 export interface StatusCardProps {
@@ -18,6 +19,13 @@ export interface StatusCardProps {
   warnings: readonly string[];
   /** Plan-step completion (T6.2); rendered only when the plan has steps. */
   progress: PlanProgress;
+  /**
+   * The dual outcome (v2.4): execution vs validation coverage, derived from
+   * RunView; null while non-terminal. The run-state badge above stays — it IS
+   * the run state; these two lines separate what the run did from what the
+   * evidence covers.
+   */
+  outcome: DualOutcome | null;
   /** Stop command in flight, or accepted and awaiting the run.stopped event. */
   stopping: boolean;
   stopError: string | null;
@@ -77,6 +85,7 @@ export function StatusCard({
   endedAt,
   warnings,
   progress,
+  outcome,
   stopping,
   stopError,
   onStop,
@@ -93,13 +102,36 @@ export function StatusCard({
   const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
-    <section aria-label="Run status" className="rounded-card border border-border bg-bg-panel p-5 shadow-subtle">
+    <section aria-label="Run status" className="rounded-card border border-border bg-surface p-5">
       {/* One instrument block (T6.2): status, elapsed, and plan progress read as a
           single readout, with Stop as the block's escape hatch. */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-section font-semibold text-text-primary">Status</h2>
+        <h2 className="text-body font-semibold text-text-primary">Status</h2>
         <Badge kind="status" value={run.status} />
       </div>
+      {outcome && (
+        // The dual outcome (v2.4): the badge above is the run state; these two
+        // lines separate the RUN's ending from the EVIDENCE's coverage, so a
+        // budget-killed run whose firmware worked never reads as a hardware
+        // failure — and a missing check never hides inside "Failed".
+        <dl className="mt-3 space-y-1.5 border-b border-border pb-3">
+          <div className="text-meta">
+            <dt className="inline font-medium text-text-primary">Run execution</dt>
+            <dd className="inline text-text-secondary">
+              {' — '}
+              {executionLabel(outcome)}
+              {outcome.execution.reason && ` · ${outcome.execution.reason}`}
+            </dd>
+          </div>
+          <div className="text-meta">
+            <dt className="inline font-medium text-text-primary">Validation coverage</dt>
+            <dd className="inline text-text-secondary">
+              {' — '}
+              {coverageLine(outcome.coverage)}
+            </dd>
+          </div>
+        </dl>
+      )}
       {elapsed && (
         <p className="mt-2 text-meta text-text-secondary">
           Elapsed <span className="font-mono text-text-primary">{elapsed}</span>
@@ -117,7 +149,7 @@ export function StatusCard({
         // merely attempted.
         <div className="mt-4">
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-label uppercase text-text-secondary">Verified</span>
+            <span className="text-metadata uppercase tracking-wide text-text-secondary">Verified</span>
             <span className="font-mono text-meta text-text-primary">
               {progress.completed} / {progress.total}
             </span>

@@ -123,10 +123,16 @@ describe('§7.4 acceptance: T3.2 tabs against the live mock', () => {
       'aria-selected',
       'true',
     );
-    // Sub-tabs labeled by kind + iteration; the deep link selected the serial one.
-    const logTabs = within(dialog).getByRole('tablist', { name: 'Log artifacts' });
-    expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 1' })).toHaveAttribute(
-      'aria-selected',
+    // Two compact selectors (Sprint 7 P0): the deep link drove Iteration to 1
+    // and Type to Serial.
+    const iterationGroup = within(dialog).getByRole('group', { name: 'Iteration' });
+    expect(within(iterationGroup).getByRole('button', { name: '1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const typeGroup = within(dialog).getByRole('group', { name: 'Type' });
+    expect(within(typeGroup).getByRole('button', { name: 'Serial' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
     const log = await within(dialog).findByRole(

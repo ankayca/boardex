@@ -69,7 +69,7 @@ export function SourcesTab({ documents, initialDocId, locator }: SourcesTabProps
               type="button"
               aria-current={active ? 'true' : undefined}
               onClick={() => setSelection({ seed: seedKey, id: doc.id })}
-              className={`flex w-full flex-col items-start gap-1 rounded-button border px-3 py-2 text-left transition-colors ${
+              className={`flex w-full flex-col items-start gap-1 rounded-control border px-3 py-2 text-left transition-colors ${
                 active
                   ? 'border-accent bg-neutral-badge-bg'
                   : 'border-border hover:border-border-strong'
@@ -78,7 +78,7 @@ export function SourcesTab({ documents, initialDocId, locator }: SourcesTabProps
               <span className="text-body font-medium text-text-primary">{doc.label}</span>
               {/* Neutral pill (§6.1 neutral badge) — a document kind carries no
                   pass/fail/warn semantics, so it never touches green/red/amber. */}
-              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-neutral-badge-bg px-2 py-0.5 text-label font-medium uppercase text-neutral-badge">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-neutral-badge-bg px-2 py-0.5 text-metadata font-medium uppercase tracking-wide text-neutral-badge">
                 {KIND_LABEL[doc.kind]}
               </span>
             </button>

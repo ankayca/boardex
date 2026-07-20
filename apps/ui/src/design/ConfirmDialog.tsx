@@ -1,6 +1,7 @@
-import { useEffect, useId } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
+import { useFocusTrap } from './focusTrap';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -26,19 +27,21 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) {
-      return;
+  // Shared modal focus trap (§6.2 v2.3): Tab cycles Cancel/Confirm; focus
+  // restores to the invoking control on close.
+  useFocusTrap(dialogRef, { active: open });
+
+  // Esc convention: element-level, consumed with stopPropagation — a confirm
+  // stacked over a Drawer closes alone; the Drawer never sees the keypress.
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onCancel();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onCancel]);
+  };
 
   if (!open) {
     return null;
@@ -54,11 +57,14 @@ export function ConfirmDialog({
           out of the way, not perform. */}
       <div className="absolute inset-0 animate-overlay-in bg-scrim" onClick={onCancel} aria-hidden="true" />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="relative w-full max-w-md animate-dialog-in rounded-card border border-border bg-bg-panel p-6 shadow-overlay"
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="relative w-full max-w-md animate-dialog-in rounded-card border border-border bg-surface p-6 shadow-overlay outline-none"
       >
         <h2 id={titleId} className="text-section font-semibold text-text-primary">
           {title}
@@ -69,7 +75,10 @@ export function ConfirmDialog({
           </p>
         )}
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={onCancel} autoFocus>
+          {/* Initial focus comes from the shared trap: Cancel is the first
+              tabbable, so the safe action is focused — and the trap captured
+              the invoking control BEFORE moving focus, so close restores it. */}
+          <Button variant="secondary" onClick={onCancel}>
             {cancelLabel}
           </Button>
           <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
