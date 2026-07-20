@@ -110,7 +110,9 @@ VALID_PLAN_ARGS: dict[str, Any] = {
 
 
 def make_turn(
-    content: str | None = None, calls: list[tuple[str, dict[str, Any]]] | None = None
+    content: str | None = None,
+    calls: list[tuple[str, dict[str, Any]]] | None = None,
+    usage: dict[str, int] | None = None,
 ) -> ModelTurn:
     tool_calls = []
     raw_calls = []
@@ -129,7 +131,9 @@ def make_turn(
     raw_message: dict[str, Any] = {"role": "assistant", "content": content}
     if raw_calls:
         raw_message["tool_calls"] = raw_calls
-    return ModelTurn(content=content, tool_calls=tool_calls, raw_message=raw_message)
+    return ModelTurn(
+        content=content, tool_calls=tool_calls, raw_message=raw_message, usage=usage
+    )
 
 
 class FakeProvider:
