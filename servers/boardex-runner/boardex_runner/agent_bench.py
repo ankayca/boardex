@@ -192,6 +192,8 @@ class AgentRunEngine(RunEngine):
         self._check_verdicts: dict[str, str] = {}
         self._meta_failures: dict[str, int] = {}
         self._narration: list[str] = []
+        self._usage_lines: list[str] = []
+        self._usage_totals: dict[str, int] = {}
         self._report_warned = False
         self._mcp: ToolHost | None = None
         self._workspace: Workspace | None = None
@@ -534,6 +536,17 @@ class AgentRunEngine(RunEngine):
             step_id=step_id,
             content=markdown.encode(),
         )
+        if self._usage_totals:
+            calls = self._usage_totals.get("calls", 0)
+            totals = {k: v for k, v in self._usage_totals.items() if k != "calls"}
+            self._emit(
+                "step.log",
+                {
+                    "stepId": step_id,
+                    "stream": "agent",
+                    "line": _usage_line(f"run total ({calls} calls)", totals),
+                },
+            )
         self._emit(
             "step.completed",
             {"stepId": step_id, "summary": "Validation report written.", "artifactIds": [artifact_id]},
@@ -730,8 +743,18 @@ class AgentRunEngine(RunEngine):
             )
             self._count_failure(exc.tool_name)
             return None
+        if turn.usage:
+            self._note_usage(f"turn {self._turns}", turn.usage)
         self._messages.append(turn.raw_message)
         return turn
+
+    def _note_usage(self, label: str, usage: dict[str, int]) -> None:
+        """One quiet agent-stream line per provider call + a running total."""
+        for key, value in usage.items():
+            if isinstance(value, int):
+                self._usage_totals[key] = self._usage_totals.get(key, 0) + value
+        self._usage_totals["calls"] = self._usage_totals.get("calls", 0) + 1
+        self._usage_lines.append(_usage_line(label, usage))
 
     def _respond(self, call: ToolCall, content: str) -> None:
         self._messages.append({"role": "tool", "tool_call_id": call.id, "content": content})
@@ -762,6 +785,12 @@ class AgentRunEngine(RunEngine):
                     "step.log", {"stepId": step_id, "stream": "agent", "lines": lines[:30]}
                 )
             self._narration.clear()
+        if self._usage_lines:
+            self._emit(
+                "step.log",
+                {"stepId": step_id, "stream": "agent", "lines": self._usage_lines[:30]},
+            )
+            self._usage_lines.clear()
         return step_id
 
     def _add_artifact(
@@ -821,6 +850,8 @@ class AgentRunEngine(RunEngine):
                 t for t in meta_tools_as_openai() if t["function"]["name"] == "write_report"
             ]
             turn = await self._provider.complete(self._messages, report_tool)
+            if turn.usage:
+                self._note_usage("partial report", turn.usage)
             for call in turn.tool_calls:
                 if call.name == "write_report" and isinstance(call.arguments.get("markdown"), str):
                     report_id = self._emit_report_step(call.arguments["markdown"])
@@ -886,6 +917,21 @@ def _cap(text: str) -> str:
     if len(text) <= TOOL_RESULT_CAP:
         return text
     return text[:TOOL_RESULT_CAP] + f"... [truncated {len(text) - TOOL_RESULT_CAP} chars]"
+
+
+_USAGE_FIELDS = (
+    ("prompt_tokens", "in"),
+    ("completion_tokens", "out"),
+    ("cached_tokens", "cache_read"),
+    ("cache_creation_tokens", "cache_write"),
+)
+
+
+def _usage_line(label: str, usage: dict[str, int]) -> str:
+    fields = " ".join(
+        f"{short}={usage[key]}" for key, short in _USAGE_FIELDS if isinstance(usage.get(key), int)
+    )
+    return f"usage: {label} {fields}".rstrip()
 
 
 def _artifact_ref(artifact_ids: list[str], kind: str) -> str | None:

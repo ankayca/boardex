@@ -87,6 +87,7 @@ class ModelTurn:
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
     raw_message: dict[str, Any] = field(default_factory=dict)
+    usage: dict[str, int] | None = None  # per-call token usage, when the API reports it
 
 
 class Provider(Protocol):
@@ -101,6 +102,24 @@ class MalformedToolArguments(Exception):
     def __init__(self, tool_name: str, detail: str) -> None:
         super().__init__(detail)
         self.tool_name = tool_name
+
+
+def _usage_from_response(response: Any) -> dict[str, int] | None:
+    """Normalize litellm usage into flat int fields (cache detail included)."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    data = usage.model_dump() if hasattr(usage, "model_dump") else dict(usage)
+    keep: dict[str, int] = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        if isinstance(data.get(key), int):
+            keep[key] = data[key]
+    details = data.get("prompt_tokens_details")
+    if isinstance(details, dict) and isinstance(details.get("cached_tokens"), int):
+        keep["cached_tokens"] = details["cached_tokens"]
+    if isinstance(data.get("cache_creation_input_tokens"), int):
+        keep["cache_creation_tokens"] = data["cache_creation_input_tokens"]
+    return keep or None
 
 
 def _parse_turn(message: Any) -> ModelTurn:
@@ -145,4 +164,6 @@ class LiteLLMProvider:
             timeout=600,
             **extra,
         )
-        return _parse_turn(response.choices[0].message)
+        turn = _parse_turn(response.choices[0].message)
+        turn.usage = _usage_from_response(response)
+        return turn

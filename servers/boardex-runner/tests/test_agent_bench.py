@@ -382,6 +382,71 @@ def test_short_results_ride_inline_untouched(task_repo: Path) -> None:
     assert _tool_message(engine, "call_build_firmware_0")["result"] == result
 
 
+def test_usage_lands_as_quiet_agent_log_lines_plus_a_run_total(task_repo: Path) -> None:
+    """Per-call litellm usage rides the agent step.log stream — one line per
+    turn, flushed with the next step — and the report step logs the run total."""
+    usage_1 = {"prompt_tokens": 4000, "completion_tokens": 100, "cached_tokens": 3800}
+    usage_2 = {"prompt_tokens": 4500, "completion_tokens": 60, "cached_tokens": 4200}
+    usage_3 = {"prompt_tokens": 4700, "completion_tokens": 200}
+    host = FakeToolHost(
+        {"build_firmware": BUILD_DESC},
+        results={"build_firmware": {"verdict": "pass", "data": {"stdout": "ok"}}},
+    )
+    plan = {**VALID_PLAN_ARGS, "checks": []}
+    script = [
+        make_turn(calls=[("declare_plan", plan)], usage=usage_1),
+        make_turn(calls=[("build_firmware", {"project_dir": "/proj"})], usage=usage_2),
+        make_turn(calls=[("write_report", {"markdown": "# done"})], usage=usage_3),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+    assert events[-1]["type"] == "run.completed"
+
+    agent_logs = [
+        e["payload"]
+        for e in events
+        if e["type"] == "step.log" and e["payload"]["stream"] == "agent"
+    ]
+    usage_lines = [
+        ln
+        for p in agent_logs
+        for ln in (p.get("lines") or [p.get("line", "")])
+        if ln.startswith("usage:")
+    ]
+    # One line per provider call, in order, with the cache detail present.
+    assert usage_lines[:3] == [
+        "usage: turn 1 in=4000 out=100 cache_read=3800",
+        "usage: turn 2 in=4500 out=60 cache_read=4200",
+        "usage: turn 3 in=4700 out=200",
+    ]
+    # The report step carries the run total (summed across all calls).
+    assert usage_lines[-1] == "usage: run total (3 calls) in=13200 out=360 cache_read=8000"
+    report_step = next(
+        e["payload"]["step"]["id"]
+        for e in events
+        if e["type"] == "step.started" and e["payload"]["step"]["kind"] == "report"
+    )
+    total_log = next(p for p in agent_logs if p.get("line", "").startswith("usage: run total"))
+    assert total_log["stepId"] == report_step
+
+
+def test_runs_without_usage_emit_no_usage_lines(task_repo: Path) -> None:
+    plan = {**VALID_PLAN_ARGS, "checks": []}
+    script = [
+        make_turn(calls=[("declare_plan", plan)]),
+        make_turn(calls=[("write_report", {"markdown": "# done"})]),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script))
+    events = run(drive_to_terminal(engine))
+    assert not any(
+        "usage:" in ln
+        for e in events
+        if e["type"] == "step.log"
+        for ln in (e["payload"].get("lines") or [e["payload"].get("line", "")])
+    )
+
+
 def test_rejected_gate_never_dispatches_and_stops_run(task_repo: Path) -> None:
     host = FakeToolHost({"flash_firmware": FLASH_DESC})
     script = [
