@@ -174,11 +174,16 @@ const EXPECTED: Record<string, EvidenceExpectation> = {
   serial_output: {
     tab: 'Logs',
     assertEvidence: (dialog) => {
-      const logTabs = within(dialog).getByRole('tablist', { name: 'Log artifacts' });
-      expect(within(logTabs).getByRole('tab', { name: 'Serial — iteration 2' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
+      expect(
+        within(within(dialog).getByRole('group', { name: 'Iteration' })).getByRole('button', {
+          name: '2',
+        }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      expect(
+        within(within(dialog).getByRole('group', { name: 'Type' })).getByRole('button', {
+          name: 'Serial',
+        }),
+      ).toHaveAttribute('aria-pressed', 'true');
       expect(within(dialog).getByText('Serial log (iteration 2)')).toBeInTheDocument();
     },
   },

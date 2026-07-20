@@ -89,10 +89,10 @@ function NavItem({ to, label, icon, active, collapsed }: NavItemProps) {
       to={to}
       aria-current={active ? 'page' : undefined}
       title={collapsed ? label : undefined}
-      className={`flex items-center gap-2.5 rounded-button px-2 py-1.5 text-body font-medium transition-colors duration-fast ease-motion ${
+      className={`flex items-center gap-2.5 rounded-control px-2 py-1.5 text-body font-medium transition-colors duration-fast ease-motion ${
         active
           ? 'bg-neutral-badge-bg text-text-primary'
-          : 'text-text-secondary hover:bg-bg-app hover:text-text-primary'
+          : 'text-text-secondary hover:bg-canvas hover:text-text-primary'
       } ${collapsed ? 'justify-center' : ''}`}
     >
       <span className="shrink-0">{icon}</span>
@@ -133,7 +133,7 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
       <div className="mt-6">
         <NavLink
           to="/demo"
-          className="block rounded-button px-2 py-1.5 text-meta text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+          className="block rounded-control px-2 py-1.5 text-meta text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
         >
           Watch a demo run
         </NavLink>
@@ -144,7 +144,7 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="mt-6 min-h-0 overflow-y-auto">
       {!collapsed && (
-        <p className="px-2 text-label font-medium uppercase text-text-secondary">Recent</p>
+        <p className="px-2 text-metadata font-medium uppercase tracking-wide text-text-secondary">Recent</p>
       )}
       <ul aria-label="Recent runs" className="mt-1 space-y-0.5">
         {recent.map((run) => (
@@ -153,10 +153,10 @@ function RecentRuns({ collapsed }: { collapsed: boolean }) {
               to={`/runs/${run.id}`}
               title={run.title}
               className={({ isActive }) =>
-                `flex items-center gap-2 rounded-button px-2 py-1.5 text-meta transition-colors duration-fast ease-motion ${
+                `flex items-center gap-2 rounded-control px-2 py-1.5 text-meta transition-colors duration-fast ease-motion ${
                   isActive
                     ? 'bg-neutral-badge-bg text-text-primary'
-                    : 'text-text-secondary hover:bg-bg-app hover:text-text-primary'
+                    : 'text-text-secondary hover:bg-canvas hover:text-text-primary'
                 } ${collapsed ? 'justify-center' : ''}`
               }
             >
@@ -195,7 +195,7 @@ function RunnerPill({ collapsed }: { collapsed: boolean }) {
     <span
       role="status"
       aria-live="polite"
-      className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-bg-panel px-3 py-1 text-meta"
+      className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-meta"
     >
       <StatusDot state={online ? 'online' : 'offline'} />
       <span className="truncate font-medium text-text-primary">{label}</span>
@@ -217,8 +217,8 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-r border-border bg-bg-panel transition-[width] duration-medium ease-motion ${
-        collapsed ? 'w-14' : 'w-60'
+      className={`flex shrink-0 flex-col border-r border-border bg-nav transition-[width] duration-medium ease-motion ${
+        collapsed ? 'w-14' : 'w-52'
       }`}
     >
       <div
@@ -234,7 +234,7 @@ export function Sidebar() {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
           onClick={toggle}
-          className="rounded-button p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+          className="rounded-control p-2 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
         >
           <CollapseIcon collapsed={collapsed} />
         </button>
@@ -259,7 +259,7 @@ export function Sidebar() {
                 to="/runs/new"
                 aria-label="New run"
                 title="New run"
-                className="shrink-0 rounded-button p-1.5 text-text-secondary transition-colors duration-fast ease-motion hover:bg-bg-app hover:text-text-primary"
+                className="shrink-0 rounded-control p-2 text-text-secondary transition-colors duration-fast ease-motion hover:bg-canvas hover:text-text-primary"
               >
                 <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none">
                   <path

@@ -42,10 +42,10 @@ export function Tour({ view }: { view: RunView | null }) {
       <section
         aria-label="Demo tour"
         aria-live="polite"
-        className="pointer-events-auto w-full max-w-sm animate-dialog-in rounded-card border border-border bg-bg-panel p-5 shadow-overlay"
+        className="pointer-events-auto w-full max-w-sm animate-dialog-in rounded-card border border-border bg-surface p-5 shadow-overlay"
       >
         <div className="flex items-center justify-between gap-3">
-          <span className="text-label font-medium uppercase tracking-wide text-text-secondary">
+          <span className="text-metadata font-medium uppercase tracking-wide text-text-secondary">
             {step.zone}
           </span>
           <span className="font-mono text-meta text-text-secondary">

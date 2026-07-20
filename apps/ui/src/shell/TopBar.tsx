@@ -76,9 +76,10 @@ function useHeaderInfo(): HeaderInfo {
 export function TopBar() {
   const { title, badge, actions } = useHeaderInfo();
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-border bg-bg-panel px-6">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <h1 className="truncate text-body font-semibold text-text-primary">{title}</h1>
+        {/* Top-bar title: the 15px section step (§6.1 v2.3 ladder). */}
+        <h1 className="truncate text-section font-semibold text-text-primary">{title}</h1>
         {badge && <Badge kind="status" value={badge} />}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

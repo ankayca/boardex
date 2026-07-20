@@ -32,7 +32,7 @@ export default function Layout() {
   // offset by a sticky-vs-document-scroll interaction, and page-level sticky
   // (the workspace rails) anchors cleanly to this scroll container.
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-app font-sans text-text-primary">
+    <div className="flex h-screen overflow-hidden bg-canvas font-sans text-text-primary">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />

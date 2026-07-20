@@ -4,10 +4,10 @@
  * strokes on solid fills use the panel white.
  */
 
-export const GLYPH_STROKE_ON_FILL = 'var(--color-bg-panel)';
+export const GLYPH_STROKE_ON_FILL = 'var(--color-surface)';
 
 /** Hollow ring — the not-yet states (pending / draft / planning). */
-export function RingGlyph({ fill = 'var(--color-bg-panel)' }: { fill?: string }) {
+export function RingGlyph({ fill = 'var(--color-surface)' }: { fill?: string }) {
   return (
     <circle
       cx="7"
@@ -29,7 +29,7 @@ export function ActiveGlyph() {
         cx="7"
         cy="7"
         r="5.75"
-        fill="var(--color-bg-panel)"
+        fill="var(--color-surface)"
         stroke="var(--color-accent)"
         strokeWidth="1.5"
       />

@@ -1,9 +1,9 @@
 // Run Workspace — the three zones + evidence band (BIBLE §6.3/§7.3): left Board
 // Context rail (280px), center Plan & Progress (fluid, min 560px), right Run Status
-// & Approval rail (340px — status card, approval card, diagnosis card, stop), bottom
+// & Approval rail (320px — status card, approval card, diagnosis card, stop), bottom
 // Evidence Summary band (88px collapsed strip of check chips + evidence actions).
-// A thin amber reconnecting bar sits above it all on a WS drop. Below 1280px the
-// right rail stacks under center.
+// A thin amber reconnecting bar sits above it all on a WS drop. Below 1208px of
+// content width the right rail stacks under center.
 import type { BenchStatus, BoardProfile, RunView } from '@boardex/contract';
 import type { RunStreamStatus } from '../../lib/runStream';
 import { BoardContextRail } from './BoardContextRail';

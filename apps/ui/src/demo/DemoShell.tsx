@@ -15,9 +15,9 @@ export interface DemoShellProps {
 export function DemoShell({ playback, onExit, children }: DemoShellProps) {
   const { status } = playback;
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-bg-app font-sans text-text-primary">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-bg-panel px-4">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-app px-3 py-1 text-meta">
+    <div className="flex h-screen flex-col overflow-hidden bg-canvas font-sans text-text-primary">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-canvas px-3 py-1 text-meta">
           <span className="font-medium text-text-primary">Demo</span>
           <span className="text-text-secondary">replaying a recorded agent run</span>
         </span>

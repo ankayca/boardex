@@ -53,7 +53,7 @@ describe('PlanReview checklist gate (D12)', () => {
     const user = userEvent.setup();
     const { onApprove } = renderReview();
 
-    const approve = screen.getByRole('button', { name: 'Approve Plan' });
+    const approve = screen.getByRole('button', { name: /approve plan/i });
     expect(approve).toBeDisabled();
 
     const boxes = screen.getAllByRole('checkbox');
@@ -81,7 +81,7 @@ describe('PlanReview checklist gate (D12)', () => {
     const user = userEvent.setup();
     renderReview();
 
-    const approve = screen.getByRole('button', { name: 'Approve Plan' });
+    const approve = screen.getByRole('button', { name: /approve plan/i });
     const boxes = screen.getAllByRole('checkbox');
     for (const box of boxes) await user.click(box);
     expect(approve).toBeEnabled();
@@ -93,12 +93,12 @@ describe('PlanReview checklist gate (D12)', () => {
   it('leaves Approve ungated when a RESOLVED profile genuinely has no checklist (§7.2)', () => {
     renderReview({ checklist: [] });
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /approve plan/i })).toBeEnabled();
   });
 
   it('fail-closed: an empty checklist never enables Approve while the profile is unresolved', () => {
     renderReview({ checklist: [], profileResolved: false });
-    expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /approve plan/i })).toBeDisabled();
   });
 
   it('fail-closed: unresolved profile keeps Approve disabled even with every line confirmed', async () => {
@@ -107,7 +107,7 @@ describe('PlanReview checklist gate (D12)', () => {
     for (const box of screen.getAllByRole('checkbox')) {
       await user.click(box);
     }
-    expect(screen.getByRole('button', { name: 'Approve Plan' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /approve plan/i })).toBeDisabled();
   });
 
   it('renders the plan with risk badges, hardware markers and the risk summary', () => {
@@ -185,5 +185,62 @@ describe('PlanReview checklist gate (D12)', () => {
     const { onEditTask } = renderReview();
     await user.click(screen.getByRole('button', { name: 'Edit task' }));
     expect(onEditTask).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Sprint 7 P0 (§7.2 v2.3): the checklist as a VISIBLE safety gate — live
+// progress line, dynamic Approve copy, and the completion check icon.
+describe('visible safety gate (Sprint 7 P0)', () => {
+  it('shows the live progress line and updates it as lines are confirmed', async () => {
+    const user = userEvent.setup();
+    renderReview();
+    expect(screen.getByText('0 of 3 bench connections confirmed')).toBeInTheDocument();
+
+    const boxes = screen.getAllByRole('checkbox');
+    await user.click(boxes[0] as HTMLElement);
+    expect(screen.getByText('1 of 3 bench connections confirmed')).toBeInTheDocument();
+    await user.click(boxes[1] as HTMLElement);
+    await user.click(boxes[2] as HTMLElement);
+    expect(screen.getByText('3 of 3 bench connections confirmed')).toBeInTheDocument();
+  });
+
+  it('the disabled primary says why: "Approve Plan · N/M confirmed", live', async () => {
+    const user = userEvent.setup();
+    renderReview();
+    expect(screen.getByRole('button', { name: 'Approve Plan · 0/3 confirmed' })).toBeDisabled();
+
+    await user.click(screen.getAllByRole('checkbox')[0] as HTMLElement);
+    expect(screen.getByRole('button', { name: 'Approve Plan · 1/3 confirmed' })).toBeDisabled();
+  });
+
+  it('at completion the label is plain "Approve Plan" with the check icon', async () => {
+    const user = userEvent.setup();
+    renderReview();
+    for (const box of screen.getAllByRole('checkbox')) await user.click(box);
+    const approve = screen.getByRole('button', { name: 'Approve Plan' });
+    expect(approve).toBeEnabled();
+    expect(within(approve).getByTestId('approve-plan-check')).toBeInTheDocument();
+  });
+
+  it('no checklist → plain label, no count, no icon', () => {
+    renderReview({ checklist: [] });
+    const approve = screen.getByRole('button', { name: 'Approve Plan' });
+    expect(screen.queryByTestId('approve-plan-check')).not.toBeInTheDocument();
+    expect(approve).toBeEnabled();
+  });
+
+  it('the risk summary carries the amber rail only when a medium+ risk step exists', () => {
+    renderReview();
+    const summary = screen.getByText('One medium-risk hardware action.').closest('div');
+    expect(summary?.className).toContain('border-warn');
+  });
+
+  it('an all-low plan renders the risk summary without the amber rail', () => {
+    renderReview({
+      plan: PLAN.map((step) => ({ ...step, riskLevel: 'low' as const })),
+      riskSummary: 'All steps are low risk.',
+    });
+    const summary = screen.getByText('All steps are low risk.').closest('div');
+    expect(summary?.className).not.toContain('border-warn');
   });
 });

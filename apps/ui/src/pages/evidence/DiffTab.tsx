@@ -70,7 +70,7 @@ function FileDiff({ file }: { file: DiffFile }) {
       <p className="font-mono text-body font-medium text-text-primary">{file.path}</p>
       <p className="mt-0.5 text-meta text-text-secondary">{file.reason}</p>
       {parsed.ok ? (
-        <div className="mt-2 overflow-x-auto rounded-button border border-border bg-bg-panel">
+        <div className="mt-2 overflow-x-auto rounded-control border border-border bg-surface">
           <table
             aria-label={`Unified diff for ${file.path}`}
             className="w-full border-collapse font-mono text-meta leading-5"
@@ -150,7 +150,7 @@ export function DiffTab({ view, artifact }: DiffTabProps) {
       {rollbackNotice && (
         <p
           role="status"
-          className="mt-2 rounded-card border border-border bg-bg-app px-4 py-2 text-meta text-text-secondary"
+          className="mt-2 rounded-card border border-border bg-canvas px-4 py-2 text-meta text-text-secondary"
         >
           {ROLLBACK_MVP_NOTICE}
         </p>

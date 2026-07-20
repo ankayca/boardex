@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './api';
 import { subscribeGlobal } from './globalStream';
-import { resetSettingsMemory, setRunnerUrlOverride } from './settings';
+import { resetSettingsMemory, setRunnerUrlOverride, setSidebarCollapsed } from './settings';
 
 afterEach(() => {
   resetSettingsMemory();
@@ -84,7 +84,14 @@ describe('runner URL redirect → WS client (global stream)', () => {
     const unsubscribe = subscribeGlobal(() => {});
     expect(opened).toHaveLength(1);
 
-    // A no-op URL change (same normalized value) must not cycle the connection.
+    // A setting that GENUINELY emits (sidebar collapse notifies every subscriber,
+    // including globalStream's) must not cycle the socket — globalStream's
+    // base-comparison guard is what holds it at one open. Delete that guard and this
+    // reconnects to 2, so the assertion proves the guard, not a silent no-op.
+    setSidebarCollapsed(true);
+    expect(opened).toHaveLength(1);
+
+    // And a no-op empty-override change is likewise inert.
     setRunnerUrlOverride('');
     expect(opened).toHaveLength(1);
 

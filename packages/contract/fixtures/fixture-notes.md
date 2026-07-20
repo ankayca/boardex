@@ -88,3 +88,15 @@ changes the contract.
   to files without a manifest.
 - `sizeBytes` in every `artifact.created` equals the real on-disk file size (asserted
   by the fixture validation test).
+
+## bme280_run_002_partial_synthetic.jsonl (v2.4, Sprint 7 P0)
+
+**SYNTHETIC — authored, not a recording** (decisions 2026-07-18). Exercises the
+dual-outcome presentation: the plan declares SIX checks via
+`run.plan_generated.checks` (v2.4), the run records TWO (`build_exit_code`,
+`device_ack`, both pass) and ends `run.failed` on the turn budget — so
+Run execution reads *Failed · turn bound exceeded* while Validation coverage
+reads *2 of 6 checks recorded* with four neutral-gray Not-recorded chips.
+Replay: `FIXTURE_FILE=packages/contract/fixtures/bme280_run_002_partial_synthetic.jsonl`.
+The real records/bmp180-run predates v2.4, declares no registry, and must render
+the honest no-denominator fallback instead — never these chips.

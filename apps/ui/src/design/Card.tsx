@@ -8,10 +8,10 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
 export function Card({ heading, className = '', children, ...rest }: CardProps) {
   return (
     <section
-      className={`rounded-card border border-border bg-bg-panel p-6 shadow-subtle ${className}`}
+      className={`rounded-card border border-border bg-surface p-6 ${className}`}
       {...rest}
     >
-      {heading && <h3 className="mb-4 text-section font-semibold text-text-primary">{heading}</h3>}
+      {heading && <h3 className="mb-4 text-body font-semibold text-text-primary">{heading}</h3>}
       {children}
     </section>
   );

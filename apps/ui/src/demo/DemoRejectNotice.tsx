@@ -17,9 +17,9 @@ export function DemoRejectNotice({ onExit }: { onExit: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Reject ends the run"
-        className="relative w-full max-w-md animate-dialog-in rounded-card border border-border bg-bg-panel p-6 shadow-overlay"
+        className="relative w-full max-w-md animate-dialog-in rounded-card border border-border bg-surface p-6 shadow-overlay"
       >
-        <h2 className="text-section font-semibold text-text-primary">Reject ends the run</h2>
+        <h2 className="text-body font-semibold text-text-primary">Reject ends the run</h2>
         <p className="mt-2 text-body text-text-secondary">{DEMO_REJECT_NOTICE}</p>
         <div className="mt-6 flex justify-end">
           <Button variant="primary" onClick={onExit} autoFocus>

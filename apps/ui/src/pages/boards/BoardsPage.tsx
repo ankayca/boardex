@@ -24,7 +24,7 @@ function instrumentSummary(profile: BoardProfile, bench: BenchStatus | null): st
 
 function ProfileRow({ profile, bench }: { profile: BoardProfile; bench: BenchStatus | null }) {
   return (
-    <li className="flex items-center gap-4 rounded-card border border-border bg-bg-panel px-5 py-4 shadow-subtle">
+    <li className="flex items-center gap-4 rounded-card border border-border bg-surface px-5 py-4">
       <div className="min-w-0 flex-1">
         <p className="text-body font-medium text-text-primary">{profile.name}</p>
         <p className="mt-0.5 text-meta text-text-secondary">{profile.mcu}</p>
@@ -34,7 +34,7 @@ function ProfileRow({ profile, bench }: { profile: BoardProfile; bench: BenchSta
       </div>
       <Link
         to={`/boards/${profile.id}`}
-        className="shrink-0 rounded-button border border-border px-4 py-2 text-body font-medium text-text-primary transition-colors hover:bg-bg-app"
+        className="shrink-0 rounded-control border border-border px-4 py-2 text-body font-medium text-text-primary transition-colors hover:bg-canvas"
       >
         Edit
       </Link>

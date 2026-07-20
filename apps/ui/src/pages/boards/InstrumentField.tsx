@@ -48,7 +48,7 @@ export function InstrumentField({
             value=""
             disabled={detected.length === 0}
             onChange={(event) => onChange(event.target.value)}
-            className="rounded-button border border-border bg-bg-panel px-3 py-1.5 text-meta text-text-primary focus:border-accent focus:outline-none disabled:opacity-50"
+            className="rounded-control border border-border bg-surface px-3 py-1.5 text-meta text-text-primary focus:border-accent focus:outline-none disabled:opacity-50"
           >
             <option value="" disabled>
               {detected.length === 0 ? 'None detected' : 'Use a detected device…'}

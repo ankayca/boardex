@@ -12,6 +12,7 @@ import type { PlanStep } from '@boardex/contract';
 import { Badge, Button } from '../../design';
 import type { BenchIssue } from '../../lib/benchReadiness';
 import { BenchWarning } from './BenchReadiness';
+import { approvePlanLabel, checklistProgressLine } from './planGate';
 
 export interface PlanReviewProps {
   plan: readonly PlanStep[];
@@ -62,8 +63,8 @@ export function PlanReview({
   };
 
   return (
-    <section aria-label="Run plan" className="rounded-card border border-border bg-bg-panel p-6 shadow-subtle">
-      <h2 className="text-section font-semibold text-text-primary">Plan</h2>
+    <section aria-label="Run plan" className="rounded-card border border-border bg-surface p-6">
+      <h2 className="text-body font-semibold text-text-primary">Plan</h2>
 
       <ol aria-label="Plan steps" className="mt-4 space-y-4">
         {plan.map((step, position) => (
@@ -88,10 +89,21 @@ export function PlanReview({
       </ol>
 
       {riskSummary && (
-        <p className="mt-5 border-t border-border pt-4 text-body text-text-secondary">
-          <span className="font-medium text-text-primary">Risk summary: </span>
-          {riskSummary}
-        </p>
+        // Quiet neutral surface; the narrow amber rail appears ONLY when a
+        // medium-or-higher-risk action exists (§7.2 v2.3) — amber stays a
+        // warning, never card decoration.
+        <div
+          className={`mt-5 rounded-card bg-canvas px-4 py-3 ${
+            plan.some((step) => step.riskLevel !== 'low')
+              ? 'border-l-[3px] border-warn'
+              : ''
+          }`}
+        >
+          <p className="text-body text-text-secondary">
+            <span className="font-medium text-text-primary">Risk summary: </span>
+            {riskSummary}
+          </p>
+        </div>
       )}
 
       {issues.length > 0 && (
@@ -105,18 +117,21 @@ export function PlanReview({
           <h3 id={checklistId} className="text-body font-medium text-text-primary">
             Confirm bench connections
           </h3>
-          <p className="mt-0.5 text-meta text-text-secondary">
-            Confirm each line before approving the plan.
+          {/* The visible safety gate (Sprint 7 P0): live progress above the
+              checklist — the operator always knows how far the gate is open. */}
+          <p aria-live="polite" className="mt-0.5 text-meta text-text-secondary">
+            {checklistProgressLine(confirmed.size, checklist.length)}
           </p>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-2">
             {checklist.map((item, index) => (
               <li key={item.label}>
-                <label className="flex cursor-pointer items-baseline gap-2.5">
+                {/* ≥32px row hit target, 18px checkbox (§6.1 v2.3 geometry). */}
+                <label className="flex min-h-8 cursor-pointer items-center gap-3 py-0.5">
                   <input
                     type="checkbox"
                     checked={confirmed.has(index)}
                     onChange={() => toggle(index)}
-                    className="translate-y-0.5 accent-accent"
+                    className="h-[18px] w-[18px] shrink-0 accent-accent"
                   />
                   <span className="text-body text-text-primary">
                     <span className="font-medium">{item.label}</span>
@@ -135,9 +150,36 @@ export function PlanReview({
         </p>
       )}
 
-      <div className="mt-6 flex items-center gap-3">
-        <Button variant="primary" disabled={!approvable || approving} onClick={onApprove}>
-          {approving ? 'Approving…' : 'Approve Plan'}
+      <div className="mt-6 flex items-center gap-4">
+        <Button variant="primary" size="gate" disabled={!approvable || approving} onClick={onApprove}>
+          {approving ? (
+            'Approving…'
+          ) : (
+            <>
+              {/* At completion the gate opens visibly: plain label + check icon.
+                  The icon is the button's own foreground — not the semantic
+                  green (D14: green is a recorded pass, not a ready CTA). */}
+              {allConfirmed && checklist.length > 0 && (
+                <svg
+                  viewBox="0 0 14 14"
+                  width={14}
+                  height={14}
+                  aria-hidden="true"
+                  data-testid="approve-plan-check"
+                >
+                  <path
+                    d="M2.5 7.5l3 3 6-7"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              {approvePlanLabel(confirmed.size, checklist.length)}
+            </>
+          )}
         </Button>
         <Button variant="secondary" onClick={onEditTask}>
           Edit task

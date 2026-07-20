@@ -1,10 +1,10 @@
-// Logs-tab derivation (§7.4): sub-tabs per log-kind artifact, labels by kind +
-// iteration (multi-iteration logs stay distinguishable), and the fail-closed
-// text parse. Views come from the real reduceRun (D5).
+// Logs-tab derivation (§7.4, Sprint 7 P0): the Iteration × Type matrix behind
+// the drawer's two compact selectors, and the fail-closed text parse. Views
+// come from the real reduceRun (D5).
 import { describe, expect, it } from 'vitest';
 import type { Artifact, Event } from '@boardex/contract';
 import { artifactOf, envelope, run, runStep, viewFrom } from '../workspace/test-events';
-import { iterationOfArtifact, logSubTabs, parseLogText } from './logs';
+import { iterationOfArtifact, logMatrix, parseLogText } from './logs';
 
 const logArtifact = (id: string, kind: Artifact['kind'], stepId: string): Artifact => ({
   ...artifactOf(id, kind),
@@ -40,38 +40,44 @@ function twoIterationEvents(): Event[] {
   ];
 }
 
-describe('logSubTabs', () => {
-  it('derives one sub-tab per log-kind artifact, in creation order, excluding other kinds', () => {
-    const tabs = logSubTabs(viewFrom(twoIterationEvents()));
-    expect(tabs.map((tab) => tab.artifact.id)).toEqual([
-      'art_build_1',
-      'art_serial_1',
-      'art_build_2',
-      'art_serial_2',
-    ]);
+describe('logMatrix', () => {
+  it('derives the iteration and type axes from the view, excluding non-log kinds', () => {
+    const matrix = logMatrix(viewFrom(twoIterationEvents()));
+    expect(matrix.iterations).toEqual([1, 2]);
+    expect(matrix.kinds).toEqual(['build_log', 'serial_log']);
+    expect(matrix.first?.id).toBe('art_build_1');
   });
 
-  it('labels multi-iteration logs distinguishably by kind + iteration', () => {
-    const tabs = logSubTabs(viewFrom(twoIterationEvents()));
-    expect(tabs.map((tab) => tab.label)).toEqual([
-      'Build — iteration 1',
-      'Serial — iteration 1',
-      'Build — iteration 2',
-      'Serial — iteration 2',
-    ]);
+  it('resolves every (iteration, kind) cell to its artifact, empty cells to null', () => {
+    const matrix = logMatrix(viewFrom(twoIterationEvents()));
+    expect(matrix.at(1, 'build_log')?.id).toBe('art_build_1');
+    expect(matrix.at(1, 'serial_log')?.id).toBe('art_serial_1');
+    expect(matrix.at(2, 'build_log')?.id).toBe('art_build_2');
+    expect(matrix.at(2, 'serial_log')?.id).toBe('art_serial_2');
+    expect(matrix.at(1, 'flash_log')).toBeNull();
+    expect(matrix.at(3, 'serial_log')).toBeNull();
   });
 
-  it('falls back to the artifact label when the emitting step is unknown', () => {
+  it('maps a log artifact back to its combo so deep links can drive the selectors', () => {
+    const matrix = logMatrix(viewFrom(twoIterationEvents()));
+    expect(matrix.comboOf('art_serial_2')).toEqual({ iteration: 2, kind: 'serial_log' });
+    expect(matrix.comboOf('art_decode')).toBeNull();
+  });
+
+  it('keeps an artifact with an unknown step reachable through the unassigned list', () => {
     const view = viewFrom([
       envelope(1, 'run.created', { run }),
       envelope(2, 'artifact.created', {
         artifact: { ...logArtifact('art_orphan', 'flash_log', 'st_missing'), label: 'Flash log' },
       }),
     ]);
-    expect(logSubTabs(view).map((tab) => tab.label)).toEqual(['Flash log']);
+    const matrix = logMatrix(view);
+    expect(matrix.iterations).toEqual([]);
+    expect(matrix.unassigned.map((artifact) => artifact.id)).toEqual(['art_orphan']);
+    expect(matrix.first?.id).toBe('art_orphan');
   });
 
-  it('suffixes duplicate labels so two logs of one kind in one iteration stay distinguishable', () => {
+  it('a cell holds the LATEST artifact of its kind; the older one still resolves its combo', () => {
     const view = viewFrom([
       envelope(1, 'run.created', { run }),
       envelope(2, 'step.started', { step: runStep('st_serial', 3, 'Read serial') }),
@@ -82,10 +88,10 @@ describe('logSubTabs', () => {
         artifact: logArtifact('art_b', 'serial_log', 'st_serial'),
       }),
     ]);
-    expect(logSubTabs(view).map((tab) => tab.label)).toEqual([
-      'Serial — iteration 1',
-      'Serial — iteration 1 (2)',
-    ]);
+    const matrix = logMatrix(view);
+    expect(matrix.at(1, 'serial_log')?.id).toBe('art_b');
+    // The deep-linked older duplicate still knows where it lives.
+    expect(matrix.comboOf('art_a')).toEqual({ iteration: 1, kind: 'serial_log' });
   });
 });
 

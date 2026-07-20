@@ -271,3 +271,78 @@ describe('bme280_run_001_fail fixture (T5.0/F9 — the fail variant)', () => {
     );
   });
 });
+
+// The SYNTHETIC partial-coverage fixture (v2.4 / Sprint 7 P0 — authored, not a
+// recording; decisions 2026-07-18): declares six checks, records two, dies on
+// the turn budget. This is the acceptance fixture for the dual-outcome UI —
+// Run execution failed vs Validation coverage 2 of 6 with four Not-recorded.
+describe('bme280_run_002_partial_synthetic.jsonl (v2.4 partial coverage)', () => {
+  const synLines = readFileSync(
+    join(fixturesDir, 'bme280_run_002_partial_synthetic.jsonl'),
+    'utf8',
+  )
+    .split('\n')
+    .filter((line) => line.length > 0);
+  const synEvents: Event[] = synLines.map((line, i) => {
+    const result = FixtureLineSchema.safeParse(JSON.parse(line));
+    if (!result.success) {
+      throw new Error(`synthetic fixture line ${i + 1} invalid: ${result.error.message}`);
+    }
+    return result.data.event;
+  });
+
+  it('every line parses, seq is gapless from 1, and the run id is the synthetic one', () => {
+    synEvents.forEach((event, index) => {
+      expect(event.seq).toBe(index + 1);
+      expect(event.runId).toBe('run_bme280_002syn');
+    });
+  });
+
+  it('reduces to a failed view: registry of 6, exactly 2 recorded, terminal summary set', () => {
+    const view = reduceRun(synEvents);
+    expect(view).not.toBeNull();
+    if (!view) return;
+    expect(view.run.status).toBe('failed');
+    expect(view.registeredChecks?.map((check) => check.requirementId)).toEqual([
+      'build_exit_code',
+      'device_ack',
+      'i2c_clock',
+      'serial_output',
+      'temperature_plausible',
+      'humidity_plausible',
+    ]);
+    expect(view.checks.map((check) => check.requirementId)).toEqual([
+      'build_exit_code',
+      'device_ack',
+    ]);
+    expect(view.checks.every((check) => check.verdict === 'pass')).toBe(true);
+    expect(view.terminalSummary).toContain('turn bound exceeded');
+    expect(view.warnings).toEqual([]);
+  });
+
+  it('every referenced artifact resolves on disk with a matching size', () => {
+    const extensionByKind: Record<string, string> = {
+      build_log: '.log',
+      protocol_decode: '.json',
+    };
+    for (const event of synEvents) {
+      if (event.type !== 'artifact.created') continue;
+      const artifact = event.payload.artifact;
+      const file = join(artifactsDir, artifact.id + extensionByKind[artifact.kind]);
+      expect(statSync(file).size, artifact.id).toBe(artifact.sizeBytes);
+    }
+  });
+
+  it('its decode artifact round-trips the contract decode schema', () => {
+    const body = JSON.parse(readFileSync(join(artifactsDir, 'art_syn_decode.json'), 'utf8'));
+    expect(ProtocolDecodeContentSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('is marked synthetic in its run title — never mistakable for a recording', () => {
+    const created = synEvents[0];
+    if (created === undefined || created.type !== 'run.created') {
+      throw new Error('first event must be run.created');
+    }
+    expect(created.payload.run.title).toContain('SYNTHETIC');
+  });
+});

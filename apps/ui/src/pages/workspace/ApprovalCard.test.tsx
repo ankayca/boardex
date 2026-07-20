@@ -66,9 +66,16 @@ describe('ApprovalCard', () => {
   });
 
   it('disables Approve and Reject while a resolution is pending (idempotent-safe)', () => {
-    renderCard({ resolving: true });
-    expect(screen.getByRole('button', { name: 'Resolving…' })).toBeDisabled();
+    renderCard({ resolving: true, resolvingStatus: 'approved' });
+    // The loading verb is specific to the action in flight (§6.2 v2.3).
+    expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
+  });
+
+  it('a pending rejection shows Rejecting… on the Reject action, not on Approve', () => {
+    renderCard({ resolving: true, resolvingStatus: 'rejected' });
+    expect(screen.getByRole('button', { name: 'Rejecting…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve & Continue' })).toBeDisabled();
   });
 
   it('Review Diff deep-links the evidence drawer’s Code Diff tab at the latest diff artifact', () => {

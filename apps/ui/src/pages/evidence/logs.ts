@@ -1,10 +1,10 @@
-// Logs tab derivation (BIBLE §7.4): one sub-tab per log-kind artifact in
-// RunView.artifacts, in creation order. Sub-tab labels are derived from the
-// artifact's step so several logs of one kind (iteration 1 vs 2 serial logs)
-// stay distinguishable: kind display name + the iteration the emitting step
-// belongs to (via RunView.iterations, D5 — never re-derived from raw events).
-// Content is plain text fetched by reference; parseLogText fails closed on
-// content that isn't renderable text, per the T3.1 decode pattern.
+// Logs tab derivation (BIBLE §7.4, Sprint 7 P0): the drawer's log navigation is
+// two compact selectors — Iteration [1|2] × Type [Build|Flash|Serial] — instead
+// of one flat sub-tab per artifact (six tabs wrapped onto two lines in the
+// drawer). logMatrix derives the axes from RunView (iteration via
+// RunView.iterations, D5 — never re-derived from raw events); log content is
+// plain text fetched by reference; parseLogText fails closed on content that
+// isn't renderable text, per the T3.1 decode pattern.
 import type { Artifact, ArtifactKind, RunView } from '@boardex/contract';
 
 export const LOG_KINDS: ReadonlySet<ArtifactKind> = new Set([
@@ -13,7 +13,10 @@ export const LOG_KINDS: ReadonlySet<ArtifactKind> = new Set([
   'flash_log',
 ]);
 
-const KIND_NAME: Partial<Record<ArtifactKind, string>> = {
+/** Fixed Type-selector order (build → flash → serial, the pipeline order). */
+export const LOG_KIND_ORDER: readonly ArtifactKind[] = ['build_log', 'flash_log', 'serial_log'];
+
+export const LOG_KIND_NAME: Partial<Record<ArtifactKind, string>> = {
   serial_log: 'Serial',
   build_log: 'Build',
   flash_log: 'Flash',
@@ -34,33 +37,61 @@ export function iterationOfArtifact(artifact: Artifact, view: RunView): number |
   return iteration;
 }
 
-export interface LogSubTab {
-  artifact: Artifact;
-  label: string;
+export interface LogCombo {
+  iteration: number;
+  kind: ArtifactKind;
 }
 
-// One sub-tab per log-kind artifact. Label: "Serial — iteration 2"; when the
-// step (and so the iteration) can't be resolved, the artifact's own label is the
-// honest fallback. Duplicate labels (two logs of one kind in one iteration) get
-// an ordinal suffix so every sub-tab stays reachable and distinguishable.
-export function logSubTabs(view: RunView): LogSubTab[] {
-  const tabs = view.artifacts
-    .filter((artifact) => LOG_KINDS.has(artifact.kind))
-    .map((artifact) => {
-      const iteration = iterationOfArtifact(artifact, view);
-      const label =
-        iteration !== null
-          ? `${KIND_NAME[artifact.kind]} — iteration ${iteration}`
-          : artifact.label;
-      return { artifact, label };
-    });
+export interface LogMatrix {
+  /** Iterations with at least one log artifact, ascending. */
+  iterations: number[];
+  /** Log kinds present anywhere in the run, in LOG_KIND_ORDER. */
+  kinds: ArtifactKind[];
+  /** The first log artifact in creation order — the no-deep-link default. */
+  first: Artifact | null;
+  /** Latest artifact for an (iteration, kind) cell; null when the cell is empty. */
+  at(iteration: number, kind: ArtifactKind): Artifact | null;
+  /** The cell a log artifact belongs to; null when its step is unresolvable. */
+  comboOf(artifactId: string): LogCombo | null;
+  /**
+   * Log artifacts whose iteration can't be resolved (their step is not in the
+   * view). Rendered as an explicit fallback list — every artifact stays
+   * reachable, nothing is silently dropped (T3.2 principle).
+   */
+  unassigned: Artifact[];
+}
 
-  const seen = new Map<string, number>();
-  return tabs.map((tab) => {
-    const count = (seen.get(tab.label) ?? 0) + 1;
-    seen.set(tab.label, count);
-    return count === 1 ? tab : { ...tab, label: `${tab.label} (${count})` };
-  });
+// The Iteration × Type matrix behind the two selectors. A cell holds the LATEST
+// artifact of that kind in that iteration (creation order); an older duplicate
+// stays reachable through its deep link, whose combo still resolves here.
+export function logMatrix(view: RunView): LogMatrix {
+  const logs = view.artifacts.filter((artifact) => LOG_KINDS.has(artifact.kind));
+  const cells = new Map<string, Artifact>();
+  const combos = new Map<string, LogCombo>();
+  const iterations = new Set<number>();
+  const kindsPresent = new Set<ArtifactKind>();
+  const unassigned: Artifact[] = [];
+
+  for (const artifact of logs) {
+    const iteration = iterationOfArtifact(artifact, view);
+    if (iteration === null) {
+      unassigned.push(artifact);
+      continue;
+    }
+    iterations.add(iteration);
+    kindsPresent.add(artifact.kind);
+    cells.set(`${iteration}:${artifact.kind}`, artifact);
+    combos.set(artifact.id, { iteration, kind: artifact.kind });
+  }
+
+  return {
+    iterations: [...iterations].sort((a, b) => a - b),
+    kinds: LOG_KIND_ORDER.filter((kind) => kindsPresent.has(kind)),
+    first: logs[0] ?? null,
+    at: (iteration, kind) => cells.get(`${iteration}:${kind}`) ?? null,
+    comboOf: (artifactId) => combos.get(artifactId) ?? null,
+    unassigned,
+  };
 }
 
 export type LogParseResult = { ok: true; lines: string[] } | { ok: false; error: string };

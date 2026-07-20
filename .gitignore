@@ -45,3 +45,8 @@ coverage/
 # recordings' shapes vary, so the directory is ignored except curated keepers.
 /records/*
 !/records/bmp180-run/
+
+# Demo/walkthrough video captures — large local binaries, never repo content
+demo-video/
+# graphify (local knowledge graph cache)
+graphify-out/

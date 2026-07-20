@@ -1,8 +1,8 @@
 /**
- * Tailwind theme extension — EXACT tokens from BIBLE §6.1, evolved by T6.1
- * (type rhythm, elevation levels, motion). Colors are wired to CSS variables
- * declared in src/index.css. Do not add colors outside this set (green = pass
- * only, red = fail/stop only, amber = approval/warn only).
+ * Tailwind theme extension — EXACT tokens from BIBLE §6.1 v2.3 (Sprint 7 P0
+ * visual system). Colors are wired to CSS variables declared in src/index.css.
+ * Do not add colors outside this set (green = pass only, red = fail/stop only,
+ * amber = approval/warn only).
  *
  * @type {import('tailwindcss').Config}
  */
@@ -11,8 +11,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        'bg-app': 'var(--color-bg-app)',
-        'bg-panel': 'var(--color-bg-panel)',
+        canvas: 'var(--color-canvas)',
+        nav: 'var(--color-nav)',
+        surface: 'var(--color-surface)',
         border: 'var(--color-border)',
         'border-strong': 'var(--color-border-strong)',
         'text-primary': 'var(--color-text-primary)',
@@ -33,23 +34,25 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
-      // §6.1 scale with T6.1 rhythm: explicit line-heights on every step,
-      // negative tracking on display sizes, positive tracking on the 11px
-      // uppercase label step (badges, chips).
+      // §6.1 v2.3 ladder — explicit line-heights per step. `label` (11px) is
+      // reserved for the run-state and risk capsules; every other state-bearing
+      // text sits at metadata (12px) or above. Card/step titles are the body
+      // step with font-semibold — weight IS the step.
       fontSize: {
         label: ['11px', { lineHeight: '16px', letterSpacing: '0.05em' }],
+        metadata: ['12px', { lineHeight: '16px' }],
+        code: ['12.5px', { lineHeight: '19px' }],
         meta: ['13px', { lineHeight: '18px' }],
         body: ['14px', { lineHeight: '20px' }],
-        section: ['16px', { lineHeight: '22px', letterSpacing: '-0.01em' }],
-        page: ['20px', { lineHeight: '26px', letterSpacing: '-0.017em' }],
+        section: ['15px', { lineHeight: '20px', letterSpacing: '-0.01em' }],
+        page: ['22px', { lineHeight: '28px', letterSpacing: '-0.017em' }],
         composer: ['24px', { lineHeight: '32px', letterSpacing: '-0.019em' }],
       },
       borderRadius: {
         card: 'var(--radius-card)',
-        button: 'var(--radius-button)',
+        control: 'var(--radius-control)',
       },
       boxShadow: {
-        subtle: 'var(--shadow-subtle)',
         raised: 'var(--shadow-raised)',
         overlay: 'var(--shadow-overlay)',
       },
@@ -57,6 +60,7 @@ export default {
         fast: 'var(--motion-fast)',
         medium: 'var(--motion-medium)',
         gentle: 'var(--motion-gentle)',
+        morph: 'var(--motion-morph)',
       },
       transitionTimingFunction: {
         motion: 'var(--ease-standard)',
