@@ -20,6 +20,7 @@ import copy
 import json
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -50,6 +51,7 @@ DEFAULT_MAX_TURNS = 60
 # BMP180 hardware run, a single 29KB protocol decode echoed inline (capped at
 # TOOL_RESULT_CAP) rides in the message list for every remaining turn.
 DECODE_MAX_ANNOTATIONS_DEFAULT = 40
+DECODE_MAX_TRANSACTIONS_DEFAULT = 200
 LOG_TAIL_LINES_DEFAULT = 60
 LOG_ERROR_LINES_DEFAULT = 20
 _ERROR_LINE_RE = re.compile(r"error|fatal|fail|warning", re.IGNORECASE)
@@ -68,16 +70,29 @@ def _positive_int_env(name: str, default: int) -> int:
     return value
 
 
-def decode_max_annotations() -> int:
-    return _positive_int_env("AGENT_DECODE_MAX_ANNOTATIONS", DECODE_MAX_ANNOTATIONS_DEFAULT)
+@dataclass(frozen=True)
+class SizePolicy:
+    """Bounds for the inline echo of a tool result. Resolved and validated once
+    at bench construction (alongside AGENT_MAX_TOKENS) so a bad value fails at
+    startup rather than at the first tool result, mid-run, on hardware."""
 
+    decode_max_annotations: int = DECODE_MAX_ANNOTATIONS_DEFAULT
+    decode_max_transactions: int = DECODE_MAX_TRANSACTIONS_DEFAULT
+    log_tail_lines: int = LOG_TAIL_LINES_DEFAULT
+    log_error_lines: int = LOG_ERROR_LINES_DEFAULT
 
-def log_tail_lines() -> int:
-    return _positive_int_env("AGENT_LOG_TAIL_LINES", LOG_TAIL_LINES_DEFAULT)
-
-
-def log_error_lines() -> int:
-    return _positive_int_env("AGENT_LOG_ERROR_LINES", LOG_ERROR_LINES_DEFAULT)
+    @classmethod
+    def from_env(cls) -> SizePolicy:
+        return cls(
+            decode_max_annotations=_positive_int_env(
+                "AGENT_DECODE_MAX_ANNOTATIONS", DECODE_MAX_ANNOTATIONS_DEFAULT
+            ),
+            decode_max_transactions=_positive_int_env(
+                "AGENT_DECODE_MAX_TRANSACTIONS", DECODE_MAX_TRANSACTIONS_DEFAULT
+            ),
+            log_tail_lines=_positive_int_env("AGENT_LOG_TAIL_LINES", LOG_TAIL_LINES_DEFAULT),
+            log_error_lines=_positive_int_env("AGENT_LOG_ERROR_LINES", LOG_ERROR_LINES_DEFAULT),
+        )
 PROTOCOL_DECODE_FIELDS = {
     "protocol",
     "device_id",
@@ -140,11 +155,15 @@ class AgentBench:
         provider_factory: Callable[[str], Any] = LiteLLMProvider,
         toolhost_factory: Callable[[], Awaitable[ToolHost | None]] | None = None,
         venv_root: Path | None = None,
+        size_policy: SizePolicy | None = None,
     ) -> None:
         self.max_turns = max_turns
         self.provider_factory = provider_factory
         self._toolhost_factory = toolhost_factory
         self.venv_root = venv_root
+        # Resolved here, at construction: an invalid AGENT_* cap must fail
+        # before the run starts, not on the first tool result mid-run.
+        self.size_policy = size_policy if size_policy is not None else SizePolicy.from_env()
         self.halted = False
 
     def bench_status(self) -> dict[str, Any]:
@@ -633,7 +652,7 @@ class AgentRunEngine(RunEngine):
             outcome_event, {"stepId": step_id, "summary": summary, "artifactIds": artifact_ids}
         )
         payload = {
-            "result": _shape_inline_result(name, result, artifact_ids),
+            "result": _shape_inline_result(name, result, artifact_ids, self.bench.size_policy),
             "artifactIds": artifact_ids,
         }
         return _cap(json.dumps(payload, default=str))
@@ -939,12 +958,16 @@ def _artifact_ref(artifact_ids: list[str], kind: str) -> str | None:
 
 
 def _shape_inline_result(
-    name: str, result: dict[str, Any], artifact_ids: list[str]
+    name: str, result: dict[str, Any], artifact_ids: list[str], policy: SizePolicy
 ) -> dict[str, Any]:
     """Bound the copy of ``result`` echoed to the model; the stored artifact
-    keeps the full data. Protocol decodes keep the complete transactions list
-    and a bounded slice of annotations; build/flash/serial log text keeps its
-    error lines plus a bounded tail."""
+    keeps the full data. Protocol decodes keep bounded slices of both the
+    transactions summary and the annotations; build/flash/serial log text keeps
+    its error lines plus a bounded tail.
+
+    Every sequence is bounded by element count, so the JSON the model receives
+    is always well-formed — the TOOL_RESULT_CAP backstop can no longer be the
+    thing that ends a decode, mid-object."""
     data = result.get("data") if isinstance(result.get("data"), dict) else None
     if data is None:
         return result
@@ -955,19 +978,17 @@ def _shape_inline_result(
         evidence = data.get("evidence") if isinstance(data.get("evidence"), dict) else {}
         holder = evidence.get("i2c") if isinstance(evidence.get("i2c"), dict) else {}
 
-    annotations = holder.get("annotations")
-    max_annotations = decode_max_annotations()
-    if isinstance(annotations, list) and len(annotations) > max_annotations:
-        ref = _artifact_ref(artifact_ids, "protocol_decode")
-        holder["annotations"] = annotations[:max_annotations]
-        holder["annotationsElided"] = len(annotations) - max_annotations
-        holder["annotationsNote"] = (
-            f"harness: showing {max_annotations} of {len(annotations)} annotations; "
-            f"the transactions list is complete. The full decode is stored as "
-            f"artifact {ref or 'of this step'} — cite that id in record_check. For "
-            "deeper annotation detail, re-run the capture/decode tool with a "
-            "narrower window or channel filter."
-        )
+    limits = {
+        "transactions": policy.decode_max_transactions,
+        "annotations": policy.decode_max_annotations,
+    }
+    original_lengths = {
+        key: len(holder[key])
+        for key in limits
+        if isinstance(holder.get(key), list)
+    }
+    for key, total in original_lengths.items():
+        holder[key] = holder[key][: limits[key]]
 
     log_kind = {"build_firmware": "build_log", "flash_firmware": "flash_log"}.get(
         name, "serial_log"
@@ -975,17 +996,58 @@ def _shape_inline_result(
     for key in ("stdout", "stderr", "text", "output", "log"):
         value = data.get(key)
         if isinstance(value, str):
-            data[key] = _bounded_log_text(value, _artifact_ref(artifact_ids, log_kind))
+            data[key] = _bounded_log_text(
+                value, _artifact_ref(artifact_ids, log_kind), policy
+            )
+
+    _shrink_to_fit(inline, holder, list(original_lengths))
+
+    elisions = []
+    for key, total in original_lengths.items():
+        kept = len(holder[key])
+        if kept < total:
+            holder[f"{key}Elided"] = total - kept
+            elisions.append(f"the first {kept} of {total} {key}")
+    if elisions:
+        ref = _artifact_ref(artifact_ids, "protocol_decode")
+        holder["decodeNote"] = (
+            f"harness: this inline copy carries {' and '.join(elisions)}. The full "
+            f"decode is stored complete as artifact {ref or 'of this step'} — cite "
+            "that id in record_check. For deeper detail, re-run the capture/decode "
+            "tool with a narrower window or channel filter."
+        )
     return inline
 
 
-def _bounded_log_text(text: str, artifact_ref: str | None) -> str:
+# Headroom for the {"result": ..., "artifactIds": [...]} wrapper and the notes
+# appended after the fit loop runs.
+_INLINE_WRAPPER_BUDGET = 1_500
+
+
+def _shrink_to_fit(inline: dict[str, Any], holder: dict[str, Any], keys: list[str]) -> None:
+    """Halve the bounded decode sequences until the serialized result fits.
+
+    An element-count bound alone does not bound bytes: one transaction may
+    carry a large read/write array, so 200 of them can still overrun
+    TOOL_RESULT_CAP and leave ``_cap`` cutting mid-object. Trimming by measured
+    size is what actually makes "the model always receives parseable JSON"
+    true for decodes."""
+    budget = TOOL_RESULT_CAP - _INLINE_WRAPPER_BUDGET
+    shrinkable = [key for key in keys if holder.get(key)]
+    while shrinkable and len(json.dumps(inline, default=str)) > budget:
+        longest = max(shrinkable, key=lambda key: len(holder[key]))
+        holder[longest] = holder[longest][: len(holder[longest]) // 2]
+        if not holder[longest]:
+            shrinkable.remove(longest)
+
+
+def _bounded_log_text(text: str, artifact_ref: str | None, policy: SizePolicy) -> str:
     lines = text.splitlines()
-    tail = log_tail_lines()
+    tail = policy.log_tail_lines
     if len(lines) <= tail:
         return text
     head = lines[:-tail]
-    errors = [line for line in head if _ERROR_LINE_RE.search(line)][: log_error_lines()]
+    errors = [line for line in head if _ERROR_LINE_RE.search(line)][: policy.log_error_lines]
     elided = len(head) - len(errors)
     where = f"; full log stored as artifact {artifact_ref}" if artifact_ref else ""
     note = f"[harness: {elided} lines elided — error lines + last {tail} lines kept{where}]"

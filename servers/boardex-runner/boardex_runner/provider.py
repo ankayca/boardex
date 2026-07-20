@@ -12,9 +12,12 @@ agent extras installed.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "openrouter/anthropic/claude-sonnet-4.6"
 
@@ -47,11 +50,59 @@ def with_cache_breakpoints(messages: list[dict[str, Any]]) -> list[dict[str, Any
     return out
 
 
+def _is_anthropic_model(litellm: Any, model: str) -> bool:
+    """True when ``model`` resolves to an Anthropic-family model.
+
+    Resolution, not substring matching: ``get_llm_provider`` maps the LiteLLM
+    model string to (resolved_model, provider), which is the only check that
+    gets both routes right — a bare ``claude-sonnet-4-6`` resolves to provider
+    ``anthropic`` while containing neither "anthropic" nor a slash, and
+    ``openrouter/anthropic/claude-sonnet-4.6`` resolves to provider
+    ``openrouter`` with the Anthropic family carried in the resolved model
+    name. A raw substring test on the caller's string misses the first and
+    would false-positive on any third-party model merely named after one.
+    """
+    resolved, provider = litellm.get_llm_provider(model=model)[:2]
+    return provider == "anthropic" or str(resolved).startswith("anthropic/")
+
+
 def _model_supports_prompt_caching(litellm: Any, model: str) -> bool:
+    """Gate for injecting Anthropic-style ``cache_control`` blocks.
+
+    Two conditions, both required. ``supports_prompt_caching`` alone is not
+    enough: it reports True for OpenAI models too (their caching is automatic
+    and server-side), and those APIs do not accept ``cache_control`` blocks —
+    so the provider family is checked as well.
+
+    Only the unknown-model lookup miss is swallowed (``get_llm_provider``
+    raises BadRequestError for a model string it cannot resolve). Anything
+    else — an API that moved, a renamed helper — is a bug in this wiring and
+    must surface rather than silently degrade to uncached requests.
+    """
     try:
-        return bool(litellm.supports_prompt_caching(model))
-    except Exception:
+        anthropic_family = _is_anthropic_model(litellm, model)
+    except litellm.exceptions.BadRequestError:
+        _warn_if_anthropic_shaped(model, "LiteLLM cannot resolve the model string")
         return False
+    if not anthropic_family:
+        _warn_if_anthropic_shaped(model, "it does not resolve to an Anthropic-family model")
+        return False
+    if not bool(litellm.utils.supports_prompt_caching(model)):
+        _warn_if_anthropic_shaped(model, "LiteLLM reports no prompt-caching support")
+        return False
+    return True
+
+
+def _warn_if_anthropic_shaped(model: str, reason: str) -> None:
+    """A model the operator believes is Anthropic silently running uncached is
+    the failure this whole path exists to prevent — say so out loud."""
+    if "anthropic" in model.lower() or "claude" in model.lower():
+        logger.warning(
+            "prompt caching DISABLED for model %r: %s. Requests will re-send the "
+            "full prefix every turn.",
+            model,
+            reason,
+        )
 
 
 def _max_tokens_from_env() -> int | None:

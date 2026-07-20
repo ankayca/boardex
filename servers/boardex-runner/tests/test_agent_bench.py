@@ -14,9 +14,8 @@ import pytest
 from boardex_runner.agent_bench import (
     DEFAULT_MAX_TURNS,
     AgentBench,
+    SizePolicy,
     _bounded_log_text,
-    decode_max_annotations,
-    log_tail_lines,
 )
 from boardex_runner.interception import is_risk_gated
 
@@ -303,16 +302,20 @@ def test_decode_inline_echo_is_bounded_but_the_artifact_keeps_everything(
     assert_wire_conformant(events)
 
     echoed = _tool_message(engine, f"call_{tool}_0")["result"]["data"]
-    assert len(echoed["annotations"]) == decode_max_annotations() == 40
+    assert len(echoed["annotations"]) == SizePolicy().decode_max_annotations == 40
     assert echoed["annotationsElided"] == 60
-    assert echoed["transactions"] == transactions  # the summary rides in full
+    # Under the default transactions bound this short summary rides in full,
+    # so the note must not claim an elision that did not happen.
+    assert echoed["transactions"] == transactions
+    assert "transactionsElided" not in echoed
+    assert "transactions" not in echoed["decodeNote"]
     decode_id = next(
         e["payload"]["artifact"]["id"]
         for e in events
         if e["type"] == "artifact.created"
         and e["payload"]["artifact"]["kind"] == "protocol_decode"
     )
-    assert decode_id in echoed["annotationsNote"]
+    assert decode_id in echoed["decodeNote"]
     # The artifact itself is NEVER truncated.
     stored = json.loads(engine.artifacts.get(decode_id).content)
     assert len(stored["annotations"]) == 100
@@ -342,7 +345,7 @@ def test_build_log_inline_echo_keeps_error_lines_and_tail(task_repo: Path) -> No
     assert echoed_lines[0].startswith("[harness:")
     assert "error: undefined reference" in echoed_lines[1]
     assert echoed_lines[-1] == lines[-1]
-    assert len(echoed_lines) == 1 + 1 + log_tail_lines()
+    assert len(echoed_lines) == 1 + 1 + SizePolicy().log_tail_lines
     build_id = next(
         e["payload"]["artifact"]["id"]
         for e in events
@@ -353,19 +356,106 @@ def test_build_log_inline_echo_keeps_error_lines_and_tail(task_repo: Path) -> No
     assert stdout in engine.artifacts.get(build_id).content.decode()  # untruncated
 
 
-def test_size_policy_constants_are_env_tunable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_size_policy_is_env_tunable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("AGENT_DECODE_MAX_ANNOTATIONS", "5")
+    monkeypatch.setenv("AGENT_DECODE_MAX_TRANSACTIONS", "7")
     monkeypatch.setenv("AGENT_LOG_TAIL_LINES", "3")
-    assert decode_max_annotations() == 5
-    assert log_tail_lines() == 3
-    bounded = _bounded_log_text("\n".join(f"line{i}" for i in range(10)), "art_x")
+    policy = SizePolicy.from_env()
+    assert (policy.decode_max_annotations, policy.decode_max_transactions) == (5, 7)
+    bounded = _bounded_log_text("\n".join(f"line{i}" for i in range(10)), "art_x", policy)
     assert bounded.splitlines()[-3:] == ["line7", "line8", "line9"]
-    monkeypatch.setenv("AGENT_LOG_TAIL_LINES", "0")
+
+
+@pytest.mark.parametrize(
+    "var",
+    [
+        "AGENT_DECODE_MAX_ANNOTATIONS",
+        "AGENT_DECODE_MAX_TRANSACTIONS",
+        "AGENT_LOG_TAIL_LINES",
+        "AGENT_LOG_ERROR_LINES",
+    ],
+)
+@pytest.mark.parametrize("bad", ["0", "-1", "nope"])
+def test_invalid_cap_fails_at_bench_construction_not_mid_run(monkeypatch, var, bad) -> None:  # type: ignore[no-untyped-def]
+    """F4: an operator typo must stop the process at startup — discovering it
+    at the first tool result means failing hours into a hardware run."""
+    monkeypatch.setenv(var, bad)
     with pytest.raises(SystemExit):
-        log_tail_lines()
-    monkeypatch.setenv("AGENT_LOG_TAIL_LINES", "nope")
-    with pytest.raises(SystemExit):
-        log_tail_lines()
+        AgentBench()
+
+
+def test_bounded_decode_stays_well_formed_json_under_the_cap(task_repo: Path) -> None:
+    """F3: with both sequences bounded by element count, the inline echo of a
+    pathologically large decode parses — TOOL_RESULT_CAP never cuts mid-JSON."""
+    tool = "capture_during"
+    host = FakeToolHost(
+        {tool: "Timed bus capture with protocol decode."},
+        results={
+            tool: {
+                "verdict": "pass",
+                "data": {
+                    "protocol": "i2c",
+                    "device_id": "sigrok:la",
+                    "channel_map": {"scl": 1, "sda": 0},
+                    "sample_rate_hz": 4_000_000,
+                    "num_samples": 400_000,
+                    "duration_s": 0.1,
+                    "bus_state": "decoded_ok",
+                    "trigger_channel": 1,
+                    "trigger_edge": "falling",
+                    "annotations": [
+                        {"raw": "x" * 200, "start": i, "end": i + 1, "decoder": "i2c-1", "text": "b"}
+                        for i in range(5000)
+                    ],
+                    "transactions": [
+                        {
+                            "addr_7bit": 0x77,
+                            "rw": "r",
+                            "write": [],
+                            "read": [0x55] * 50,
+                            "nack_at": None,
+                        }
+                        for _ in range(5000)
+                    ],
+                },
+            }
+        },
+    )
+    plan = {**VALID_PLAN_ARGS, "checks": []}
+    script = [
+        make_turn(calls=[("declare_plan", plan)]),
+        make_turn(calls=[(tool, {"device_id": "sigrok:la", "protocol": "i2c"})]),
+        make_turn(calls=[("write_report", {"markdown": "# done"})]),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+
+    raw = next(
+        m["content"]
+        for m in engine._messages
+        if m.get("role") == "tool" and m.get("tool_call_id") == f"call_{tool}_0"
+    )
+    assert "[truncated" not in raw, "the cap still had to cut — bounds are not doing their job"
+    echoed = json.loads(raw)["result"]["data"]  # parses => well-formed
+    # Both sequences were trimmed: the count bound first, then the size fit
+    # (200 transactions of 50 read bytes each still overruns the cap).
+    assert 0 < len(echoed["transactions"]) < SizePolicy().decode_max_transactions
+    assert 0 < len(echoed["annotations"]) <= SizePolicy().decode_max_annotations
+    kept_tx, kept_ann = len(echoed["transactions"]), len(echoed["annotations"])
+    assert echoed["transactionsElided"] == 5000 - kept_tx
+    assert echoed["annotationsElided"] == 5000 - kept_ann
+    # The note reports what actually survived, not the nominal limit.
+    assert f"the first {kept_tx} of 5000 transactions" in echoed["decodeNote"]
+    assert f"the first {kept_ann} of 5000 annotations" in echoed["decodeNote"]
+    # The artifact still holds everything.
+    decode_id = next(
+        e["payload"]["artifact"]["id"]
+        for e in events
+        if e["type"] == "artifact.created"
+        and e["payload"]["artifact"]["kind"] == "protocol_decode"
+    )
+    stored = json.loads(engine.artifacts.get(decode_id).content)
+    assert len(stored["annotations"]) == len(stored["transactions"]) == 5000
 
 
 def test_short_results_ride_inline_untouched(task_repo: Path) -> None:
