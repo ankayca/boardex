@@ -20,6 +20,9 @@ export default tseslint.config(
       '.venv/**',
       'packages/contract/json-schema/**',
       'packages/contract/fixtures/**',
+      // Demo-video shoot scripts (chore/demo-video): Playwright ESM driving the UI
+      // for a walkthrough recording. Not part of the shipped product; not a workspace.
+      'tools/demo-video/**',
     ],
   },
   js.configs.recommended,
