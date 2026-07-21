@@ -1,0 +1,118 @@
+# Boardex CI — repo-wide gate (backend-owner authored; the npm job runs the
+# UI owner's `npm run verify` unmodified — see docs/decisions.md).
+#
+# Hardware rules:
+# - All pytest suites are hardware-free by invariant (servers/CONTRIBUTING.md),
+#   so the Python matrix runs on hosted runners with no USB access.
+# - CI-for-hardware (HIL, scheduled bench runs) is deferred (BIBLE §2.3 #9)
+#   and deliberately absent here.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python-servers:
+    name: servers (py${{ matrix.python }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: servers/*/pyproject.toml
+
+      - name: Install server packages (editable, dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "servers/boardex-core[dev]"
+          pip install -e "servers/boardex-target[dev]"
+          pip install -e "servers/boardex-logic[dev]"
+          pip install -e "servers/boardex-runner[dev]"
+
+      # The runner suite reads packages/contract/json-schema/ (read-only
+      # cross-language bridge, BIBLE §3) — present in the checkout.
+      - name: Run pytest (all four suites)
+        run: >
+          pytest
+          servers/boardex-core/tests
+          servers/boardex-target/tests
+          servers/boardex-logic/tests
+          servers/boardex-runner/tests
+
+  npm-verify:
+    name: npm verify (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # The UI owner's gate, exactly as documented (BIBLE §11): typecheck +
+      # lint + test across the npm workspaces.
+      - run: npm run verify
+
+  ui-smoke:
+    name: ui smoke (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run BME280 browser smoke (BIBLE §8 T2.3)
+        run: npm run smoke
+
+  firmware-examples:
+    name: firmware examples (arm-none-eabi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Arm GNU toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: "13.2.Rel1"
+
+      - name: Build blinky-f303re
+        working-directory: examples/firmware/blinky-f303re
+        run: |
+          make
+          test -f blinky-f303re.elf
+
+      - name: Build rtt-f303re
+        working-directory: examples/firmware/rtt-f303re
+        run: |
+          make
+          test -f rtt-f303re.elf

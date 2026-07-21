@@ -1,0 +1,109 @@
+# Boardex server release — tag-driven (servers-vX.Y.Z).
+#
+# Publishes the four Python server packages (wheels + sdists) to a GitHub
+# Release. Installers / signed desktop packaging stay deferred (BIBLE §2.3 #7);
+# these artifacts are the backend tool layer + the §5 runner only.
+#
+# Gate order: version-lockstep check -> full pytest -> build -> install the
+# built wheels into a clean venv and smoke the runner from them -> publish.
+
+name: Release (servers)
+
+on:
+  push:
+    tags:
+      - "servers-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build wheels + sdists
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tag matches servers/VERSION and pyprojects are in lockstep
+        run: python servers/scripts/sync_versions.py --check --tag "$GITHUB_REF_NAME"
+
+      - name: Run the full server test suite first
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "servers/boardex-core[dev]"
+          pip install -e "servers/boardex-target[dev]"
+          pip install -e "servers/boardex-logic[dev]"
+          pip install -e "servers/boardex-runner[dev]"
+          pytest servers/boardex-core/tests servers/boardex-target/tests \
+                 servers/boardex-logic/tests servers/boardex-runner/tests
+
+      - name: Build all four packages
+        run: |
+          pip install build
+          for pkg in boardex-core boardex-target boardex-logic boardex-runner; do
+            python -m build --outdir dist "servers/$pkg"
+          done
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+          if-no-files-found: error
+
+  install-smoke:
+    name: install wheels + fake-bench smoke
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout only for the smoke script and the contract JSON Schema
+      # (read-only cross-language bridge, BIBLE §3) — the runner under test
+      # comes exclusively from the built wheels.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+
+      - name: Install the built wheels into a clean venv
+        run: |
+          python -m venv /tmp/release-venv
+          /tmp/release-venv/bin/pip install dist/*.whl
+
+      - name: Start boardex-runner (fake bench) from the wheels and smoke it
+        run: |
+          BOARDEX_CONTRACT_SCHEMA_DIR="$PWD/packages/contract/json-schema" \
+            PORT=4390 SPEED=2000 /tmp/release-venv/bin/boardex-runner &
+          RUNNER_PID=$!
+          python servers/scripts/release_smoke.py --base http://127.0.0.1:4390
+          kill "$RUNNER_PID"
+
+  publish:
+    name: publish GitHub Release
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+
+      - name: Create the release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Boardex servers $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Python wheels + sdists for boardex-core, boardex-target, boardex-logic, boardex-runner. Install: download all four wheels, then \`pip install boardex_*.whl\`. See docs/RELEASING.md."

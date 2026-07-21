@@ -1,0 +1,28 @@
+# Boardex — non-root USB access for supported debug probes on Linux.
+#
+# Install:
+#   sudo cp 49-boardex-probes.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger
+# Then re-plug the probe. `boardex-doctor` reports whether rules are in place.
+#
+# Logic analyzers are covered separately by libsigrok's 60-libsigrok.rules
+# (shipped with libsigrok) — see docs/kingst-la-bringup.md.
+
+# --- STMicroelectronics ST-Link -------------------------------------------
+# ST-Link/V2
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3744", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3748", MODE="0666", TAG+="uaccess"
+# ST-Link/V2-1 (on-board, e.g. Nucleo/Discovery)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="374a", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="374b", MODE="0666", TAG+="uaccess"
+# ST-Link/V3 family
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="374d", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="374e", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="374f", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3752", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3753", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3754", MODE="0666", TAG+="uaccess"
+
+# --- CMSIS-DAP (vendor-neutral, matched by product string) ----------------
+SUBSYSTEM=="usb", ATTRS{product}=="*CMSIS-DAP*", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{product}=="*CMSIS-DAP*", MODE="0666", TAG+="uaccess"
