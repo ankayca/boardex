@@ -33,13 +33,14 @@ jobs:
 
       # Dependency order matters: unpublished local packages must be installed
       # before anything that lists them (boardex-target[dev] needs boardex-logic).
+      # The runner's [agent] extra is needed for the provider tests.
       - name: Run the full server test suite first
         run: |
           python -m pip install --upgrade pip
           pip install -e "servers/boardex-core[dev]"
           pip install -e "servers/boardex-logic[dev]"
           pip install -e "servers/boardex-target[dev]"
-          pip install -e "servers/boardex-runner[dev]"
+          pip install -e "servers/boardex-runner[dev,agent]"
           pytest servers/boardex-core/tests servers/boardex-target/tests \
                  servers/boardex-logic/tests servers/boardex-runner/tests
 

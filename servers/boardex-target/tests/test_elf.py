@@ -1,14 +1,18 @@
 """Tests for ELF/DWARF symbol resolution. No board required.
 
 We compile a tiny program with the *host* toolchain (architecture-independent:
-ElfInfo just reads .symtab and DWARF), so the test is portable wherever a C
-compiler exists and skips cleanly otherwise.
+ElfInfo just reads .symtab and DWARF). ELF is the native object format on
+Linux/BSD but not on macOS (Mach-O) or Windows (PE), so the suite skips unless
+the host compiler actually emits ELF — checked by probing the magic bytes
+rather than by hardcoding a platform list.
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -16,7 +20,30 @@ from boardex_target.elf import ElfInfo
 
 _CC = shutil.which("cc") or shutil.which("gcc")
 
-pytestmark = pytest.mark.skipif(_CC is None, reason="no host C compiler available")
+
+def _host_cc_emits_elf() -> bool:
+    """True only if the host compiler produces an ELF binary (Linux/BSD)."""
+    if _CC is None:
+        return False
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "probe.c"
+            src.write_text("int main(void) { return 0; }\n")
+            out = Path(tmp) / "probe.bin"
+            subprocess.run(
+                [_CC, "-o", str(out), str(src)],
+                check=True,
+                capture_output=True,
+            )
+            return out.read_bytes()[:4] == b"\x7fELF"
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _host_cc_emits_elf(),
+    reason="host toolchain does not emit ELF (needs Linux/BSD cc/gcc)",
+)
 
 
 @pytest.fixture()
