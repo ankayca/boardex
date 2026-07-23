@@ -23,7 +23,7 @@ on a GitHub Release.
 ## Cutting a release
 
 1. Make sure `main` is green (the `CI` workflow: pytest matrix on
-   Linux/macOS/Windows, `npm run verify`, firmware examples).
+   Linux/macOS/Windows, `npm run verify`, Playwright smoke).
 2. Bump the version and sync it into the four pyprojects:
 
    ```bash
