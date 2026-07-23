@@ -36,12 +36,15 @@ jobs:
           cache: pip
           cache-dependency-path: servers/*/pyproject.toml
 
+      # Dependency order matters: these are unpublished local packages, so a
+      # package must be installed before anything that lists it as a dep.
+      # boardex-target[dev] depends on boardex-logic, so logic goes first.
       - name: Install server packages (editable, dev extras)
         run: |
           python -m pip install --upgrade pip
           pip install -e "servers/boardex-core[dev]"
-          pip install -e "servers/boardex-target[dev]"
           pip install -e "servers/boardex-logic[dev]"
+          pip install -e "servers/boardex-target[dev]"
           pip install -e "servers/boardex-runner[dev]"
 
       # The runner suite reads packages/contract/json-schema/ (read-only
