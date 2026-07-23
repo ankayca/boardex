@@ -11,6 +11,7 @@ before dispatch). The servers are spawned only after plan approval
 from __future__ import annotations
 
 import json
+import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Protocol
@@ -18,6 +19,13 @@ from typing import Any, Protocol
 from .meta_tools import PLAN_INDEX_PROP
 
 SERVER_BINARIES = ("boardex-target", "boardex-logic")
+
+
+def _venv_script(venv: Path, binary: str) -> Path:
+    """Console-script path inside a venv (POSIX bin/ vs Windows Scripts/)."""
+    if sys.platform == "win32":
+        return venv / "Scripts" / f"{binary}.exe"
+    return venv / "bin" / binary
 
 
 class ToolHost(Protocol):
@@ -50,7 +58,7 @@ class McpToolHost:
 
         self._stack = AsyncExitStack()
         for binary in SERVER_BINARIES:
-            command = venv_root / ".venv" / "bin" / binary
+            command = _venv_script(venv_root / ".venv", binary)
             if not command.is_file():
                 raise McpHostError(
                     f"{command} not found — install servers/{binary} into the repo .venv first"

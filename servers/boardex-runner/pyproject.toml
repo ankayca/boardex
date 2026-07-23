@@ -6,6 +6,19 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "TBD" }
 authors = [{ name = "Boardex contributors" }]
+# Lockstep version with the other server packages — bump via servers/VERSION
+# + servers/scripts/sync_versions.py, never by hand.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Embedded Systems",
+]
 dependencies = [
     "boardex-core",
     "boardex-target",
@@ -17,10 +30,14 @@ dependencies = [
     "jsonschema>=4.18",
 ]
 
+# The provider/mcp-host test suites exercise the real litellm gate (the
+# reviewer-pinned tests import litellm directly), so dev must pull in the
+# agent extras — otherwise `pip install -e ".[dev]"` collects tests that
+# ModuleNotFoundError on `import litellm`.
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
-# BENCH=agent extras: imported lazily (provider/mcp host), so fake/real
-# deployments and the test suite need none of these installed.
+dev = ["pytest>=8.0", "boardex-runner[agent]"]
+# BENCH=agent extras: imported lazily (provider/mcp host) at runtime, so
+# fake/real deployments need none of these — but the test suite does.
 agent = [
     "litellm>=1.40",
     # litellm lazy-imports its proxy path (fastapi + orjson) whenever `tools`
@@ -30,6 +47,10 @@ agent = [
     "orjson>=3.9",
     "mcp>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ankayca/boardex"
+Source = "https://github.com/ankayca/boardex"
 
 [project.scripts]
 boardex-runner = "boardex_runner.server:main"

@@ -50,3 +50,7 @@ coverage/
 demo-video/
 # graphify (local knowledge graph cache)
 graphify-out/
+
+# External clone of lastmile-ai/mcp-agent (substrate for the retired
+# bench-agent spike) — not Boardex code, never repo content
+mcp-agent/

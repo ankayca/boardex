@@ -6,7 +6,28 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "TBD" }
 authors = [{ name = "Boardex contributors" }]
+# Lockstep version with the other server packages — bump via servers/VERSION
+# + servers/scripts/sync_versions.py, never by hand.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Embedded Systems",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/ankayca/boardex"
+Source = "https://github.com/ankayca/boardex"
+
+[project.scripts]
+# Host-environment checker (drivers, tools, USB access) — see doctor.py.
+boardex-doctor = "boardex_core.doctor:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
