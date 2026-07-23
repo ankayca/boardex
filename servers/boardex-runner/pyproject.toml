@@ -30,10 +30,14 @@ dependencies = [
     "jsonschema>=4.18",
 ]
 
+# The provider/mcp-host test suites exercise the real litellm gate (the
+# reviewer-pinned tests import litellm directly), so dev must pull in the
+# agent extras — otherwise `pip install -e ".[dev]"` collects tests that
+# ModuleNotFoundError on `import litellm`.
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
-# BENCH=agent extras: imported lazily (provider/mcp host), so fake/real
-# deployments and the test suite need none of these installed.
+dev = ["pytest>=8.0", "boardex-runner[agent]"]
+# BENCH=agent extras: imported lazily (provider/mcp host) at runtime, so
+# fake/real deployments need none of these — but the test suite does.
 agent = [
     "litellm>=1.40",
     # litellm lazy-imports its proxy path (fastapi + orjson) whenever `tools`
