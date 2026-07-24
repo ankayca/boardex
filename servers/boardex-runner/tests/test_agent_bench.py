@@ -18,6 +18,7 @@ from boardex_runner.agent_bench import (
     _bounded_log_text,
 )
 from boardex_runner.interception import is_risk_gated
+from boardex_runner.prompts import SYSTEM_PROMPT
 
 from conftest import (
     BUILD_DESC,
@@ -50,6 +51,34 @@ def test_agent_turn_budget_default_is_60() -> None:
     assert DEFAULT_MAX_TURNS == 60
     assert AgentBench().max_turns == 60
     assert AgentBench(max_turns=25).max_turns == 25
+
+
+def test_system_prompt_pins_fault_domain_discrimination() -> None:
+    # Layer-1 hardware fault discrimination (prompts-only; the structured
+    # diagnosis category field is the v2.5 layer-2 companion). Run 2's
+    # iteration 2 ended with a live bus still NACKing at a plausible address —
+    # the shape where an agent burns iterations rewriting correct code while
+    # the fault is physical. Pin the section's key signatures and the
+    # protocol's hard rule so a prompt rewrite cannot silently drop them.
+    assert "## Fault-domain discrimination" in SYSTEM_PROMPT
+    # the signature table
+    assert "Do not rewrite the driver." in SYSTEM_PROMPT
+    assert "No firmware change can fix a held line." in SYSTEM_PROMPT
+    assert "the fault is between the pin and the probe" in SYSTEM_PROMPT
+    assert "decoders misframe at capture start" in SYSTEM_PROMPT
+    assert "a one-bit-late frame of 0xEE reads as 0xDC" in SYSTEM_PROMPT
+    assert '"target was not halted"' in SYSTEM_PROMPT
+    assert "Only when the wire CONTRADICTS the code's intent" in SYSTEM_PROMPT
+    # judgment license — signatures, not rigid if-then
+    assert "signatures, not certainties" in SYSTEM_PROMPT
+    # the discrimination protocol
+    assert "before requesting ANY second fix-iteration" in SYSTEM_PROMPT
+    assert "firmware, hardware, or instrumentation" in SYSTEM_PROMPT
+    assert "profile's connection checklist" in SYSTEM_PROMPT
+    assert (
+        "what to check with a multimeter, not show them a fifth driver rewrite"
+        in SYSTEM_PROMPT
+    )
 
 
 def test_risk_gate_floor() -> None:

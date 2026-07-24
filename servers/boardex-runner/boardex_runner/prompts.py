@@ -83,6 +83,51 @@ the approval-gated `reset_and_capture_i2c` tool; sequential `reset_target` then 
 pass with a cited artifact — `needs_review` ends the run as failed. Prove \
 chip-id over RTT in `serial_output`; use LA checks only for bus timing and ACK.
 
+## Fault-domain discrimination — before you burn a second iteration
+A communication failure lives in one of three domains: firmware, hardware \
+(wiring, power, pull-ups, the device itself), or instrumentation (probe \
+seating, analyzer placement, decoder framing). Rewriting correct code against \
+a physical fault wastes the budget and proves nothing. The signatures a bench \
+engineer reads, and the domain each points at:
+- Bus silent on capture while the firmware's I2C/GPIO config is VERIFIED by \
+register readback (values match intent) -> suspect wiring, LA probe placement, \
+or target power — not code. Do not rewrite the driver.
+- SDA or SCL stuck low across an entire capture -> a short, device latch-up, \
+or wrong wiring. No firmware change can fix a held line.
+- Lines toggling but never reaching a clean high, or transitions absent where \
+the firmware provably drives them (RTT/serial confirms execution reached the \
+transaction) -> missing or wrong pull-ups, or the signal path. The "no square \
+wave" test: if code demonstrably runs and the wire shows nothing clean, the \
+fault is between the pin and the probe.
+- Correct address byte on the wire plus a NACK on every attempt -> device \
+absent, unpowered, or address-strapped differently. Verify the decoded bits \
+yourself — decoders misframe at capture start; a one-bit-late frame of 0xEE \
+reads as 0xDC. Recommend physical checks; do not iterate firmware.
+- Flash/probe failures ("target was not halted", DP errors, transient verify \
+failures) -> probe seating, target power, or debug-domain state. One retry \
+through the approval gate is reasonable; repeated failures are a bench \
+problem to report, not to code around.
+- Only when the wire CONTRADICTS the code's intent — wrong address bits \
+genuinely driven, wrong timing against a verified TIMINGR, a missing STOP — \
+is the fault firmware. That is when iteration is warranted.
+These are signatures, not certainties; state your confidence and cite the \
+capture.
+
+The discrimination protocol is a hard rule: before requesting ANY second \
+fix-iteration for a communication failure, (1) read back the relevant config \
+registers and compare to intent; (2) capture the bus during a known \
+transmission attempt; (3) classify the evidence against the signatures above; \
+(4) `declare_diagnosis` naming the suspected DOMAIN — firmware, hardware, or \
+instrumentation — as the leading hypothesis, citing the evidence artifact. If \
+the domain is hardware or instrumentation: `record_check` everything you \
+measured with honest verdicts, then `write_report` recommending the SPECIFIC \
+physical checks — named pins, pull-up values, power rails from the board \
+profile's connection checklist — and conclude the run. An honest failure with \
+instructions is the correct outcome; further firmware iterations against a \
+physical fault waste the budget and prove nothing. The report should tell the \
+operator what to check with a multimeter, not show them a fifth driver \
+rewrite.
+
 ## Tool argument schemas — pass typed arguments (the bench validates types)
 Numeric arguments are JSON numbers, never quoted strings, and JSON has no \
 `0x` literal — write a hex address as its DECIMAL value. The memory tools key \
