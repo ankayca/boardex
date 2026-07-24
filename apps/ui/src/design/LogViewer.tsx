@@ -20,6 +20,12 @@ export interface LogViewerProps {
   minHeightPx?: number;
   /** Accessible name for the log region. */
   label?: string;
+  /**
+   * True when this log is actively receiving lines (the active step of a live
+   * run). It only changes the paused-scroll control's LABEL: streaming → "Resume
+   * live" (there is a live tail to rejoin); static → "Jump to latest" (P1 #7).
+   */
+  streaming?: boolean;
 }
 
 // Content padding (py-1) around the virtualized rows, included in the fit height.
@@ -72,6 +78,7 @@ export function LogViewer({
   maxHeightPx = 320,
   minHeightPx = 96,
   label = 'Log output',
+  streaming = false,
 }: LogViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
@@ -272,12 +279,14 @@ export function LogViewer({
           )}
         </div>
         {!follow && !searching && (
+          // Streaming → "Resume live" (rejoin the live tail); static → "Jump to
+          // latest". Both return to tail-follow so new lines auto-scroll again (P1 #7).
           <button
             type="button"
             onClick={jumpToLatest}
             className="absolute bottom-3 right-3 rounded-control border border-border bg-surface px-3 py-1 text-meta font-medium text-accent shadow-raised transition-colors duration-fast ease-motion hover:text-accent-hover"
           >
-            Jump to latest
+            {streaming ? 'Resume live' : 'Jump to latest'}
           </button>
         )}
       </div>

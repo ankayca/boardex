@@ -69,7 +69,7 @@ export function SourcesTab({ documents, initialDocId, locator }: SourcesTabProps
               type="button"
               aria-current={active ? 'true' : undefined}
               onClick={() => setSelection({ seed: seedKey, id: doc.id })}
-              className={`flex w-full flex-col items-start gap-1 rounded-control border px-3 py-2 text-left transition-colors ${
+              className={`flex w-full flex-col items-start gap-1 rounded-control border px-3 py-2 text-left transition-colors duration-fast ease-motion ${
                 active
                   ? 'border-accent bg-neutral-badge-bg'
                   : 'border-border hover:border-border-strong'

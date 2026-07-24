@@ -401,7 +401,9 @@ never white-on-white):
 Border:            #E2E3E7 default · #D2D4DA strong (focused cards, tables, approvals)
 Text primary:      #17171A
 Text secondary:    #5C6068
-Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue)
+Accent (actions):  #5B4CF0; hover #4A3BD8 (derived: one step darker, same hue);
+  bg tint #ECEBFB (Sprint 7 P1 — the cited-source highlight's resting tint; a
+  light tint of the accent, NOT a D14 semantic, so a citation may wear it)
 Pass/success ONLY: #168A4A; bg tint #E8F5EE
 Fail/stop ONLY:    #C73535; bg tint #FBEDED
 Approval/warn ONLY:#A86D00; bg tint #FAF3E4
@@ -420,14 +422,21 @@ Motion (Sprint 7 extends, never replaces): fast 120ms (hover/focus — the
   100–140 band) · medium 200ms (badge/state transitions, 160–200 band; and
   drawer/modal surfaces, 200–240 band, entrance ease = the ease-out) ·
   gentle 360ms (progress) · morph 280ms (FAIL→PASS verdict: icon morph +
-  ONE restrained background pulse, 240–300 band; --motion-morph) · ambient 2s
+  ONE restrained background pulse, 240–300 band; --motion-morph) · arrival 700ms
+  (Sprint 7 P1 — a one-shot "you landed here" wash, 600–800 band, slower than a
+  state flip so it reads as settling; --motion-arrival) · ambient 2s
   (the looping active-step pulse; --motion-ambient); eases
   cubic-bezier(0.2,0,0,1) standard, cubic-bezier(0.16,1,0.3,1) entrance;
   prefers-reduced-motion removes pulses and swaps states instantly.
 Focus: one 2px accent :focus-visible ring, offset 2px, on ALL interactive
   controls; text fields keep their accent-border focus instead.
 Spacing: 8px grid (4/8/12/16/24/32); panels padded 16–24px; sections 32px.
-Type: Inter (UI), JetBrains Mono (logs, decode, diffs, values, commands);
+Type: Inter (UI), JetBrains Mono (logs, decode, diffs, values, commands) — the
+  mono fallback stack is JetBrains Mono → ui-monospace → SFMono-Regular → Menlo →
+  Consolas → DejaVu Sans Mono → monospace, so a glyph absent from JetBrains Mono
+  resolves to a symbol-covering mono face on each OS (Consolas on Windows,
+  SF Mono/Menlo on macOS, DejaVu Sans Mono on Linux) before the last-resort
+  generic that renders tofu;
   tabular numerals app-wide — measurement columns align in either face.
 Scale (the ladder — line-height/tracking fixed per step):
   composer 24/32 −0.019em (Ask Boardex only) · page 22/28 −0.017em (page
@@ -456,7 +465,7 @@ Hard rules: green/red/amber are semantically reserved (D14) — never decorative
 
 ## 6.3 Layout (the three zones + evidence band, spec §17.2)
 
-The app frame (T6.1b, geometry v2.3): a persistent left sidebar (208px on the navigation surface, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title at the 15px section step + status badge, right-aligned page actions). The shell sits on the application canvas; all work content sits on white primary surfaces. Each page declares a content width: Home/Boards ~1040px left-aligned, composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
+The app frame (T6.1b, geometry v2.3): a persistent left sidebar (208px on the navigation surface, collapsible to a 56px icon rail; primary nav, five most recent runs, runner pill) beside a 48px context top bar (route-derived page title at the 15px section step + status badge, right-aligned page actions). The shell sits on the application canvas; all work content sits on white primary surfaces. Each page declares a content width: Home ~1040px and Boards ~960px, both left-aligned (Boards' single-column form reads at a narrower measure; Home is unchanged); composer a ~760px reading column. The frame itself does not scroll (T6.1b): it is a full-height `h-screen`/`overflow-hidden` shell — sidebar and top bar stay put, and only the content region beneath the top bar scrolls, so the page never double-scrolls.
 
 Run Workspace grid: the three-zone split keys on CONTENT width via container query (≥1208px of content area — 280 + 560 + 320 + 2×24 gaps; frame-aware, so the sidebar's 208/56px participates; a viewport breakpoint would overflow the rails under the frame): left Board Context rail 280px · center fluid (min 560px, capped 940px, surplus to the gutters) · right Run Status & Approval rail 320px · bottom Evidence Summary band full-width, 88px collapsed, expands to drawer. Below 1208px of content the right rail stacks under center; this is a desktop tool — mobile is out of scope. The rails are sticky within the content scroll region (`rail-sticky`, T6.2b — the Status card and Stop stay reachable down a long timeline); sticky is disabled below 1208px, where the right rail stacks and a pinned card could otherwise cover the timeline. The evidence drawer opens at 840px, capped at 47vw so the dimmed run always stays visible beside it.
 
@@ -470,7 +479,7 @@ Beside the seven product screens, a **/demo route family** (T6.5): `/demo`, `/de
 
 ## 7.1 Home / Runs
 
-Purpose: land, orient, resume. Content: the runner status pill (online/offline + `runnerKind`) and "New Run" now live in the app frame (T6.1b — the pill moved to the sidebar's foot, New Run to the top bar; the sidebar also carries a quiet "+" beside Runs); the page renders the list of runs — each row: title, board name, status badge, updated-at, **next action** as a real button (Approve plan / Review approval / View evidence / Open report — "Review approval" since v2.0: the row cannot know which proposal is pending, so the label names the user's action, not a guessed hardware step). Sorted: needs-attention first, then active, then recent. States: empty (first-use hero, shown only on a genuine empty response — two actions: **New Run** and **Watch a demo run**, the demo working offline since onboarding often precedes a running runner; the sidebar mirrors the demo action when it has no recent runs, gated the same way), runner offline (banner with retry + troubleshooting note, list still renders from HTTP), bench needs attention (advisory one-line amber link under the banner slot — "N instruments need attention" → /boards — shown only while the runner is online; never gates New Run), populated. Done when: a user understands what Boardex is working on and what needs them within ten seconds.
+Purpose: land, orient, resume. Content: the runner status pill (online/offline + `runnerKind`) and "New Run" now live in the app frame (T6.1b — the pill moved to the sidebar's foot, New Run to the top bar; the sidebar also carries a quiet "+" beside Runs); the page renders the list of runs — each row: title, board name, status badge, updated-at, **next action** as a real button (Approve plan / Review approval / View evidence / Open report — "Review approval" since v2.0: the row cannot know which proposal is pending, so the label names the user's action, not a guessed hardware step). Sorted: needs-attention first, then active, then recent. States: empty (first-use hero, shown only on a genuine empty response — two actions: **New Run** and **Watch a demo run**, the demo working offline since onboarding often precedes a running runner; the sidebar carries NO demo link on a genuine empty state — the hero owns the affordance — and surfaces its own quiet "Watch a demo run" link only once runs exist, the moment the hero is gone, so two demo affordances never compete on one screen), runner offline (banner with retry + troubleshooting note, list still renders from HTTP), bench needs attention (advisory one-line amber link under the banner slot — "N instruments need attention" → /boards — shown only while the runner is online; never gates New Run), populated. Done when: a user understands what Boardex is working on and what needs them within ten seconds.
 
 ## 7.2 New Run Composer
 

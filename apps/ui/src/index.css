@@ -19,6 +19,11 @@
   --color-text-secondary: #5c6068;
   --color-accent: #5b4cf0;
   --color-accent-hover: #4a3bd8;
+  /* Light accent tint (Sprint 7 P1) — the resting background of a cited-source
+     highlight. Accent is the one action/highlight color; a light tint of it is
+     NOT a D14 semantic (green/red/amber), so a citation may wear it. Same
+     lightness family as the pass/fail/warn tints. */
+  --color-accent-bg: #ecebfb;
   --color-pass: #168a4a;
   --color-pass-bg: #e8f5ee;
   --color-fail: #c73535;
@@ -57,6 +62,10 @@
   --motion-medium: 200ms;
   --motion-gentle: 360ms;
   --motion-morph: 280ms;
+  /* Arrival (Sprint 7 P1) — a one-shot "you landed here" highlight, slower than a
+     state transition so it reads as an event settling, not a flip. Used by the
+     cited-source wash; removed under prefers-reduced-motion like every animation. */
+  --motion-arrival: 700ms;
   /* Ambient loop — the active-step pulse (T6.2). Distinct from the one-shot
      durations above: it is a slow, repeating breath, not a transition. */
   --motion-ambient: 2s;
@@ -145,6 +154,16 @@ body {
    place at the morph token — a scale settle plus ONE restrained background
    pulse of the pass tint. No bounce, no celebration; reduced motion removes
    the pulse entirely (global override below). */
+/* Cited-source arrival (Sprint 7 P1 #5): a deep-linked citation washes its tint
+   in over the arrival duration, then rests on the persistent rail + tint. The
+   wash settles INTO the element's own bg (accent-bg), so the resting state is
+   whatever the class paints — the animation only stages the arrival. */
+@keyframes cited-arrival {
+  from {
+    background-color: transparent;
+    border-left-color: transparent;
+  }
+}
 @keyframes verdict-flip {
   0% {
     transform: scale(1);
@@ -195,6 +214,9 @@ body {
 .animate-verdict-flip {
   animation: verdict-flip var(--motion-morph) var(--ease-standard);
   border-radius: 9999px;
+}
+.animate-cited-arrival {
+  animation: cited-arrival var(--motion-arrival) var(--ease-entrance);
 }
 
 /* Workspace three-zone grid (§6.3) under the frame (T6.1b): the 3-column split

@@ -13,7 +13,7 @@ function Chip({ label, value, onOpen }: { label: string; value: string; onOpen: 
     <button
       type="button"
       onClick={onOpen}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-meta transition-colors hover:border-border-strong hover:text-text-primary"
+      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-meta transition-colors duration-fast ease-motion hover:border-border-strong hover:text-text-primary"
     >
       <span className="text-text-secondary">{label}</span>
       <span className="font-medium text-text-primary">{value}</span>

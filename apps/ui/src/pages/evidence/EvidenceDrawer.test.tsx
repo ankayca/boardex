@@ -198,6 +198,16 @@ describe('EvidenceDrawer deep links (?artifact=…)', () => {
     const added = table.querySelectorAll('tr[data-diff="add"]');
     expect(added).toHaveLength(1);
     expect(added[0]).toHaveTextContent('#define BME280_SADD');
+    // P1 #7 line tints (D14-compliant): an addition wears the pass tint; a
+    // context line stays untinted (the changed-ness is the semantic).
+    expect(added[0]).toHaveClass('bg-pass-bg');
+    const context = table.querySelector('tr[data-diff="context"]');
+    expect(context).not.toBeNull();
+    expect(context).not.toHaveClass('bg-pass-bg');
+    expect(context).not.toHaveClass('bg-fail-bg');
+    // P1 #7 no-wrap: the code cell never wraps and the box scrolls horizontally.
+    expect(table.querySelector('td.whitespace-pre')).not.toBeNull();
+    expect(table.closest('div.overflow-x-auto')).not.toBeNull();
   });
 
   it('a timing_measurement artifact opens Raw artifacts with its row highlighted', () => {

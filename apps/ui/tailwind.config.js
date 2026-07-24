@@ -20,6 +20,7 @@ export default {
         'text-secondary': 'var(--color-text-secondary)',
         accent: 'var(--color-accent)',
         'accent-hover': 'var(--color-accent-hover)',
+        'accent-bg': 'var(--color-accent-bg)',
         pass: 'var(--color-pass)',
         'pass-bg': 'var(--color-pass-bg)',
         fail: 'var(--color-fail)',
@@ -32,7 +33,23 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        // Sprint 7 P1 tofu fold (report surface, chosen option: extend the font
+        // fallback rather than normalize the glyph — the report_md is the agent's
+        // and must not be rewritten, and a font-layer fix covers EVERY symbol a
+        // report can carry, not one checkmark). Named symbol-covering monospace
+        // fonts sit before the generic `monospace` so a glyph missing from
+        // JetBrains Mono resolves to a mono face that has it on each OS (Consolas
+        // on Windows, SF Mono/Menlo on macOS, DejaVu Sans Mono on Linux) instead
+        // of the last-resort face that renders tofu.
+        mono: [
+          'JetBrains Mono',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          'DejaVu Sans Mono',
+          'monospace',
+        ],
       },
       // §6.1 v2.3 ladder — explicit line-heights per step. `label` (11px) is
       // reserved for the run-state and risk capsules; every other state-bearing

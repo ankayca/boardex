@@ -118,6 +118,7 @@ describe('§6.1 v2.3 token migration', () => {
       '--color-text-secondary': '#5c6068',
       '--color-accent': '#5b4cf0',
       '--color-accent-hover': '#4a3bd8',
+      '--color-accent-bg': '#ecebfb',
       '--color-pass': '#168a4a',
       '--color-pass-bg': '#e8f5ee',
       '--color-fail': '#c73535',
@@ -142,6 +143,7 @@ describe('§6.1 v2.3 token migration', () => {
       '--motion-medium': '200ms',
       '--motion-gentle': '360ms',
       '--motion-morph': '280ms',
+      '--motion-arrival': '700ms',
       '--motion-ambient': '2s',
       '--ease-standard': 'cubic-bezier(0.2, 0, 0, 1)',
       '--ease-entrance': 'cubic-bezier(0.16, 1, 0.3, 1)',
@@ -149,6 +151,21 @@ describe('§6.1 v2.3 token migration', () => {
     for (const [token, value] of Object.entries(expected)) {
       expect(css, token).toContain(`${token}: ${value}`);
     }
+  });
+
+  // Sprint 7 P1 #14: reduced motion re-verified. The one global rule collapses
+  // BOTH animations and transitions to near-zero — so everything this pass added
+  // (the cited-source arrival wash, the on-token hover transitions) settles
+  // instantly for a reduced-motion user without any per-component handling.
+  it('index.css collapses all animation + transition motion under prefers-reduced-motion', () => {
+    const css = readFileSync(join(UI_ROOT, 'src', 'index.css'), 'utf8');
+    const block = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(block).toContain('@media (prefers-reduced-motion: reduce)');
+    // Applies to every element and pseudo-element, not a hand-listed set.
+    expect(block).toContain('*,');
+    expect(block).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
+    expect(block).toMatch(/animation-iteration-count:\s*1\s*!important/);
+    expect(block).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
   });
 
   it('the geometry tokens hold: sidebar 208px, rail 320px, breakpoint 1208px', () => {

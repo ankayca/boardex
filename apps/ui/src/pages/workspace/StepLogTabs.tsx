@@ -8,9 +8,12 @@ import { formatLogTime, groupLogsByStream, LOG_STREAMS, STREAM_LABELS } from './
 export interface StepLogTabsProps {
   stepTitle: string;
   logs: readonly StepLogLine[];
+  /** True while this step is the live, streaming one — drives the LogViewer's
+   * "Resume live" affordance (P1 #7). */
+  streaming?: boolean;
 }
 
-export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
+export function StepLogTabs({ stepTitle, logs, streaming = false }: StepLogTabsProps) {
   const grouped = useMemo(() => groupLogsByStream(logs), [logs]);
   // Initial tab: the first stream with output (agent when the pane opens empty).
   // Only the user switches after that — no effect re-picks as new streams arrive.
@@ -67,6 +70,7 @@ export function StepLogTabs({ stepTitle, logs }: StepLogTabsProps) {
           timestamps={activeTimestamps}
           maxHeightPx={320}
           label={`${stepTitle} — ${STREAM_LABELS[active]} log`}
+          streaming={streaming}
         />
       </div>
     </div>

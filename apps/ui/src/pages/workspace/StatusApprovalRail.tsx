@@ -234,7 +234,7 @@ function CompletionModule({
       {reportHref && (
         <Link
           to={reportHref}
-          className="mt-3 flex h-10 w-full items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-white transition-colors hover:bg-accent-hover"
+          className="mt-3 flex h-10 w-full items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-white transition-colors duration-fast ease-motion hover:bg-accent-hover"
         >
           Open Validation Report
         </Link>

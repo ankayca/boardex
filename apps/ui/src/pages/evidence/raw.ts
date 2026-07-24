@@ -4,7 +4,8 @@
 // same-origin Blob (content fetched by reference, D4) so the filename and MIME
 // hold regardless of the runner's origin; logic captures save as sigrok .sr
 // files that open in PulseView.
-import type { Artifact, ArtifactKind } from '@boardex/contract';
+import type { Artifact, ArtifactKind, RunView } from '@boardex/contract';
+import { iterationOfArtifact } from './logs';
 
 // Filename extension by kind — the same mapping the mock runner stores fixture
 // artifacts under; derived from the contract's kind enum, not invented per file.
@@ -23,6 +24,52 @@ const EXTENSION_BY_KIND: Record<ArtifactKind, string> = {
 // id + kind extension is the right filename for every fixture artifact.
 export function downloadFilename(artifact: Pick<Artifact, 'id' | 'kind'>): string {
   return `${artifact.id}${EXTENSION_BY_KIND[artifact.kind]}`;
+}
+
+// Type order within an iteration group (§7.4 Raw grouping, Sprint 7 P1 #8):
+// the run pipeline order — build → flash → serial, then the structured captures,
+// the diff, and the report last. Derived from the contract kind enum, not per-file.
+const KIND_ORDER: readonly ArtifactKind[] = [
+  'build_log',
+  'flash_log',
+  'serial_log',
+  'logic_capture',
+  'protocol_decode',
+  'timing_measurement',
+  'code_diff',
+  'report_md',
+];
+
+export interface ArtifactGroup {
+  /** The fix-loop iteration, or null for artifacts whose step isn't in the view. */
+  iteration: number | null;
+  artifacts: Artifact[];
+}
+
+// Group the run's artifacts by iteration (via the same step→iteration derivation
+// the Logs tab uses, D5), then order each group by type. Iterations ascend;
+// iteration-unresolvable artifacts fall into a trailing null group — every
+// artifact stays listed, nothing is dropped (the T3.2 principle).
+export function groupArtifacts(view: RunView): ArtifactGroup[] {
+  const byIteration = new Map<number | null, Artifact[]>();
+  for (const artifact of view.artifacts) {
+    const iteration = iterationOfArtifact(artifact, view);
+    const bucket = byIteration.get(iteration);
+    if (bucket) bucket.push(artifact);
+    else byIteration.set(iteration, [artifact]);
+  }
+  const iterations = [...byIteration.keys()].sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a - b;
+  });
+  return iterations.map((iteration) => ({
+    iteration,
+    artifacts: byIteration
+      .get(iteration)!
+      .slice()
+      .sort((x, y) => KIND_ORDER.indexOf(x.kind) - KIND_ORDER.indexOf(y.kind)),
+  }));
 }
 
 // "76 B" / "1.5 KB" / "10.7 KB" — binary steps, one decimal above bytes.

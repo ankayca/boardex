@@ -76,6 +76,28 @@ describe('LogViewer', () => {
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).not.toBeInTheDocument();
   });
 
+  // P1 #7: a streaming log labels the paused-scroll control "Resume live" and,
+  // on click, rejoins the tail so new lines auto-scroll again.
+  it('streaming: "Resume live" appears on scroll-up and returns to tail-follow', () => {
+    const { rerender } = render(<LogViewer lines={makeLines(50)} streaming />);
+    const log = screen.getByRole('log');
+    mockScrollMetrics(log, 1000, 200);
+    // At the bottom: no chip. Scroll up during streaming: the chip appears, named
+    // for the live tail (not "Jump to latest").
+    expect(screen.queryByRole('button', { name: 'Resume live' })).not.toBeInTheDocument();
+    fireEvent.scroll(log, { target: { scrollTop: 100 } });
+    expect(screen.getByRole('button', { name: 'Resume live' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).not.toBeInTheDocument();
+    // Click returns to the tail...
+    fireEvent.click(screen.getByRole('button', { name: 'Resume live' }));
+    expect(log.scrollTop).toBe(1000);
+    expect(screen.queryByRole('button', { name: 'Resume live' })).not.toBeInTheDocument();
+    // ...and follow resumes: a new line auto-scrolls without another click.
+    mockScrollMetrics(log, 1200, 200);
+    rerender(<LogViewer lines={makeLines(60)} streaming />);
+    expect(log.scrollTop).toBe(1200);
+  });
+
   it('shows a placeholder and no header when there are no lines', () => {
     render(<LogViewer lines={[]} label="Empty" />);
     expect(screen.getByText('No output yet.')).toBeInTheDocument();

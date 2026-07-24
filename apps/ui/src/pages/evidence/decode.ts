@@ -124,6 +124,14 @@ export interface DecodeRow {
   annotation: string;
   /** Fail bg tint ONLY when the device did not answer (address NACK). */
   failed: boolean;
+  /**
+   * True when this row opens a new transaction group (§7.4, Sprint 7 P1 #6): a
+   * read that immediately follows a write to the SAME address joins that write's
+   * group (the register-set-then-read pair operators read as one operation), so
+   * it is groupStart=false; every other transaction opens its own group. Drives
+   * the subtle group separators — no zebra.
+   */
+  groupStart: boolean;
 }
 
 // One table row per transaction. Time and annotation come from the aligned
@@ -134,7 +142,7 @@ export function decodeRows(decode: ProtocolDecode): DecodeRow[] {
   const segments = foldAnnotationSegments(decode.annotations);
   const aligned = segments.length === decode.transactions.length;
 
-  return decode.transactions.map((tx, index) => {
+  const rows: DecodeRow[] = decode.transactions.map((tx, index) => {
     const segment = aligned ? segments[index] : undefined;
     const bytes = [...tx.write, ...tx.read];
     return {
@@ -155,6 +163,19 @@ export function decodeRows(decode: ProtocolDecode): DecodeRow[] {
       data: bytes.length > 0 ? bytes.map(hexByte).join(' ') : '—',
       annotation: segment ? segment.texts.join(' · ') : '—',
       failed: isTransactionFailed(tx),
+      groupStart: true,
     };
   });
+
+  // Pair a write with the read that follows it to the same address: the read
+  // joins the write's group. Only the immediate write→read pair joins (the
+  // write must itself open a group), so W W stays two groups and R R stays two.
+  for (let i = 1; i < rows.length; i++) {
+    const prev = rows[i - 1]!;
+    const cur = rows[i]!;
+    if (cur.rw === 'R' && prev.rw === 'W' && cur.address === prev.address && prev.groupStart) {
+      cur.groupStart = false;
+    }
+  }
+  return rows;
 }

@@ -151,7 +151,7 @@ export function LogsTab({ view, targetArtifact }: LogsTabProps) {
               type="button"
               aria-pressed={artifact.id === selected.id}
               onClick={() => select(artifact)}
-              className={`rounded-full border border-border px-2.5 py-0.5 text-metadata font-medium transition-colors ${
+              className={`rounded-full border border-border px-2.5 py-0.5 text-metadata font-medium transition-colors duration-fast ease-motion ${
                 artifact.id === selected.id
                   ? 'bg-neutral-badge-bg text-text-primary'
                   : 'text-text-secondary hover:text-text-primary'

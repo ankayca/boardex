@@ -95,10 +95,20 @@ describe('SourcesTab', () => {
     const located = await screen.findByRole('heading', { name: 'Timing specifications' });
     expect(located).toHaveAttribute('data-located', 'true');
     expect(located).toHaveAttribute('id', 'timing-specifications');
+    // P1 #5: the cited section carries a "Cited source" label and, on its wrapper,
+    // BOTH the one-shot arrival wash and the persistent rail + accent tint that it
+    // settles into (reduced motion drops only the animation; the rail/tint stay).
+    expect(screen.getByText('Cited source')).toBeInTheDocument();
+    const cited = located.parentElement!;
+    expect(cited).toHaveClass('animate-cited-arrival');
+    expect(cited).toHaveClass('border-accent');
+    expect(cited).toHaveClass('bg-accent-bg');
+    expect(cited).toHaveClass('border-l-[3px]');
     // A non-located heading carries its slug id but is not highlighted.
     const other = screen.getByRole('heading', { name: 'I2C device addressing' });
     expect(other).toHaveAttribute('id', 'i2c-device-addressing');
     expect(other).not.toHaveAttribute('data-located');
+    expect(screen.getAllByText('Cited source')).toHaveLength(1);
   });
 
   it('renders a PDF document via a native embed with a fallback link', () => {

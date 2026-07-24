@@ -14,27 +14,44 @@ import { useBenchStatus } from '../../lib/useBenchStatus';
 import { RunRow } from './RunRow';
 import { sortRunSummaries } from './nextAction';
 
-function NewRunButton() {
-  const navigate = useNavigate();
+// A small filled play triangle for the demo affordance (P1 #1 / design review):
+// gives "Watch a demo run" a recognizable playback marker.
+function PlayIcon() {
   return (
-    <Button variant="primary" onClick={() => navigate('/runs/new')}>
-      New Run
-    </Button>
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" className="shrink-0">
+      <path d="M5 3.5v9l7-4.5-7-4.5z" fill="currentColor" />
+    </svg>
   );
 }
 
 // The first-run hero's two actions (§7.1 / T6.5): start a real run, or watch the
 // recorded demo run — the latter works offline, which is exactly when onboarding
-// happens (the runner may not be up yet).
+// happens (the runner may not be up yet). They render at the 40px button height to
+// meet the review's 38–40px hero spec (P1 #1) — a size choice for the empty-state
+// hero, not a claim of gate-primary semantics (§6.1 reserves 40px's MEANING, not
+// the height itself, for approval gates).
 function HeroActions() {
   const navigate = useNavigate();
   return (
     <div className="flex flex-wrap items-center justify-center gap-3">
-      <NewRunButton />
-      <Button variant="secondary" onClick={() => navigate('/demo')}>
+      <Button variant="primary" size="gate" onClick={() => navigate('/runs/new')}>
+        New Run
+      </Button>
+      <Button variant="secondary" size="gate" onClick={() => navigate('/demo')}>
+        <PlayIcon />
         Watch a demo run
       </Button>
     </div>
+  );
+}
+
+// The whitespace's product-specific purpose (P1 #1): a compact secondary-tone line
+// naming the run lifecycle beneath the hero actions.
+function ProcessLine() {
+  return (
+    <p className="text-metadata uppercase tracking-wide text-text-secondary">
+      Plan → Flash → Measure → Verify
+    </p>
   );
 }
 
@@ -182,13 +199,16 @@ export default function HomePage() {
         // A genuine empty response — the first-use hero (§7.1). We DON'T show this on a
         // failed fetch: an offline cold start has no runs to list, but the banner above
         // already explains why, and "start your first run" would misread the situation.
-        // T6.1c: the first-use hero floats on the canvas ~35vh down, no card chrome.
+        // T6.1c: the first-use hero floats on the canvas, no card chrome. P1 #1:
+        // lifted into the upper-40% band so it reads anchored, not stranded in a
+        // large empty field; the process line gives the whitespace below a purpose.
         <EmptyState
           title="Bring up your first board"
           description="Describe a bring-up task in plain language — Boardex plans it, flashes, measures, and reports, with every result linked to its evidence."
           action={<HeroActions />}
+          footer={<ProcessLine />}
           frameless
-          className="mt-[24vh]"
+          className="mt-[16vh]"
         />
       ) : null}
     </main>

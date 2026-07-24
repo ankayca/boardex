@@ -1,9 +1,15 @@
 // Raw-artifacts helpers (§7.4): kind-derived download filenames, humanized
 // sizes, and the download path carrying the artifact's own MIME type.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Artifact, ArtifactKind } from '@boardex/contract';
+import type { Artifact, ArtifactKind, RunView } from '@boardex/contract';
 import { artifactOf } from '../workspace/test-events';
-import { downloadArtifact, downloadFilename, humanizeSize, saveBlobViaAnchor } from './raw';
+import {
+  downloadArtifact,
+  downloadFilename,
+  groupArtifacts,
+  humanizeSize,
+  saveBlobViaAnchor,
+} from './raw';
 
 describe('downloadFilename', () => {
   it('derives id + kind extension for every artifact kind', () => {
@@ -29,6 +35,29 @@ describe('humanizeSize', () => {
     expect(humanizeSize(1024)).toBe('1.0 KB');
     expect(humanizeSize(10923)).toBe('10.7 KB');
     expect(humanizeSize(3 * 1024 * 1024)).toBe('3.0 MB');
+  });
+});
+
+describe('groupArtifacts (P1 #8)', () => {
+  it('groups by iteration (ascending, null last) then orders each group by type', () => {
+    const view = {
+      steps: [{ id: 'st_a' }, { id: 'st_b' }],
+      iterations: [{ iteration: 2, reason: 'fix', firstStepIndex: 1 }],
+      artifacts: [
+        { ...artifactOf('a_diff', 'code_diff'), stepId: 'st_a' },
+        { ...artifactOf('a_build', 'build_log'), stepId: 'st_a' },
+        { ...artifactOf('a_serial2', 'serial_log'), stepId: 'st_b' },
+        // step not in the view → iteration unresolvable → trailing null group.
+        { ...artifactOf('a_report', 'report_md'), stepId: 'st_missing' },
+      ],
+    } as unknown as RunView;
+
+    const groups = groupArtifacts(view);
+    expect(groups.map((g) => g.iteration)).toEqual([1, 2, null]);
+    // Iteration 1: build_log sorts before code_diff (pipeline KIND_ORDER).
+    expect(groups[0]!.artifacts.map((a) => a.id)).toEqual(['a_build', 'a_diff']);
+    expect(groups[1]!.artifacts.map((a) => a.id)).toEqual(['a_serial2']);
+    expect(groups[2]!.artifacts.map((a) => a.id)).toEqual(['a_report']);
   });
 });
 

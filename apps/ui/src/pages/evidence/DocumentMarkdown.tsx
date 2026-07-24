@@ -56,7 +56,7 @@ export interface DocumentMarkdownProps {
 
 export function DocumentMarkdown({ markdown, locator }: DocumentMarkdownProps) {
   const blocks = parseMarkdown(markdown);
-  const locatedRef = useRef<HTMLHeadingElement | null>(null);
+  const locatedRef = useRef<HTMLDivElement | null>(null);
 
   // Scroll the located heading into view when the locator resolves. jsdom has no
   // layout, so scrollIntoView may be absent or throw — guard it; the highlight
@@ -87,7 +87,7 @@ function DocumentBlock({
 }: {
   block: Block;
   locator: string | null;
-  locatedRef: React.MutableRefObject<HTMLHeadingElement | null>;
+  locatedRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
   switch (block.type) {
     case 'heading': {
@@ -99,22 +99,34 @@ function DocumentBlock({
           : block.level === 2
             ? 'mt-8 mb-3 border-b border-border pb-2 text-section font-semibold'
             : 'mt-6 mb-2 text-body font-semibold';
-      // A located heading gets an accent left-rail highlight over a neutral tint
-      // (accent is the one action/highlight color; the tint is neutral — not a
-      // green/red/amber semantic, D14 intact).
-      const highlight = located
-        ? 'scroll-mt-4 rounded-r border-l-2 border-accent bg-neutral-badge-bg pl-3 -ml-3'
-        : '';
       const Tag = (`h${Math.min(block.level, 4)}` as unknown) as 'h2';
-      return (
+      const heading = (
         <Tag
           id={slug}
           data-located={located ? 'true' : undefined}
-          ref={located ? locatedRef : undefined}
-          className={`${size} ${highlight} text-text-primary`}
+          // Located: the wrapper is the scroll target and owns the top margin, so
+          // the heading sits tight beneath the "Cited source" label.
+          className={`${size} ${located ? '!mt-0' : ''} text-text-primary`}
         >
           <InlineRun inline={block.inline} />
         </Tag>
+      );
+      if (!located) return heading;
+      // Cited-source highlight (§7.4, Sprint 7 P1 #5): a persistent 3px accent
+      // rail + light accent tint marks the cited section, a small "Cited source"
+      // label names it, and a one-shot arrival wash (removed under reduced
+      // motion) settles into that resting state. scroll-mt clears the drawer
+      // header so the heading isn't tucked beneath it when it scrolls into view.
+      return (
+        <div
+          ref={locatedRef}
+          className="animate-cited-arrival -ml-3 mt-8 scroll-mt-6 rounded-r border-l-[3px] border-accent bg-accent-bg py-2 pl-3"
+        >
+          <p className="text-metadata font-semibold uppercase tracking-wide text-accent">
+            Cited source
+          </p>
+          {heading}
+        </div>
       );
     }
     case 'paragraph':

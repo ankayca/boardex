@@ -16,18 +16,20 @@
 import { StatusDot } from '../../design';
 import { benchMatchText, hasBenchWarnings, type InstrumentMatch } from '../../lib/benchReadiness';
 
+// One tight line per instrument (P1 #10): label · dot/message. Compact metadata
+// rows rather than the roomier body layout — the panel is a findings list.
 function MatchRow({ match }: { match: InstrumentMatch }) {
   const message = benchMatchText(match);
   return (
-    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className="w-32 shrink-0 text-meta text-text-secondary">{match.label}</span>
+    <li className="flex flex-wrap items-baseline gap-x-2.5 text-metadata">
+      <span className="w-28 shrink-0 text-text-secondary">{match.label}</span>
       {match.status === 'missing' ? (
-        <span className="text-body text-warn">{message}</span>
+        <span className="text-warn">{message}</span>
       ) : (
-        <>
+        <span className="inline-flex items-center gap-1.5">
           <StatusDot state={match.deviceState ?? 'online'} label={match.deviceId ?? ''} />
-          {message && <span className="text-meta text-warn">{message}</span>}
-        </>
+          {message && <span className="text-warn">{message}</span>}
+        </span>
       )}
     </li>
   );
@@ -39,22 +41,22 @@ export function ValidationPanel({ matches }: { matches: readonly InstrumentMatch
     <section
       aria-label="Bench validation"
       role="status"
-      className={`rounded-card border px-5 py-4 ${
+      className={`rounded-card border px-4 py-3 ${
         warnings ? 'border-warn bg-warn-bg' : 'border-pass bg-pass-bg'
       }`}
     >
-      <p className={`text-body font-medium ${warnings ? 'text-warn' : 'text-pass'}`}>
+      <p className={`text-meta font-medium ${warnings ? 'text-warn' : 'text-pass'}`}>
         {warnings
           ? 'Validated with warnings — some instruments are not on the bench'
           : 'Validated — every referenced instrument is on the bench'}
       </p>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-2 space-y-1">
         {matches.map((match) => (
           <MatchRow key={match.kind} match={match} />
         ))}
       </ul>
       {warnings && (
-        <p className="mt-3 text-meta text-text-secondary">
+        <p className="mt-2 text-metadata text-text-secondary">
           You can still save this profile — benches change. Runs that need a missing
           instrument will fail at that step.
         </p>
