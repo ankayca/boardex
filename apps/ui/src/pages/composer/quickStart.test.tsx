@@ -4,14 +4,14 @@
 // (non-contract) workspace probe are stubbed; the live end-to-end path is the composer
 // integration test.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { BenchStatus, BoardProfile } from '@boardex/contract';
 import { api } from '../../lib/api';
 import { addRecentRepoPath, getRecentRepoPaths, resetSettingsMemory } from '../../lib/settings';
-import { workspaceApi } from '../../lib/workspaceValidate';
+import { workspaceApi, type WorkspaceProbe } from '../../lib/workspaceValidate';
 import NewRunPage from './NewRunPage';
 
 const BENCH: BenchStatus = {
@@ -213,6 +213,51 @@ describe('Quick Start path validation — advisory, never blocking', () => {
     await user.type(pathInput(), '-typo');
     expect(screen.queryByText(/Firmware folder found on the runner/)).not.toBeInTheDocument();
   });
+
+  it('discards a probe that resolves AFTER the path changed — verdict and build alike', async () => {
+    const user = userEvent.setup();
+    // The first probe hangs; it is answered only once the user has already retyped.
+    let answerFirstProbe!: (probe: WorkspaceProbe) => void;
+    const firstProbe = new Promise<WorkspaceProbe>((resolve) => {
+      answerFirstProbe = resolve;
+    });
+    vi.spyOn(workspaceApi, 'validate')
+      .mockReturnValueOnce(firstProbe)
+      .mockResolvedValue({ status: 'unsupported' });
+    const { saveBoardProfile } = setup();
+    await screen.findByRole('region', { name: 'Quick Start' });
+
+    await enterPath(user, '/bench/firmware/old-board');
+    expect(screen.getByText('Checking the path on the runner…')).toBeInTheDocument();
+
+    // The user moves on before the runner answers.
+    await user.type(pathInput(), '-new');
+    expect(pathInput()).toHaveValue('/bench/firmware/old-board-new');
+
+    // The stale answer lands — about a path that is no longer in the field.
+    await act(async () => {
+      answerFirstProbe({
+        status: 'validated',
+        result: { ok: true, exists: true, kind: 'firmware', detectedBuild: 'cmake --build' },
+      });
+      await Promise.resolve();
+    });
+
+    // Nothing is claimed: not the green verdict, not the checking state.
+    expect(screen.queryByText(/Firmware folder found on the runner/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Checking the path on the runner…')).not.toBeInTheDocument();
+
+    // …and the discarded detectedBuild cannot ride into the compiled profile: the
+    // build command is the documented fallback, not the stale probe's answer.
+    await user.click(screen.getByRole('textbox', { name: 'Ask Boardex' }));
+    await user.paste('bring up the BME280');
+    await user.click(screen.getByRole('button', { name: 'Create Run Plan' }));
+    await waitFor(() => expect(saveBoardProfile).toHaveBeenCalledTimes(1));
+    expect(saveBoardProfile.mock.calls[0]?.[0]).toMatchObject({
+      repoPath: '/bench/firmware/old-board-new',
+      buildCommand: 'make',
+    });
+  });
 });
 
 describe('Quick Start feature detection (the route is not contract)', () => {
@@ -316,6 +361,35 @@ describe('Quick Start assembly — one click, two entities', () => {
       'Could not save the board and create the run',
     );
     expect(createRun).not.toHaveBeenCalled();
+  });
+
+  it('retrying after a failed create re-saves the SAME profile, never a second one', async () => {
+    const user = userEvent.setup();
+    const { saveBoardProfile, createRun } = setup();
+    // The profile saves, then the run creation fails — the runner is now holding a
+    // board profile for a run that does not exist.
+    createRun.mockRejectedValueOnce(new Error('runner unreachable'));
+    await screen.findByRole('region', { name: 'Quick Start' });
+
+    await enterPath(user, '/bench/firmware/bme280-f303re');
+    await user.click(screen.getByRole('textbox', { name: 'Ask Boardex' }));
+    await user.paste('bring up the BME280');
+    const create = screen.getByRole('button', { name: 'Create Run Plan' });
+    await user.click(create);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    // Retry: the same panel, the same board — so the same profile id, which POST
+    // /board-profiles (keyed by id) overwrites rather than duplicates.
+    await user.click(create);
+    await waitFor(() => expect(createRun).toHaveBeenCalledTimes(2));
+    expect(saveBoardProfile).toHaveBeenCalledTimes(2);
+    const [first, second] = saveBoardProfile.mock.calls.map(
+      (call) => (call[0] as BoardProfile).id,
+    );
+    expect(second).toBe(first);
+    expect(createRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ boardProfileId: first }),
+    );
   });
 
   it('needs a path before it can create anything', async () => {

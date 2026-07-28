@@ -611,9 +611,21 @@ describe('mock runner', () => {
     const missing = await post('/workspace/validate', { path: '/definitely/not/a/real/path' });
     expect(await missing.json()).toEqual({ ok: false, exists: false, kind: 'missing' });
 
-    // A body without a string path is a client error, never a guessed answer.
+    // A body without a string path is a client error, never a guessed answer — and
+    // never a 500 either: a literal null body is a malformed request, not a runner bug.
     expect((await post('/workspace/validate', {})).status).toBe(400);
     expect((await post('/workspace/validate', { path: 42 })).status).toBe(400);
+    // Raw fetch, not post(): the helper's `body ?? {}` would turn a null into an
+    // object and never exercise the null branch.
+    const rawBody = (body: string): Promise<Response> =>
+      fetch(`${base}/workspace/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+    expect((await rawBody('null')).status).toBe(400);
+    expect((await rawBody('"not an object"')).status).toBe(400);
+    expect((await rawBody('[]')).status).toBe(400);
     expect((await fetch(`${base}/workspace/validate`)).status).toBe(405);
   });
 

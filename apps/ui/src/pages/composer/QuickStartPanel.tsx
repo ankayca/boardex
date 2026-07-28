@@ -12,12 +12,13 @@
 // and the flow still completes. Every state here is ADVISORY — the same pattern the
 // bench references follow: a path we could not confirm never blocks Create Run Plan,
 // the run just fails honestly if the user insists.
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../design';
 import { getRecentRepoPaths, subscribeSettings } from '../../lib/settings';
 import { repoBasename } from '../../lib/repoBasename';
 import { workspaceApi, type WorkspaceValidation } from '../../lib/workspaceValidate';
+import { newBoardProfileId } from '../boards/profileDraft';
 import { quickStartName } from './quickStartProfile';
 
 // 'unsupported' and 'failed' both render NOTHING: the runner could not tell us, which
@@ -39,6 +40,12 @@ export interface QuickStart {
   acceptSuggestion: (path: string) => void;
   /** The build command to compile into the profile; undefined → the 'make' fallback. */
   detectedBuild: string | undefined;
+  /**
+   * The compiled profile's id, minted ONCE per panel session: a retried Create after a
+   * failure re-saves the same profile (POST /board-profiles is keyed by id) instead of
+   * leaving an orphan behind on the runner.
+   */
+  profileId: string;
   ready: boolean;
 }
 
@@ -52,9 +59,21 @@ export function useQuickStart(initialPath = ''): QuickStart {
   const [name, setNameRaw] = useState(() => (initialPath ? quickStartName(initialPath) : ''));
   const [nameEdited, setNameEdited] = useState(false);
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' });
+  // One id for this panel session. A successful Create navigates away and unmounts the
+  // composer, so the next board gets a fresh hook instance and a fresh id; every retry
+  // in between is the SAME profile being written again, never a second one.
+  const [profileId] = useState(() => newBoardProfileId());
+
+  // Request generation. Every probe carries the generation it was issued under, and a
+  // stale answer — one that resolves after the path moved on — is DISCARDED rather than
+  // rendered: a verdict about a path the user has already edited is a lie about the
+  // path now in the field, and its detectedBuild would otherwise ride into the
+  // compiled profile's buildCommand.
+  const probeGeneration = useRef(0);
 
   const setRepoPath = useCallback(
     (value: string) => {
+      probeGeneration.current += 1; // supersede any probe still in flight
       setRepoPathRaw(value);
       setProbe({ status: 'idle' }); // a stale verdict beside a retyped path is a lie
       if (!nameEdited) setNameRaw(value.trim() ? quickStartName(value) : '');
@@ -69,6 +88,8 @@ export function useQuickStart(initialPath = ''): QuickStart {
 
   const probePath = useCallback((path: string) => {
     const trimmed = path.trim();
+    const generation = (probeGeneration.current += 1);
+    const current = () => generation === probeGeneration.current;
     if (trimmed.length === 0) {
       setProbe({ status: 'idle' });
       return;
@@ -76,14 +97,17 @@ export function useQuickStart(initialPath = ''): QuickStart {
     setProbe({ status: 'checking' });
     workspaceApi
       .validate(trimmed)
-      .then((answer) =>
+      .then((answer) => {
+        if (!current()) return;
         setProbe(
           answer.status === 'validated'
             ? { status: 'validated', result: answer.result }
             : { status: 'unsupported' },
-        ),
-      )
-      .catch(() => setProbe({ status: 'failed' }));
+        );
+      })
+      .catch(() => {
+        if (current()) setProbe({ status: 'failed' });
+      });
   }, []);
 
   const validate = useCallback(() => probePath(repoPath), [probePath, repoPath]);
@@ -110,6 +134,7 @@ export function useQuickStart(initialPath = ''): QuickStart {
     validate,
     acceptSuggestion,
     detectedBuild,
+    profileId,
     ready: repoPath.trim().length > 0,
   };
 }

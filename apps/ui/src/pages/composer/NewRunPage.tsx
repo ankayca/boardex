@@ -82,12 +82,18 @@ export default function NewRunPage() {
       // Quick Start: compile the profile from the path + the live bench, save it
       // through the SAME profile-creation path the builder uses (§5.3 POST
       // /board-profiles), then create the run against what the runner echoed back.
-      const compiled = buildQuickStartProfile({
-        repoPath: quick.repoPath,
-        name: quick.name,
-        detectedBuild: quick.detectedBuild,
-        bench,
-      });
+      // The id comes from the panel session, not from a fresh mint per attempt: a
+      // Create that saved the profile and then failed at POST /runs must, on retry,
+      // OVERWRITE that profile rather than leave a second one behind on the runner.
+      const compiled = buildQuickStartProfile(
+        {
+          repoPath: quick.repoPath,
+          name: quick.name,
+          detectedBuild: quick.detectedBuild,
+          bench,
+        },
+        quick.profileId,
+      );
       const saved = await api.saveBoardProfile(compiled);
       addRecentRepoPath(saved.repoPath);
       await queryClient.invalidateQueries({ queryKey: ['board-profiles'] });

@@ -185,6 +185,11 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
     if (seg.length === 2 && seg[0] === 'workspace' && seg[1] === 'validate') {
       if (method !== 'POST') return sendError(res, 405, 'method not allowed');
       const body = await readBody(req);
+      // A literal `null` body parses to null, and reading .path off it would throw
+      // into the 500 handler — a client mistake must answer 400, not "internal error".
+      if (body === null || typeof body !== 'object') {
+        return sendError(res, 400, 'invalid workspace path');
+      }
       const path = (body as { path?: unknown }).path;
       if (typeof path !== 'string') return sendError(res, 400, 'invalid workspace path');
       return sendJson(res, 200, validateWorkspacePath(path));

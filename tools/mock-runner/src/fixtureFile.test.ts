@@ -14,6 +14,12 @@ const RECORD = fileURLToPath(
   new URL('../../../records/bmp180-run/recorded_run.jsonl', import.meta.url),
 );
 const RECORDING_RUN_ID = 'run_fc45bae2d6f8'; // the id baked into the recording
+// The board profile the RECORDING itself names. A recording's run.created is a record
+// of a run that happened, so this id is a fact — the mock's requested-boardProfileId
+// substitution (authored fixtures only) must never overwrite it. The POST below names
+// a DIFFERENT id on purpose: with the two equal, the assertion would pass either way.
+const RECORDING_BOARD_PROFILE_ID = 'bp_nucleo_f303re';
+const REQUESTED_BOARD_PROFILE_ID = 'bp_requested_by_the_client';
 const TERMINAL = new Set(['completed', 'failed', 'stopped']);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -45,7 +51,7 @@ describe('FIXTURE_FILE replays an arbitrary recorded run', () => {
     const res = await fetch(base + '/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskPrompt: 'replay', boardProfileId: 'bp_nucleo_f303re' }),
+      body: JSON.stringify({ taskPrompt: 'replay', boardProfileId: REQUESTED_BOARD_PROFILE_ID }),
     });
     expect(res.status).toBe(200);
     const { runId } = (await res.json()) as { runId: string };
@@ -85,6 +91,24 @@ describe('FIXTURE_FILE replays an arbitrary recorded run', () => {
     expect(view.artifacts).toHaveLength(15);
     // Every emitted event was rekeyed to this session — none carry the source id.
     expect(events.every((e) => e.runId === runId)).toBe(true);
+
+    // A RECORDING KEEPS ITS OWN boardProfileId. The requested-profile substitution is
+    // scoped to the authored fixtures: run.created here is a record of a run that
+    // actually happened on a bench, so its board profile is evidence, not a
+    // placeholder to re-point at whatever the client asked for (§10.3).
+    const created = events.find((e) => e.type === 'run.created');
+    expect(created?.type === 'run.created' && created.payload.run.boardProfileId).toBe(
+      RECORDING_BOARD_PROFILE_ID,
+    );
+    expect(view.run.boardProfileId).not.toBe(REQUESTED_BOARD_PROFILE_ID);
+    // …and the summary GET /runs serves agrees — one identity, not two.
+    const summaries = (await (await fetch(`${base}/runs`)).json()) as {
+      id: string;
+      boardProfileId: string;
+    }[];
+    expect(summaries.find((s) => s.id === runId)?.boardProfileId).toBe(
+      RECORDING_BOARD_PROFILE_ID,
+    );
 
     // Artifact bodies come from records/bmp180-run/artifacts/ by reference.
     const report = view.artifacts.find((a) => a.kind === 'report_md')!;
