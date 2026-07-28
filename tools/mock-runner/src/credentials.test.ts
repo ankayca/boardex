@@ -14,8 +14,16 @@ describe('maskKey', () => {
   });
 
   it('reveals NOTHING of a short key — four characters would be most of it', () => {
-    expect(maskKey('abc1234')).toBe('…');
+    expect(maskKey('abc1234')).toBe('…'); // 7 chars: below the floor
     expect(maskKey('')).toBe('…');
+  });
+
+  it('pins the floor exactly: 8 characters is the first key that earns a hint', () => {
+    // The boundary is the whole rule — off by one here either withholds a harmless
+    // hint or reveals half of a short key.
+    expect(maskKey('1234567')).toBe('…'); // 7
+    expect(maskKey('12345678')).toBe('…5678'); // 8, the first with a hint
+    expect(maskKey('123456789')).toBe('…6789'); // 9, still the last four
   });
 });
 

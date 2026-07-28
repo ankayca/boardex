@@ -62,6 +62,17 @@ describe('feature detection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('renders nothing when the capability is advertised with NO providers in it', async () => {
+    // A runner that answers `credentials: []` offers no provider to configure. That is
+    // an empty capability, not a broken one — so there is nothing to render, exactly as
+    // for an absent one. A section here would be a form with no subject.
+    fetchCapability.mockResolvedValue(advertised());
+    const { container } = renderSection();
+    await waitFor(() => expect(fetchCapability).toHaveBeenCalled());
+    expect(section()).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('renders the section per advertised provider once the capability arrives', async () => {
     fetchCapability.mockResolvedValue(
       advertised({ provider: 'openrouter', configured: false }),

@@ -135,6 +135,8 @@ async function waitForView(
 
 interface Collector {
   events: Event[];
+  /** Frames exactly as they arrived on the socket, before any parse (leak greps). */
+  raw: string[];
   waitFor: (pred: (e: Event) => boolean) => Promise<Event>;
   close: () => void;
 }
@@ -142,8 +144,10 @@ interface Collector {
 async function connect(query: string): Promise<Collector> {
   const ws = new WebSocket(`${wsBase}/ws?${query}`);
   const events: Event[] = [];
+  const raw: string[] = [];
   const waiters: { pred: (e: Event) => boolean; resolve: (e: Event) => void }[] = [];
   ws.on('message', (data: Buffer) => {
+    raw.push(data.toString());
     const event = EventSchema.parse(JSON.parse(data.toString()));
     events.push(event);
     for (const w of [...waiters]) {
@@ -159,6 +163,7 @@ async function connect(query: string): Promise<Collector> {
   });
   return {
     events,
+    raw,
     waitFor: (pred) =>
       new Promise<Event>((resolve) => {
         const hit = events.find(pred);
@@ -741,9 +746,23 @@ describe('mock runner', () => {
     ).toBe(204);
 
     const runId = await createRun();
+    // A security grep must read WIRE BYTES: schema parsing STRIPS unknown keys, so a key
+    // echoed into a non-contract payload field would be laundered by the parse — passing
+    // a grep over the parsed view while still going out on the socket and the replay.
+    const wsCollector = await connect(`runId=${runId}`);
     const events = await driveToCompletion(runId);
     expect(events.length).toBeGreaterThan(1);
-    expect(JSON.stringify(events)).not.toContain(key);
+
+    // The live socket's frames, exactly as they arrived.
+    await wsCollector.waitFor((e) => e.type === 'run.completed');
+    expect(wsCollector.raw.length).toBeGreaterThan(0);
+    for (const frame of wsCollector.raw) expect(frame).not.toContain(key);
+    wsCollector.close();
+
+    // And the HTTP replay body, unparsed.
+    const replayBody = await (await fetch(`${base}/runs/${runId}/events?afterSeq=0`)).text();
+    expect(replayBody.length).toBeGreaterThan(0);
+    expect(replayBody).not.toContain(key);
 
     // Every artifact the run produced, fetched by reference exactly as the UI does.
     const artifactIds = events.flatMap((e) =>
