@@ -106,13 +106,33 @@ def providers_from_models(models: Iterable[str]) -> list[str]:
 
 
 def env_var_for(provider: str) -> str:
-    """The provider-standard env var LiteLLM reads for ``provider``.
+    """The env var this store reads for ``provider``.
 
-    ``openrouter`` -> ``OPENROUTER_API_KEY``, ``anthropic`` -> ``ANTHROPIC_API_KEY``,
-    and so on — the convention every provider in the default model set follows,
-    so the mapping generalizes with AGENT_MODELS instead of hardcoding one name.
+    ``openrouter`` -> ``OPENROUTER_API_KEY``, ``anthropic`` -> ``ANTHROPIC_API_KEY``:
+    the convention followed by every provider in the DEFAULT MODEL SET, which is
+    the claim this mapping actually supports — not "whatever LiteLLM reads".
+    LiteLLM's own naming diverges for plenty of providers (``together_ai`` reads
+    TOGETHERAI_API_KEY, not TOGETHER_AI_API_KEY; ``vertex_ai`` does not use an
+    API-key variable at all), so a runner pointed at one of those gets a store
+    entry that seeds from nothing and simply falls through to LiteLLM's own env
+    handling — the pre-store behavior, not a break. Widening this to LiteLLM's
+    real table means importing litellm here, which this module deliberately
+    does not do (see provider_for_model).
     """
     return f"{provider.upper()}_API_KEY"
+
+
+def _env_key(provider: str) -> str | None:
+    """The environment's key for ``provider``, stripped, or None if unset/blank.
+
+    THE single env read in this module. Seeding, re-seeding after a Remove and
+    resolution all go through it, so the key the store advertises a hint for and
+    the key handed to the provider are byte-identical — a stray newline in an
+    exported variable cannot make advertise() and resolve_key() describe
+    different keys.
+    """
+    value = os.environ.get(env_var_for(provider), "").strip()
+    return value or None
 
 
 def _models_from_env() -> list[str]:
@@ -141,8 +161,8 @@ def configure(models: Sequence[str] | None = None) -> None:
     _providers = tuple(providers_from_models(models if models is not None else _models_from_env()))
     _keys.clear()
     for provider in _providers:
-        from_env = os.environ.get(env_var_for(provider), "").strip()
-        if from_env:
+        from_env = _env_key(provider)
+        if from_env is not None:
             _keys[provider] = from_env
 
 
@@ -182,11 +202,30 @@ def set_key(provider: Any, api_key: Any) -> CredentialError | None:
 
 
 def delete_key(provider: str) -> CredentialError | None:
-    """Remove a provider's key. Idempotent: a known provider with no key is a
-    success, so the dashboard's Remove can be pressed twice."""
+    """Remove the dashboard's key, then RE-SEED from the environment if one is
+    exported there. Idempotent, so Remove can be pressed twice.
+
+    Re-seeding is what keeps this store's two views from ever disagreeing. What
+    Remove discards is the key the dashboard set; it cannot discard the one the
+    operator exported before launch, because ``resolve_key`` would still fall
+    back to it and the very next run would spend it. Leaving the slot empty
+    would advertise ``configured: false`` while runs kept succeeding on the env
+    key — the store telling the operator one thing and the provider layer doing
+    another. So the slot goes back to exactly what boot would have put in it,
+    and advertise() and resolve_key() are once again the same fact seen twice.
+
+    The honest consequence, stated in the README: stopping spend on an
+    env-provided key means unsetting the variable and restarting. That is the
+    operator's launch configuration, which the dashboard deliberately has no
+    authority over — a browser page must not be able to edit how the process
+    was started.
+    """
     if provider not in _providers:
         return CredentialError(404, "unknown provider")
     _keys.pop(provider, None)
+    from_env = _env_key(provider)
+    if from_env is not None:
+        _keys[provider] = from_env
     return None
 
 
@@ -195,7 +234,13 @@ def resolve_key(model: str) -> str | None:
 
     Called at REQUEST time, never captured at construction — a key pasted into
     the dashboard mid-session must take effect on the next run without a
-    restart, and one removed there must stop being used just as promptly.
+    restart, and one removed there reverts to the environment just as promptly
+    (``delete_key`` re-seeds, so the store usually answers that case itself).
+
+    The env branch reads through ``_env_key`` and is therefore stripped exactly
+    as the seeded path is: both routes to the same variable must yield the same
+    key, or a padded value would be advertised under one hint and sent as
+    another.
 
     Not part of the readable surface (see the module docstring): the caller is
     the provider layer handing it to the SDK for an outbound call. Nothing that
@@ -204,7 +249,4 @@ def resolve_key(model: str) -> str | None:
     provider = provider_for_model(model)
     if provider is None:
         return None
-    stored = _keys.get(provider)
-    if stored:
-        return stored
-    return os.environ.get(env_var_for(provider)) or None
+    return _keys.get(provider) or _env_key(provider)

@@ -199,10 +199,18 @@ def _is_local_client(request: web.Request) -> bool:
     the browser sends one, must be a loopback origin.
 
     Deliberately asymmetric with the rest of the server: the other routes keep
-    their existing CORS-only behavior, unchanged by this task. They expose run
-    data on a single-user local bench (D13); these two accept a SECRET and are
-    the only ones where a rebound page changes what the runner does with money
-    and hardware. Hardening the rest is a separate decision, not a side effect.
+    their existing CORS-only behavior, unchanged by this task.
+
+    Be precise about what that leaves standing. This guard stops a rebound page
+    from WRITING keys — it cannot set one, cannot replace one, cannot clear one.
+    It does NOT stop that page from POSTing /runs, approving the plan and
+    driving hardware, and a run started that way spends whatever key is
+    currently active. So the residual exposure is not "nothing": it is
+    unauthorized SPEND and unauthorized bench actuation, minus key theft and key
+    tampering. Extending the guard to the run-starting and approval POSTs would
+    close it and is the backend owner's call — those are contract routes with an
+    external-runner conformance suite behind them, so tightening them is a
+    contract-level decision, not a side effect of adding a credential store.
     """
     if not _LOCAL_HOST.match(request.headers.get("Host", "")):
         return False

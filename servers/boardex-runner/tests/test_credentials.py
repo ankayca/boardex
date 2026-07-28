@@ -63,30 +63,72 @@ def test_providers_are_derived_from_the_advertised_models() -> None:
     assert credentials.env_var_for("anthropic") == "ANTHROPIC_API_KEY"
 
 
-def test_env_seeds_the_store_and_the_store_wins_after_that(
+def test_env_boot_dashboard_override_and_remove_reverting_to_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The full sequence an operator with an exported key actually walks, with
+    the two views checked at every step: what /health advertises and what a run
+    would spend must never disagree."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-from-the-environment")
     credentials.configure([MODEL])
 
-    # Seeded: a runner booted with the standard variable set is already
-    # configured, so the UI never offers to set a key that is in fact set.
+    # Boot: seeded from env, so the UI never offers to set a key already set.
     assert credentials.advertise() == [
         {"provider": "openrouter", "configured": True, "hint": "…ment"}
     ]
     assert credentials.resolve_key(MODEL) == "sk-or-v1-from-the-environment"
 
-    # Store first: a key pasted into the dashboard overrides the environment.
+    # Paste in the dashboard: the hint flips and the store wins.
     assert credentials.set_key("openrouter", "sk-or-v1-from-the-dashboard") is None
+    assert credentials.advertise() == [
+        {"provider": "openrouter", "configured": True, "hint": "…oard"}
+    ]
     assert credentials.resolve_key(MODEL) == "sk-or-v1-from-the-dashboard"
 
-    # Env fallback: removing the pasted key falls back to the environment rather
-    # than breaking a setup that worked before the store existed.
+    # Remove: what it discards is the DASHBOARD's key. The exported one is still
+    # there and still what runs will spend, so the store re-seeds and keeps
+    # saying so — configured, with the env key's hint back. Advertising
+    # `configured: false` here would be the store claiming a run has no key
+    # while the very next run bills the exported one.
     assert credentials.delete_key("openrouter") is None
+    assert credentials.advertise() == [
+        {"provider": "openrouter", "configured": True, "hint": "…ment"}
+    ]
     assert credentials.resolve_key(MODEL) == "sk-or-v1-from-the-environment"
 
     # A model whose provider is underivable resolves nothing at all.
     assert credentials.resolve_key("claude-sonnet-4-6") is None
+
+
+def test_remove_clears_the_slot_when_no_env_key_backs_it() -> None:
+    """The other half of the ruling: with nothing exported, Remove really does
+    leave the provider unconfigured — re-seeding is not a refusal to delete."""
+    assert credentials.set_key("openrouter", "sk-or-v1-dashboard-only") is None
+    assert credentials.delete_key("openrouter") is None
+    assert credentials.advertise() == [{"provider": "openrouter", "configured": False}]
+    assert credentials.resolve_key(MODEL) is None
+
+
+def test_padded_env_value_yields_one_key_on_both_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trailing newline in an exported variable (``export K=$(cat key.txt)``)
+    must not make the advertised hint and the sent key describe different
+    strings: seeding, re-seeding and the resolve fallback all strip identically."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "  sk-or-v1-padded-3b7f\n")
+    credentials.configure([MODEL])
+    assert credentials.resolve_key(MODEL) == "sk-or-v1-padded-3b7f"
+    assert credentials.advertise()[0]["hint"] == "…3b7f"
+
+    # The resolve fallback path (store empty, env present) strips the same way.
+    credentials._keys.clear()
+    assert credentials.resolve_key(MODEL) == "sk-or-v1-padded-3b7f"
+
+    # And so does the re-seed after a Remove.
+    assert credentials.set_key("openrouter", "sk-or-v1-dashboard") is None
+    assert credentials.delete_key("openrouter") is None
+    assert credentials.resolve_key(MODEL) == "sk-or-v1-padded-3b7f"
+    assert credentials.advertise()[0]["hint"] == "…3b7f"
 
 
 def test_unset_env_leaves_the_store_empty_and_resolution_none() -> None:
@@ -145,16 +187,14 @@ def test_provider_resolves_the_key_at_call_time_not_at_construction(
 # -- the HTTP surface -----------------------------------------------------------------
 
 
-def _put(h: Harness, body: Any, raw: str | None = None, **kwargs: Any) -> Any:
+def _put(
+    h: Harness, body: Any, raw: str | None = None, headers: dict[str, str] | None = None
+) -> Any:
     assert h.session
     if raw is not None:
-        return h.session.put(
-            h.base + "/credentials",
-            data=raw,
-            headers={"Content-Type": "application/json"},
-            **kwargs,
-        )
-    return h.session.put(h.base + "/credentials", json=body, **kwargs)
+        merged = {"Content-Type": "application/json", **(headers or {})}
+        return h.session.put(h.base + "/credentials", data=raw, headers=merged)
+    return h.session.put(h.base + "/credentials", json=body, headers=headers or {})
 
 
 def test_credentials_routes_store_reflect_and_remove() -> None:
@@ -242,6 +282,19 @@ def test_credentials_routes_reject_non_local_host_and_origin() -> None:
             # real one) is caught by Origin instead.
             async with _put(h, body, headers={"Origin": "https://evil.example.com"}) as res:
                 assert res.status == 403
+            # ORDERING, not just outcome: the guard runs BEFORE the body is
+            # read. A malformed body from a rebound host still answers 403 —
+            # a 400 here would mean the attacker's payload reached the parser
+            # before the runner decided whether to listen to it at all.
+            async with _put(
+                h, None, raw="{not json", headers={"Host": "evil.example.com"}
+            ) as res:
+                assert res.status == 403
+            # Same for a body that is well-formed JSON but the wrong shape: the
+            # 400 that a local client would get is never the answer here.
+            async with _put(h, None, raw="null", headers={"Host": "evil.example.com"}) as res:
+                assert res.status == 403
+
             # DELETE is guarded identically — clearing a key silently breaks
             # every run, which is an attack too.
             for headers in ({"Host": "evil.example.com"}, {"Origin": "http://evil.example.com"}):

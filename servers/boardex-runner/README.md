@@ -114,8 +114,15 @@ the next run — no restart.
 variable (`OPENROUTER_API_KEY` for `openrouter/*`, `ANTHROPIC_API_KEY`, ...)
 before launching and that provider boots configured; the dashboard shows it as
 such rather than offering to set what is already set. A key set in the dashboard
-takes precedence over the environment for as long as it is stored, and removing
-it falls back to the exported one.
+takes precedence over the environment for as long as it is stored.
+
+**Remove discards the dashboard's key, not the environment's.** If the provider's
+variable was exported at launch, Remove reverts to it: the provider goes on
+showing as configured, with the exported key's hint, and runs go on using it —
+that is the truth, not a stale badge. Stopping spend on an env-provided key means
+unsetting the variable and restarting the runner. That is your launch
+configuration, and the dashboard deliberately has no authority over it: a web
+page should not be able to rewrite how the process was started.
 
 **Storage is in-memory and dies with the process.** A restart clears anything set
 from the dashboard — paste it again, or export the variable to have it survive.
@@ -130,10 +137,22 @@ Both write routes — `PUT /credentials`, `DELETE /credentials/{provider}` —
 require a loopback `Host` and, when the browser sends one, a loopback `Origin`,
 so a page that rebinds its own hostname to `127.0.0.1` cannot set or clear a key.
 
-**Not yet solved: shared benches.** The runner has no auth (single-user MVP), so
-anyone who can reach it on the network can set or replace the key — fine on your
-own machine, not fine on a bench several people share, and it needs an answer
-before that happens.
+One accepted trade in that advertisement: when a key comes from the environment,
+`/health` now exposes its last four characters, which before this feature had no
+HTTP trace at all. That is the cost of the dashboard being able to tell you
+*which* key is active instead of merely that one is, and it is accepted
+deliberately — but it is new exposure on an unauthenticated route, so it is
+stated rather than buried.
+
+**Not yet solved: shared benches, and spend.** The runner has no auth (single-user
+MVP), so anyone who can reach it on the network can set or replace the key — fine
+on your own machine, not fine on a bench several people share. The Host/Origin
+guard is narrower than it may look, too: it stops a rebound browser page from
+writing keys, but that page can still `POST /runs` and approve a plan, and a run
+started that way spends whatever key is active and drives the hardware. Closing
+that means extending the guard to the run-starting and approval routes, which are
+contract routes with external-runner conformance behind them — a decision for the
+backend owner, not something this feature should change on its own.
 
 ## Tests
 
