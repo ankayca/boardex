@@ -14,6 +14,7 @@ import {
   type Event,
   type HealthResponse,
 } from '@boardex/contract';
+import { CredentialStore, type ProviderCredentialStatus } from './credentials';
 import { buildBenchStatus, DOCUMENT_CATALOG, NUCLEO_F303RE_PROFILE } from './data';
 import { buildArtifactCatalog, loadFixture, loadFixtureFile, type ArtifactFile } from './fixture';
 import { RunSession, type CommandResult } from './session';
@@ -34,6 +35,15 @@ export interface MockRunnerOptions {
   // Validate every outbound event against the contract at send time (§5.6). On by
   // default; a conforming runner never trips it, so a throw here is a real defect.
   validateOutbound?: boolean;
+  // MOCK_PROVIDER_KEY: boot with the advertised provider already configured, mirroring
+  // the real runner's env-fallback semantics (keys are provider-standard env vars read
+  // at call time). The value is stored, masked, and never served back — see
+  // src/credentials.ts.
+  providerKey?: string | undefined;
+  // MOCK_MODELS: override the advertised capabilities.models (comma-separated),
+  // mirroring the real runner's AGENT_MODELS env (docs/decisions.md, 2026-07-13).
+  // Default unchanged: exactly ['mock-model'].
+  models?: readonly string[];
 }
 
 export interface MockRunner {
@@ -45,8 +55,11 @@ export interface MockRunner {
 const DEFAULT_PORT = 4319;
 
 // v2.1 (T6.3, riding along for T6.6): the mock advertises one model so the
-// composer's feature-detected model select has something to render (§5.3).
-const MOCK_CAPABILITIES: { models: string[] } = { models: ['mock-model'] };
+// composer's feature-detected model select has something to render (§5.3). The
+// `models` option (MOCK_MODELS) overrides it — a provider-prefixed model like
+// `openrouter/...` is what makes the composer's credentials pre-flight reachable
+// against the mock, exactly as the real runner's AGENT_MODELS list would be.
+const DEFAULT_MOCK_MODELS: readonly string[] = ['mock-model'];
 
 export async function createMockRunner(options: MockRunnerOptions = {}): Promise<MockRunner> {
   const speed = options.speed ?? 1;
@@ -58,6 +71,11 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
     : { entries: loadFixture(options.failVariant ? 'fail' : 'default'), artifactsDir: undefined };
   const artifactCatalog = buildArtifactCatalog(fixture, artifactsDir);
   const bench: BenchStatus = buildBenchStatus(degraded);
+  const capabilities = { models: [...(options.models ?? DEFAULT_MOCK_MODELS)] };
+  // Write-only, in-memory provider keys (see src/credentials.ts). Held here so it
+  // dies with the process, and reachable from exactly two routes plus /health's
+  // masked advertisement — never from the session, so no key can reach an event.
+  const credentials = new CredentialStore(undefined, options.providerKey);
 
   // In-memory state (§D8: the mock persists nothing beyond fixture state in memory).
   const boardProfiles = new Map<string, BoardProfile>([
@@ -152,13 +170,53 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
 
     // GET /health
     if (method === 'GET' && seg.length === 1 && seg[0] === 'health') {
-      const body: HealthResponse = {
+      // `credentials` is NOT a contract field (HealthResponse is unchanged) — it is the
+      // mock-prototyped advertisement the UI feature-detects on, carrying PRESENCE and a
+      // masked hint per provider and never key material. Typed as an intersection here
+      // so adding it cannot drift into packages/contract.
+      const body: HealthResponse & { credentials: ProviderCredentialStatus[] } = {
         ok: true,
         contractVersion: CONTRACT_VERSION,
         runnerKind: 'mock',
-        capabilities: MOCK_CAPABILITIES,
+        capabilities,
+        credentials: credentials.advertise(),
       };
       return sendJson(res, 200, body);
+    }
+
+    // PUT /credentials {provider, apiKey} — store a provider key (204).
+    // DELETE /credentials/{provider} — remove it (204).
+    //
+    // MOCK-PROTOTYPED, not contract (§10.5 proposal; docs/decisions.md 2026-07-28), so
+    // the UI feature-detects the capability off /health rather than probing here.
+    //
+    // There is deliberately NO GET: the store is WRITE-ONLY, so no route can serve key
+    // material back. /health's masked hint is the only readable trace a stored key has.
+    if (seg[0] === 'credentials') {
+      if (method === 'PUT' && seg.length === 1) {
+        const body = await readBody(req);
+        // A literal `null` body parses to null, and reading .provider off it would throw
+        // into the 500 handler — a client mistake must answer 400, not "internal error".
+        if (body === null || typeof body !== 'object') {
+          return sendError(res, 400, 'invalid credential request');
+        }
+        const { provider, apiKey } = body as { provider?: unknown; apiKey?: unknown };
+        const result = credentials.set(provider, apiKey);
+        // The error strings come from the store and are fixed — a rejection never
+        // echoes the submitted key back in the response body.
+        if (!result.ok) return sendError(res, result.status, result.error);
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      if (method === 'DELETE' && seg.length === 2) {
+        const result = credentials.clear(seg[1] as string);
+        if (!result.ok) return sendError(res, result.status, result.error);
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      return sendError(res, 405, 'method not allowed');
     }
 
     // GET /bench
@@ -401,7 +459,7 @@ function setCors(req: IncomingMessage, res: ServerResponse): void {
       : 'http://localhost:5173';
   res.setHeader('Access-Control-Allow-Origin', allowed);
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
