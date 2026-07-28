@@ -29,8 +29,9 @@ BENCH=real BOARDEX_BENCH_CONFIG=bench.json boardex-runner
 
 # Agent bench (LLM tool-use loop over the MCP servers; needs the agent extras):
 pip install -e "servers/boardex-runner[agent]"
-export OPENROUTER_API_KEY=...   # provider-standard env var for the chosen model
 BENCH=agent AGENT_MODELS=openrouter/anthropic/claude-sonnet-4.6 boardex-runner
+# ...then set the provider key from the dashboard (see Provider keys below),
+# or export OPENROUTER_API_KEY before launching if you prefer the shell.
 ```
 
 Point the UI at it:
@@ -94,12 +95,45 @@ behind the same engine and wire layer. Highlights:
 - **Bounds.** `AGENT_MAX_TURNS`, `safety.maxIterations` (counted on
   `declare_iteration`) and a 3-turn idle stall are harness counters; a
   malformed meta-tool payload gets one retry, then the run fails closed.
-- **Keys are env-only.** LiteLLM reads the provider-standard variable
-  (`OPENROUTER_API_KEY` for `openrouter/*`, `ANTHROPIC_API_KEY`, ...) at call
-  time; nothing key-derived is logged, stored, or emitted.
+- **Keys.** Set from the dashboard or from the environment — see
+  [Provider keys](#provider-keys). Resolved at call time; nothing key-derived is
+  logged, stored on disk, or emitted.
 - **Model selection.** `/health` advertises `capabilities.models` from
   `AGENT_MODELS`; `CreateRun.model` must be in that list (else 409) and is
   echoed onto `Run.model`; absent, the first listed model is used.
+
+## Provider keys
+
+**The dashboard is the primary path.** Settings → Provider keys lists every
+provider this runner can hold a key for (derived from `AGENT_MODELS`), shows
+whether each is configured, and lets you paste or remove one. Nobody has to open
+a terminal to get a first run going, and a key pasted mid-session takes effect on
+the next run — no restart.
+
+**The environment is the fallback**, unchanged. Export the provider-standard
+variable (`OPENROUTER_API_KEY` for `openrouter/*`, `ANTHROPIC_API_KEY`, ...)
+before launching and that provider boots configured; the dashboard shows it as
+such rather than offering to set what is already set. A key set in the dashboard
+takes precedence over the environment for as long as it is stored, and removing
+it falls back to the exported one.
+
+**Storage is in-memory and dies with the process.** A restart clears anything set
+from the dashboard — paste it again, or export the variable to have it survive.
+That is deliberate for v0: a key that outlives the process has to rest somewhere
+on disk, and that is a decision to make on purpose, not a side effect.
+
+The store is **write-only**: no route serves key material back. `GET /health`
+advertises presence and a masked hint (last four characters, and nothing at all
+for a key short enough that four characters would be most of it) under a
+non-contract `credentials` field, which is also what the UI feature-detects on.
+Both write routes — `PUT /credentials`, `DELETE /credentials/{provider}` —
+require a loopback `Host` and, when the browser sends one, a loopback `Origin`,
+so a page that rebinds its own hostname to `127.0.0.1` cannot set or clear a key.
+
+**Not yet solved: shared benches.** The runner has no auth (single-user MVP), so
+anyone who can reach it on the network can set or replace the key — fine on your
+own machine, not fine on a bench several people share, and it needs an answer
+before that happens.
 
 ## Tests
 
