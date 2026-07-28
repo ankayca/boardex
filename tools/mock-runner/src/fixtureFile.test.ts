@@ -122,5 +122,9 @@ describe('FIXTURE_FILE replays an arbitrary recorded run', () => {
     );
     // The RTT capture that proves the sensor answered is served by reference.
     expect(serialBodies.some((b) => b.includes('chip_id=0x55'))).toBe(true);
-  });
+    // 10s, not vitest's default 5s: this drives a 186-event recording end to end over
+    // real HTTP and typically lands near 2.6s. That margin is comfortable alone and
+    // thin under a loaded CI runner (it has flaked before, P1 merge) — a load-sensitive
+    // budget that tight eventually cries wolf about a runner that is merely busy.
+  }, 10000);
 });

@@ -99,6 +99,20 @@ async function driveToCompletion(runId: string): Promise<Event[]> {
   throw new Error('run did not reach a terminal state in time');
 }
 
+// "plan_ready" is NOT the same instant as "parked at the plan gate". The fixture emits
+// run.status_changed(plan_ready) one event BEFORE run.plan_generated, and the session
+// arms the plan gate only after emitting the latter (§5.6) — so between the two there
+// is a real window, ~1ms at SPEED=200, in which POST /plan/approve is legitimately 409.
+// A loaded CI runner lands a poll inside it (node 20, 2026-07-28).
+//
+// Waiting on the PLAN closes the window deterministically: the gate is armed in the
+// same synchronous stretch that appends run.plan_generated to the log — no await
+// between them — and the HTTP handler cannot interleave with it. So any GET that can
+// SEE the plan is a GET taken after the gate was armed. Loops that retry an approve
+// until it answers 204 are unaffected and keep using the status alone.
+const atPlanGate = (view: RunView): boolean =>
+  view.run.status === 'plan_ready' && view.run.plan !== undefined;
+
 // Poll the HTTP event log until the reduced view satisfies `pred`, guarding the
 // brief window after createRun where the log is still empty.
 async function waitForView(
@@ -264,7 +278,7 @@ describe('mock runner', () => {
     const runId = await createRun();
 
     // Get past the plan gate into the running steps.
-    await waitForView(runId, (v) => v.run.status === 'plan_ready', 'plan_ready');
+    await waitForView(runId, atPlanGate, 'the plan gate');
     expect((await post(`/runs/${runId}/plan/approve`)).status).toBe(204);
     await waitForView(runId, (v) => v.run.status === 'running', 'running');
 
@@ -293,7 +307,7 @@ describe('mock runner', () => {
     const runId = await createRun();
 
     // Approve the plan, then wait for the first (flash) approval to be pending.
-    await waitForView(runId, (v) => v.run.status === 'plan_ready', 'plan_ready');
+    await waitForView(runId, atPlanGate, 'the plan gate');
     expect((await post(`/runs/${runId}/plan/approve`)).status).toBe(204);
 
     const { view: pendingView } = await waitForView(
