@@ -1,8 +1,36 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { LogViewer } from '../LogViewer';
 
 const makeLines = (count: number) => Array.from({ length: count }, (_, i) => `line ${i}`);
+
+// FAKE TIMERS ARE LOAD-BEARING HERE (CI, node 22, 2026-07-28).
+//
+// @tanstack/virtual-core arms a 150ms "isScrolling settle" debounce on every scroll
+// event, and — unlike its rAF scroll reconcile, which the virtualizer's cleanup does
+// cancel — it never clears that pending timeout when the virtualizer unmounts (it only
+// removes the listener). This file is the only one in the suite that fires real scroll
+// events, so it is the only one that arms it.
+//
+// vitest tears jsdom down between FILES. A 150ms timer still in flight at that moment
+// fires into a dead environment and throws "window is not defined" as an UNHANDLED
+// ERROR: every test passes and the run is still red. Node 20 happened to win that race
+// on CI; node 22 did not.
+//
+// Fake timers put the debounce on a clock this file owns: each afterEach unmounts,
+// drains the pending timers while jsdom is still alive, then restores the real clock —
+// so no timer scheduled by a mounted component outlives this file, by construction
+// rather than by luck. Safe here because every test below is synchronous fireEvent:
+// nothing in this file awaits a real clock.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  cleanup(); // unmount first — the virtualizer drops its scroll listener…
+  vi.runOnlyPendingTimers(); // …then the orphaned debounce fires here, harmlessly
+  vi.useRealTimers();
+});
 
 // jsdom reports zero offset sizes, so the virtualizer would render no rows at all
 // (virtual-core measures the scroll element via offsetWidth/offsetHeight). Give
@@ -154,6 +182,27 @@ describe('LogViewer', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('14:03:22')).toBeInTheDocument();
+  });
+
+  // The tripwire for the teardown guard above. It pins the two facts the fake-timer
+  // afterEach exists for: a scroll ARMS a virtualizer timer, and unmounting does NOT
+  // disarm it. If a future @tanstack/react-virtual clears the debounce on cleanup,
+  // this test fails at the second assertion — that is the signal to delete the
+  // beforeEach/afterEach pair above along with this test, not to loosen it.
+  it('arms a scroll-settle timer that unmount does not clear (why this file fakes timers)', () => {
+    const { unmount } = render(<LogViewer lines={makeLines(50)} />);
+    const log = screen.getByRole('log');
+    mockScrollMetrics(log, 1000, 200);
+    expect(vi.getTimerCount()).toBe(0);
+
+    fireEvent.scroll(log, { target: { scrollTop: 100 } });
+    expect(vi.getTimerCount()).toBe(1); // virtual-core's 150ms isScrolling debounce
+
+    unmount();
+    expect(vi.getTimerCount()).toBe(1); // still armed — the leak, in one assertion
+
+    vi.advanceTimersByTime(200); // past the 150ms debounce
+    expect(vi.getTimerCount()).toBe(0); // and it does not re-arm itself
   });
 
   // T6.1b: the pane sizes to its content — floor 96px, cap 320px by default.
