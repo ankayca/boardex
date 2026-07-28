@@ -595,6 +595,28 @@ describe('mock runner', () => {
     expect(plainCreated?.type === 'run.created' && plainCreated.payload.run.model).toBeUndefined();
   });
 
+  // Quick Start's path probe (v0). Mock-only: POST /workspace/validate is a §10.5
+  // PROPOSAL prototyped here, not a contract route — an external runner answers 404,
+  // which is exactly the signal the UI feature-detects on. The resolution rules
+  // themselves are covered against a real tree in workspace.test.ts; this pins the
+  // HTTP surface: the body shape in, the response shape out, and 400 on a bad body.
+  itMockOnly('validates a workspace path over HTTP (mock-prototyped, §10.5 proposal)', async () => {
+    const probe = await post('/workspace/validate', { path: process.cwd() });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({
+      exists: true,
+      kind: expect.stringMatching(/^(firmware|directory)$/),
+    });
+
+    const missing = await post('/workspace/validate', { path: '/definitely/not/a/real/path' });
+    expect(await missing.json()).toEqual({ ok: false, exists: false, kind: 'missing' });
+
+    // A body without a string path is a client error, never a guessed answer.
+    expect((await post('/workspace/validate', {})).status).toBe(400);
+    expect((await post('/workspace/validate', { path: 42 })).status).toBe(400);
+    expect((await fetch(`${base}/workspace/validate`)).status).toBe(405);
+  });
+
   it('returns 404 for an unknown run id on every run route', async () => {
     expect((await fetch(`${base}/runs/run_does_not_exist/events?afterSeq=0`)).status).toBe(404);
     expect((await post('/runs/run_does_not_exist/stop')).status).toBe(404);

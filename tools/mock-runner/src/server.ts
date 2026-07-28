@@ -17,6 +17,7 @@ import {
 import { buildBenchStatus, DOCUMENT_CATALOG, NUCLEO_F303RE_PROFILE } from './data';
 import { buildArtifactCatalog, loadFixture, loadFixtureFile, type ArtifactFile } from './fixture';
 import { RunSession, type CommandResult } from './session';
+import { validateWorkspacePath } from './workspace';
 
 export interface MockRunnerOptions {
   port?: number;
@@ -169,6 +170,18 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
         return sendJson(res, 200, parsed.data);
       }
       return sendError(res, 405, 'method not allowed');
+    }
+
+    // POST /workspace/validate — Quick Start's path probe (v0). NOT a contract route:
+    // mock-prototyped as a §10.5 proposal to the backend owner (docs/decisions.md,
+    // 2026-07-28), so the UI feature-detects it and this 404s on any other runner.
+    // Read-only against the runner's own filesystem — see src/workspace.ts.
+    if (seg.length === 2 && seg[0] === 'workspace' && seg[1] === 'validate') {
+      if (method !== 'POST') return sendError(res, 405, 'method not allowed');
+      const body = await readBody(req);
+      const path = (body as { path?: unknown }).path;
+      if (typeof path !== 'string') return sendError(res, 400, 'invalid workspace path');
+      return sendJson(res, 200, validateWorkspacePath(path));
     }
 
     // /runs and subroutes
