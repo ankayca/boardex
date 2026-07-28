@@ -95,10 +95,26 @@ export default function BoardsPage() {
   });
   const bench = useBenchStatus();
 
-  const newProfile = (
-    <Button variant="primary" className="whitespace-nowrap" onClick={() => navigate('/boards/new')}>
-      New Profile
-    </Button>
+  // Quick Start v0: with no profiles yet, the empty state leads with the two-field
+  // flow, not the seven-section form — the form is where a profile is EDITED, and it
+  // stays one click away as "Advanced setup".
+  const emptyStateActions = (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      <Button
+        variant="primary"
+        className="whitespace-nowrap"
+        onClick={() => navigate('/runs/new', { state: { quickStart: true } })}
+      >
+        Quick Start
+      </Button>
+      <Button
+        variant="secondary"
+        className="whitespace-nowrap"
+        onClick={() => navigate('/boards/new')}
+      >
+        Advanced setup
+      </Button>
+    </div>
   );
 
   // Frame v2 (T6.1b): the page title and the New Profile action live in the
@@ -142,8 +158,8 @@ export default function BoardsPage() {
           (profilesQuery.data.length === 0 ? (
             <EmptyState
               title="No board profiles yet"
-              description="A profile tells Boardex how to build, flash, and observe one board. Create one to start a run."
-              action={newProfile}
+              description="Point Boardex at your firmware folder and it compiles the profile from the bench scan — build, flash, instruments, safety limits. Advanced setup opens the full form instead."
+              action={emptyStateActions}
             />
           ) : (
             <ul aria-label="Board profiles" className="space-y-3">

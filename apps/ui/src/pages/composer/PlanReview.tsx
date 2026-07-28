@@ -112,6 +112,12 @@ export function PlanReview({
         </div>
       )}
 
+      {/* D12 ATTESTATION IS UNTOUCHED BY QUICK START (v0). A compiled profile's
+          checklist arrives here exactly as a hand-authored one does: every line starts
+          unconfirmed, the operator ticks each by hand, and nothing — not a validated
+          repo path, not a healthy bench, not a seeded default row — ever pre-confirms a
+          line or ungates Approve Plan on the user's behalf. Pinned by
+          quickStartGate.test.tsx; this component has no Quick Start branch, by design. */}
       {checklist.length > 0 && (
         <div className="mt-5 border-t border-border pt-4" role="group" aria-labelledby={checklistId}>
           <h3 id={checklistId} className="text-body font-medium text-text-primary">

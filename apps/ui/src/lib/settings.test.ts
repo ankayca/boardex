@@ -3,8 +3,11 @@
 // that lib/config resolves — the same order the api singleton and both WS clients read.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  addRecentRepoPath,
+  getRecentRepoPaths,
   getRunnerUrlOverride,
   getSidebarCollapsed,
+  RECENT_REPO_PATH_LIMIT,
   resetSettingsMemory,
   runnerUrlVersionValue,
   setRunnerUrlOverride,
@@ -51,6 +54,47 @@ describe('runner URL precedence — user > env > default', () => {
     expect(getRunnerWsBase()).toBe('ws://localhost:4319');
     setRunnerUrlOverride('https://runner.example:9000');
     expect(getRunnerWsBase()).toBe('wss://runner.example:9000');
+  });
+});
+
+// Quick Start v0: the remembered firmware paths. Same module memory as everything else
+// here — a session-lived convenience, never a stored record of the user's disk.
+describe('recent repo paths', () => {
+  it('starts empty and remembers most-recent-first', () => {
+    expect(getRecentRepoPaths()).toEqual([]);
+    addRecentRepoPath('/bench/firmware/a');
+    addRecentRepoPath('/bench/firmware/b');
+    expect(getRecentRepoPaths()).toEqual(['/bench/firmware/b', '/bench/firmware/a']);
+  });
+
+  it('promotes a re-used path instead of repeating it', () => {
+    addRecentRepoPath('/bench/firmware/a');
+    addRecentRepoPath('/bench/firmware/b');
+    addRecentRepoPath('/bench/firmware/a');
+    expect(getRecentRepoPaths()).toEqual(['/bench/firmware/a', '/bench/firmware/b']);
+  });
+
+  it('trims, ignores blanks, and caps the list', () => {
+    addRecentRepoPath('   ');
+    expect(getRecentRepoPaths()).toEqual([]);
+
+    addRecentRepoPath('  /bench/firmware/a  ');
+    expect(getRecentRepoPaths()).toEqual(['/bench/firmware/a']);
+
+    for (let i = 0; i < RECENT_REPO_PATH_LIMIT + 3; i++) addRecentRepoPath(`/bench/fw/${i}`);
+    expect(getRecentRepoPaths()).toHaveLength(RECENT_REPO_PATH_LIMIT);
+    expect(getRecentRepoPaths()[0]).toBe(`/bench/fw/${RECENT_REPO_PATH_LIMIT + 2}`);
+  });
+
+  it('notifies subscribers, and resets with the rest of the module memory', () => {
+    const seen = vi.fn();
+    const unsubscribe = subscribeSettings(seen);
+    addRecentRepoPath('/bench/firmware/a');
+    expect(seen).toHaveBeenCalledTimes(1);
+    unsubscribe();
+
+    resetSettingsMemory();
+    expect(getRecentRepoPaths()).toEqual([]);
   });
 });
 

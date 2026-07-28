@@ -12,7 +12,7 @@
 // already passed — the form holds a real profile — so the failure becomes an inline
 // notice and the edits stay put.
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
@@ -66,8 +66,15 @@ export default function BoardProfilePage() {
   const navigate = useNavigate();
   const isNew = id === undefined;
 
+  // Quick Start's "Advanced" link hands the path over rather than making the user
+  // retype it; every other field stays blank (v0). Nothing else is carried.
+  const handoff = (useLocation().state ?? {}) as { repoPath?: string };
+
   // A new profile's id is minted once, not on every render (§4: ids are opaque strings).
-  const [newDraft] = useState(() => blankDraft());
+  const [newDraft] = useState(() => ({
+    ...blankDraft(),
+    repoPath: handoff.repoPath?.trim() ?? '',
+  }));
 
   const profilesQuery = useQuery({
     queryKey: ['board-profiles'],
@@ -90,7 +97,7 @@ export default function BoardProfilePage() {
       </h1>
       <p className="mt-1 text-body text-text-secondary">
         {isNew
-          ? 'Describe the board once; every run against it reuses this setup.'
+          ? 'Advanced setup: every field by hand. Quick Start in the composer compiles most of these from your repo path and the bench scan.'
           : 'Editing this profile changes how future runs build, flash, and observe this board.'}
       </p>
 

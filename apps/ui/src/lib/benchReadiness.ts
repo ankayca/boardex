@@ -65,12 +65,18 @@ function matchOne(bench: BenchStatus, kind: InstrumentKind, reference: string): 
 /**
  * One row per instrument the profile actually references. The logic analyzer is
  * optional (§4), so an unset one is not a missing device — it is simply not claimed.
+ * A BLANK debug probe follows the same rule (Quick Start v0: a profile compiled
+ * against a bench that reported no probe claims none): an unclaimed instrument cannot
+ * be missing, and " was not found on the bench" is not a sentence we show anyone.
  */
 export function matchInstruments(
   instruments: BoardProfile['instruments'],
   bench: BenchStatus,
 ): InstrumentMatch[] {
-  const matches: InstrumentMatch[] = [matchOne(bench, 'debug_probe', instruments.debugProbe)];
+  const debugProbe = instruments.debugProbe.trim();
+  const matches: InstrumentMatch[] = debugProbe
+    ? [matchOne(bench, 'debug_probe', debugProbe)]
+    : [];
   const logicAnalyzer = instruments.logicAnalyzer?.trim();
   if (logicAnalyzer) matches.push(matchOne(bench, 'logic_analyzer', logicAnalyzer));
   return matches;

@@ -10,10 +10,17 @@
 //     and WS caller resolves against, so a change re-points the whole app (§T6.6).
 //   • sidebarCollapsed  — the collapse-by-default preference, folded in from the
 //     Sidebar's former private module flag so there is a single source of truth.
+//   • recentRepoPaths   — Quick Start's recently used firmware paths (v0), offered as
+//     tappable chips so the second run against a board is not a retype. Same module
+//     memory: a session-lived convenience, never a stored record of the user's disk.
 import { useSyncExternalStore } from 'react';
 
 let runnerUrlOverride: string | null = null;
 let sidebarCollapsed = false;
+let recentRepoPaths: readonly string[] = [];
+
+/** How many Quick Start paths are remembered — a chip row, not a history. */
+export const RECENT_REPO_PATH_LIMIT = 5;
 
 // A monotonic tick bumped on ANY settings change (drives useSyncExternalStore), plus a
 // dedicated runner-URL tick so the run stream only reconnects when the URL actually
@@ -71,11 +78,33 @@ export function setSidebarCollapsed(value: boolean): void {
   emit();
 }
 
+/** Quick Start's remembered firmware paths, most recent first (v0). */
+export function getRecentRepoPaths(): readonly string[] {
+  return recentRepoPaths;
+}
+
+/**
+ * Remember a path Quick Start actually created a run with. Most recent first, no
+ * duplicates (re-using a path promotes it rather than repeating it), capped at
+ * RECENT_REPO_PATH_LIMIT. Blank input is ignored — there is nothing to remember.
+ */
+export function addRecentRepoPath(path: string): void {
+  const trimmed = path.trim();
+  if (trimmed.length === 0) return;
+  const next = [trimmed, ...recentRepoPaths.filter((entry) => entry !== trimmed)].slice(
+    0,
+    RECENT_REPO_PATH_LIMIT,
+  );
+  recentRepoPaths = next;
+  emit();
+}
+
 /** Test seam — restore settings to their defaults (mirrors demo/Tour's resetTourMemory). */
 export function resetSettingsMemory(): void {
   const hadOverride = runnerUrlOverride !== null;
   runnerUrlOverride = null;
   sidebarCollapsed = false;
+  recentRepoPaths = [];
   if (hadOverride) runnerUrlVersion += 1;
   emit();
 }

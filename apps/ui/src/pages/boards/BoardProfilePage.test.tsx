@@ -177,14 +177,18 @@ describe('/boards — the profile list', () => {
     expect(screen.queryByRole('button', { name: 'New Profile' })).not.toBeInTheDocument();
   });
 
-  it('offers the empty state when the runner knows no profiles', async () => {
+  it('offers the empty state when the runner knows no profiles, leading with Quick Start', async () => {
     listBoardProfiles.mockResolvedValue([]);
     renderAt('/boards');
 
     expect(await screen.findByText('No board profiles yet')).toBeInTheDocument();
-    // T6.1b: exactly the empty-state hero's button — the header action lives in
-    // the shell's top bar now.
-    expect(screen.getAllByRole('button', { name: 'New Profile' })).toHaveLength(1);
+    // Quick Start v0: the empty state leads with the two-field flow (primary) and
+    // keeps the full seven-section form one click away as Advanced setup. T6.1b's
+    // rule still holds — the page's own header action lives in the shell's top bar,
+    // so these two buttons are the hero's, and there is no "New Profile" beside them.
+    expect(screen.getByRole('button', { name: 'Quick Start' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advanced setup' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New Profile' })).not.toBeInTheDocument();
   });
 
   it('surfaces a failed fetch with a retry, not an empty list', async () => {

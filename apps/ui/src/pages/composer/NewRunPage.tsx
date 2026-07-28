@@ -4,14 +4,24 @@
 // allowed), and Create Run Plan → POST /runs → navigate to /runs/:id in composer
 // mode. "Edit task" from plan review returns here with the prompt prefilled via
 // router state.
+//
+// Quick Start v0: the board selector has a second mode. With no profiles yet — or via
+// "+ New board" — the selector swaps for the Quick Start panel, and Create Run Plan
+// COMPILES a board profile from the validated repo path plus the live bench scan
+// (quickStartProfile.ts), saves it through the existing profile-creation path, then
+// creates the run against it. One click, two entities.
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CreateRunResponse } from '@boardex/contract';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
+import { addRecentRepoPath } from '../../lib/settings';
 import { useBenchStatus } from '../../lib/useBenchStatus';
 import { BenchReadiness } from './BenchReadiness';
 import { ContextChips } from './ContextChips';
+import { QuickStartPanel, useQuickStart } from './QuickStartPanel';
+import { buildQuickStartProfile } from './quickStartProfile';
 
 // §7.2, verbatim placeholder.
 const PLACEHOLDER =
@@ -20,10 +30,15 @@ const PLACEHOLDER =
 interface ComposerPrefill {
   taskPrompt?: string;
   boardProfileId?: string;
+  /** Boards' empty state leads with Quick Start and lands here already in it. */
+  quickStart?: boolean;
 }
+
+type BoardMode = 'existing' | 'quickstart';
 
 export default function NewRunPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const prefill = (useLocation().state ?? {}) as ComposerPrefill;
   const [taskPrompt, setTaskPrompt] = useState(prefill.taskPrompt ?? '');
   const [profileId, setProfileId] = useState<string | null>(prefill.boardProfileId ?? null);
@@ -35,6 +50,16 @@ export default function NewRunPage() {
   const profiles = profilesQuery.data ?? [];
   // Explicit selection wins; otherwise the first profile is preselected.
   const profile = profiles.find((p) => p.id === profileId) ?? profiles[0] ?? null;
+
+  // Quick Start (v0). An explicit choice wins; otherwise the mode follows the data —
+  // with no profiles on the runner there is nothing to select, so the composer leads
+  // with Quick Start instead of an empty dropdown.
+  const quick = useQuickStart();
+  const [modeChoice, setModeChoice] = useState<BoardMode | null>(
+    prefill.quickStart ? 'quickstart' : null,
+  );
+  const noProfiles = profilesQuery.isSuccess && profiles.length === 0;
+  const boardMode: BoardMode = modeChoice ?? (noProfiles ? 'quickstart' : 'existing');
 
   const bench = useBenchStatus();
 
@@ -48,12 +73,31 @@ export default function NewRunPage() {
   const model = showModelSelect ? (modelChoice ?? models[0]) : undefined;
 
   const create = useMutation({
-    mutationFn: (request: { taskPrompt: string; boardProfileId: string; model?: string }) =>
-      api.createRun(request),
+    mutationFn: async (): Promise<CreateRunResponse> => {
+      const request = { taskPrompt: taskPrompt.trim(), ...(model ? { model } : {}) };
+      if (boardMode !== 'quickstart') {
+        if (!profile) throw new Error('no board profile selected');
+        return api.createRun({ ...request, boardProfileId: profile.id });
+      }
+      // Quick Start: compile the profile from the path + the live bench, save it
+      // through the SAME profile-creation path the builder uses (§5.3 POST
+      // /board-profiles), then create the run against what the runner echoed back.
+      const compiled = buildQuickStartProfile({
+        repoPath: quick.repoPath,
+        name: quick.name,
+        detectedBuild: quick.detectedBuild,
+        bench,
+      });
+      const saved = await api.saveBoardProfile(compiled);
+      addRecentRepoPath(saved.repoPath);
+      await queryClient.invalidateQueries({ queryKey: ['board-profiles'] });
+      return api.createRun({ ...request, boardProfileId: saved.id });
+    },
     onSuccess: ({ runId }) => navigate(`/runs/${runId}`),
   });
 
-  const canCreate = taskPrompt.trim().length > 0 && profile !== null && !create.isPending;
+  const boardReady = boardMode === 'quickstart' ? quick.ready : profile !== null;
+  const canCreate = taskPrompt.trim().length > 0 && boardReady && !create.isPending;
 
   // Frame v2 (T6.1b): the "New Run" title lives in the shell's top bar; the page
   // is the ~760px reading column. T6.1c: the hero block sits ~15vh down so the
@@ -75,25 +119,41 @@ export default function NewRunPage() {
           className="w-full resize-y rounded-card border border-border bg-surface p-5 text-composer text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
         />
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <label className="flex items-center gap-2 text-meta text-text-secondary">
-            Board profile
-            <select
-              value={profile?.id ?? ''}
-              onChange={(event) => setProfileId(event.target.value)}
-              disabled={profiles.length === 0}
-              className="rounded-control border border-border bg-surface px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
+        {boardMode === 'quickstart' ? (
+          <QuickStartPanel
+            quick={quick}
+            onUseExisting={profiles.length > 0 ? () => setModeChoice('existing') : undefined}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <label className="flex items-center gap-2 text-meta text-text-secondary">
+              Board profile
+              <select
+                value={profile?.id ?? ''}
+                onChange={(event) => setProfileId(event.target.value)}
+                disabled={profiles.length === 0}
+                className="rounded-control border border-border bg-surface px-3 py-1.5 text-body text-text-primary focus:border-accent focus:outline-none"
+              >
+                {profiles.length === 0 && <option value="">No profiles</option>}
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {/* Quick Start's entry point beside the selector: a board Boardex has never
+                seen needs a path, not a form (§7.2, v0). */}
+            <button
+              type="button"
+              onClick={() => setModeChoice('quickstart')}
+              className="rounded-control border border-border px-3 py-1.5 text-meta font-medium text-text-primary transition-colors duration-fast ease-motion hover:bg-canvas"
             >
-              {profiles.length === 0 && <option value="">No profiles</option>}
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {profile && <ContextChips profile={profile} />}
-        </div>
+              + New board
+            </button>
+            {profile && <ContextChips profile={profile} />}
+          </div>
+        )}
 
         {showModelSelect && (
           <label className="flex items-center gap-2 text-meta text-text-secondary">
@@ -113,26 +173,23 @@ export default function NewRunPage() {
           </label>
         )}
 
-        <BenchReadiness bench={bench} instruments={profile?.instruments ?? null} />
+        {/* In Quick Start there is no profile yet, so there is no reference that could
+            be missing — only the bench's own devices are known, which is exactly what a
+            null instruments prop reports (§7.2: never an assumed anything). */}
+        <BenchReadiness
+          bench={bench}
+          instruments={boardMode === 'quickstart' ? null : (profile?.instruments ?? null)}
+        />
 
         {create.isError && (
           <p role="alert" className="rounded-card border border-warn bg-warn-bg px-4 py-3 text-body text-warn">
-            Could not create the run — check that the runner is online, then try again.
+            {boardMode === 'quickstart'
+              ? 'Could not save the board and create the run — check that the runner is online, then try again.'
+              : 'Could not create the run — check that the runner is online, then try again.'}
           </p>
         )}
 
-        <Button
-          variant="primary"
-          disabled={!canCreate}
-          onClick={() => {
-            if (!profile) return;
-            create.mutate({
-              taskPrompt: taskPrompt.trim(),
-              boardProfileId: profile.id,
-              ...(model ? { model } : {}),
-            });
-          }}
-        >
+        <Button variant="primary" disabled={!canCreate} onClick={() => create.mutate()}>
           {create.isPending ? 'Creating…' : 'Create Run Plan'}
         </Button>
       </div>
