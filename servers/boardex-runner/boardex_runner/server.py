@@ -15,6 +15,7 @@ from typing import Any
 
 from aiohttp import WSMsgType, web
 
+from . import credentials
 from .artifacts import ArtifactStore
 from .clock import Clock, VirtualClock
 from .contract import (
@@ -29,6 +30,8 @@ from .recorder import FixtureRecorder
 
 DEFAULT_PORT = 4380
 _LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+# Same two names, unschemed: the Host header the credential routes require.
+_LOCAL_HOST = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
 # Staleness bound for the off-loop bench snapshot (audit HIGH-2). The UI treats
 # bench status as advisory, so a few seconds of staleness is acceptable and it
 # stops repeated GET /bench + dashboard connects from hammering the probe.
@@ -172,9 +175,39 @@ def _cors(request: web.Request) -> dict[str, str]:
     return {
         "Access-Control-Allow-Origin": allowed,
         "Vary": "Origin",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        # PUT/DELETE are advertised for the credential routes' preflight; every
+        # other resource still implements only GET/POST and answers 405.
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
     }
+
+
+def _is_local_client(request: web.Request) -> bool:
+    """Host/Origin guard for the credential routes (and ONLY those).
+
+    "It is localhost" is not authentication: a local port is reachable by every
+    process on the machine, and — the case this exists for — by a page in the
+    operator's own browser via DNS rebinding. An attacker page that resolves its
+    own hostname to 127.0.0.1 can reach this port with the browser's blessing,
+    and without this check it could set a provider key (billing the operator's
+    account through a runner it now controls) or clear one (silently breaking
+    every run). CORS does not help: it governs whether the page may READ the
+    response, not whether the request is executed.
+
+    So both are pinned, before any body is read: the Host header must name a
+    loopback name (a rebound attacker hostname does not), and an Origin, when
+    the browser sends one, must be a loopback origin.
+
+    Deliberately asymmetric with the rest of the server: the other routes keep
+    their existing CORS-only behavior, unchanged by this task. They expose run
+    data on a single-user local bench (D13); these two accept a SECRET and are
+    the only ones where a rebound page changes what the runner does with money
+    and hardware. Hardening the rest is a separate decision, not a side effect.
+    """
+    if not _LOCAL_HOST.match(request.headers.get("Host", "")):
+        return False
+    origin = request.headers.get("Origin")
+    return origin is None or bool(_LOCAL_ORIGIN.match(origin))
 
 
 def _json(request: web.Request, status: int, body: Any) -> web.Response:
@@ -214,7 +247,47 @@ def build_app(state: RunnerApp) -> web.Application:
         }
         if state.models:
             payload["capabilities"] = {"models": state.models}
+        # NOT a contract field: HealthResponse is unchanged and a plain-object
+        # parse strips this, which is the proof (docs/decisions.md 2026-07-28).
+        # It carries presence + a masked hint per provider, never key material,
+        # and is what the UI feature-detects the credential routes on.
+        payload["credentials"] = credentials.advertise()
         return _json(request, 200, payload)
+
+    # PUT /credentials {provider, apiKey} — store a provider key (204).
+    # DELETE /credentials/{provider} — remove it (204, idempotent).
+    #
+    # There is deliberately NO GET on either: the store is WRITE-ONLY, so no
+    # route can serve key material back and /health's masked hint is the only
+    # readable trace a stored key has. aiohttp answers 405 for the missing
+    # method, which is the honest answer — the resource exists, reading is not
+    # one of the things it does.
+    async def put_credentials(request: web.Request) -> web.Response:
+        if not _is_local_client(request):
+            # Before any body parsing: a rebound page's key must not even be read.
+            return _error(request, 403, "forbidden")
+        try:
+            body = await _read_body(request)
+        except json.JSONDecodeError:
+            return _error(request, 400, "invalid credential request")
+        # A literal `null` body parses to None, and reading .get off it would
+        # raise into a 500 — a client mistake answers 400, not "internal error".
+        if not isinstance(body, dict):
+            return _error(request, 400, "invalid credential request")
+        # The error strings come from the store and are fixed: a rejection never
+        # echoes the submitted key back in the response body.
+        failure = credentials.set_key(body.get("provider"), body.get("apiKey"))
+        if failure is not None:
+            return _error(request, failure.status, failure.error)
+        return web.Response(status=204, headers=_cors(request))
+
+    async def delete_credentials(request: web.Request) -> web.Response:
+        if not _is_local_client(request):
+            return _error(request, 403, "forbidden")
+        failure = credentials.delete_key(request.match_info["provider"])
+        if failure is not None:
+            return _error(request, failure.status, failure.error)
+        return web.Response(status=204, headers=_cors(request))
 
     async def bench(request: web.Request) -> web.Response:
         return _json(request, 200, await state.bench_status())
@@ -378,6 +451,8 @@ def build_app(state: RunnerApp) -> web.Application:
 
     app.router.add_route("OPTIONS", "/{tail:.*}", options_handler)
     app.router.add_get("/health", health)
+    app.router.add_route("PUT", "/credentials", put_credentials)
+    app.router.add_delete("/credentials/{provider}", delete_credentials)
     app.router.add_get("/bench", bench)
     app.router.add_get("/board-profiles", list_profiles)
     app.router.add_post("/board-profiles", save_profile)
@@ -434,6 +509,14 @@ def state_from_env() -> RunnerApp:
     AGENT_MODELS=<csv> — LiteLLM model strings advertised via capabilities (BENCH=agent)
     AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 60)
     """
+    # Provider key store: the providers it will hold a key for are the ones the
+    # advertised models name (AGENT_MODELS), and any provider whose standard env
+    # var is already exported boots configured — env stays a working fallback,
+    # so an existing setup behaves exactly as it did. Configured for every BENCH,
+    # not just agent: the dashboard's key path has to work before anyone
+    # switches over, and a fake-bench runner is what a new user meets first.
+    credentials.configure()
+
     bench_kind = os.environ.get("BENCH", "fake")
     speed = float(os.environ.get("SPEED", "1"))
     # PACING stretches the fake bench's narrative time (virtual timestamps)
