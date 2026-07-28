@@ -617,6 +617,25 @@ describe('mock runner', () => {
     expect((await fetch(`${base}/workspace/validate`)).status).toBe(405);
   });
 
+  // A run is created against the profile the request named — the id the UI resolves
+  // the run's safety context (D12 checklist) by. Mock-only: it asserts the mock's
+  // substitution onto the canned story, which an external runner has no notion of.
+  itMockOnly('creates the run against the requested board profile id', async () => {
+    const res = await post('/runs', {
+      taskPrompt: 'bring up the BME280',
+      boardProfileId: 'bp_quickstart_compiled',
+    });
+    const { runId } = (await res.json()) as { runId: string };
+    const { events } = await waitForView(runId, (v) => v.run.status !== 'draft', 'run.created');
+    const created = events.find((e) => e.type === 'run.created');
+    expect(created?.type === 'run.created' && created.payload.run.boardProfileId).toBe(
+      'bp_quickstart_compiled',
+    );
+    // The summary GET /runs serves agrees — one identity, not two.
+    const summaries = ListRunsResponseSchema.parse(await getJson('/runs'));
+    expect(summaries.find((s) => s.id === runId)?.boardProfileId).toBe('bp_quickstart_compiled');
+  });
+
   it('returns 404 for an unknown run id on every run route', async () => {
     expect((await fetch(`${base}/runs/run_does_not_exist/events?afterSeq=0`)).status).toBe(404);
     expect((await post('/runs/run_does_not_exist/stop')).status).toBe(404);

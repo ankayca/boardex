@@ -35,6 +35,12 @@ export interface RunSessionOptions {
   validateOutbound: boolean;
   // v2.1 (T6.3): the chosen runner model, echoed onto the run.created Run when set.
   model?: string;
+  // The requested board profile, echoed onto the run.created Run when set — a real
+  // runner creates the run against the profile it was asked for, and the UI resolves
+  // its D12 checklist by that id. Set only for the AUTHORED fixtures (server.ts): a
+  // FIXTURE_FILE recording's boardProfileId is a recorded fact about a run that
+  // actually happened, never a placeholder to substitute.
+  boardProfileId?: string;
   onEvent: (event: Event) => void;
 }
 
@@ -75,6 +81,7 @@ export class RunSession {
   private readonly speed: number;
   private readonly validateOutbound: boolean;
   private readonly model: string | undefined;
+  private readonly requestedBoardProfileId: string | undefined;
   private readonly onEvent: (event: Event) => void;
 
   private readonly log: Event[] = [];
@@ -100,6 +107,7 @@ export class RunSession {
     this.speed = options.speed;
     this.validateOutbound = options.validateOutbound;
     this.model = options.model;
+    this.requestedBoardProfileId = options.boardProfileId;
     this.onEvent = options.onEvent;
     // Seed a schema-valid RunSummary at POST /runs time (T5.0/F7): the fixture's
     // run.created replays only after its delayMs, and a GET /runs in that window
@@ -109,7 +117,7 @@ export class RunSession {
     const created = this.entries.find((entry) => entry.event.type === 'run.created')?.event;
     const run = created?.type === 'run.created' ? created.payload.run : undefined;
     this.title = run?.title ?? 'Run';
-    this.boardProfileId = run?.boardProfileId ?? 'bp_nucleo_f303re';
+    this.boardProfileId = options.boardProfileId ?? run?.boardProfileId ?? 'bp_nucleo_f303re';
     this.sourceRunId = run?.id ?? FIXTURE_RUN_ID;
     this.updatedAt = new Date().toISOString();
     const firstTs = this.entries[0] ? Date.parse(this.entries[0].event.ts) : NaN;
@@ -236,9 +244,25 @@ export class RunSession {
     // v2.1 (T6.3): stamp the chosen model onto the run.created Run so the UI can
     // render the run's model (§4 Run.model). Every run.created goes through emit
     // (replay loop and the stop-before-created path), so this is the one seam.
+    // The requested boardProfileId rides the same seam: a real runner creates the run
+    // against the profile the request named, and the UI resolves that run's safety
+    // context — the D12 checklist above all — by that id. A Quick Start run must
+    // therefore reach the plan gate holding the profile it just compiled, not the
+    // canned one the story was authored against.
     const event =
-      this.model !== undefined && rawEvent.type === 'run.created'
-        ? { ...rawEvent, payload: { run: { ...rawEvent.payload.run, model: this.model } } }
+      rawEvent.type === 'run.created'
+        ? {
+            ...rawEvent,
+            payload: {
+              run: {
+                ...rawEvent.payload.run,
+                ...(this.model !== undefined ? { model: this.model } : {}),
+                ...(this.requestedBoardProfileId !== undefined
+                  ? { boardProfileId: this.requestedBoardProfileId }
+                  : {}),
+              },
+            },
+          }
         : rawEvent;
     if (this.validateOutbound) {
       // Throws on any non-conforming outbound event — a loud failure by design.

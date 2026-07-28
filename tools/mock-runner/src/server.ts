@@ -110,7 +110,7 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
     return `run_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  function createRun(model?: string): string {
+  function createRun(model?: string, boardProfileId?: string): string {
     const id = newRunId();
     const session = new RunSession({
       id,
@@ -119,6 +119,12 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
       validateOutbound,
       // v2.1 (T6.3): echo the chosen model onto the run.created Run (§4 Run.model).
       model,
+      // Echo the requested board profile too — a real runner creates the run against
+      // the profile it was asked for, and the UI resolves the run's safety context
+      // (the D12 checklist) by that id. Authored fixtures only: a FIXTURE_FILE
+      // recording's run.created is a RECORD of a run that happened, so its
+      // boardProfileId is a fact, not a placeholder (§10.3, preserve the evidence).
+      ...(options.fixtureFile ? {} : { boardProfileId }),
       onEvent: (event) => dispatch(session, event),
     });
     sessions.set(id, session);
@@ -195,9 +201,15 @@ export async function createMockRunner(options: MockRunnerOptions = {}): Promise
         const parsed = CreateRunRequestSchema.safeParse(await readBody(req));
         if (!parsed.success) return sendError(res, 400, 'invalid create-run request');
         // The mock replays the canned BME280 story re-keyed with a fresh runId
-        // (§5.6); the request's taskPrompt/boardProfileId are not substituted. The
-        // chosen model (v2.1) IS honored — echoed onto the run.created Run.
-        return sendJson(res, 200, { runId: createRun(parsed.data.model) });
+        // (§5.6); the request's taskPrompt is not substituted. The chosen model
+        // (v2.1) and the requested boardProfileId ARE honored — both are echoed onto
+        // the run.created Run, so a run created against a just-compiled Quick Start
+        // profile resolves that profile at the plan gate, as a real runner's would.
+        return sendJson(
+          res,
+          200,
+          { runId: createRun(parsed.data.model, parsed.data.boardProfileId) },
+        );
       }
 
       const runId = seg[1];
