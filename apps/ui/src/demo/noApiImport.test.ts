@@ -24,25 +24,27 @@ const EXCEPTION = 'demoArtifactSource.ts';
 
 const isTestModule = (path: string): boolean => /\.test\.tsx?$/.test(path);
 
-// Matches an import of lib/api OR lib/liveRunCommands, in both `from '…'` and
-// `import('…')` forms. The trailing quote after the module name means lib/apiErrors
-// (a legitimate sibling) is NOT matched — only the api client and its live impl are.
+// Matches an import of lib/api, lib/liveRunCommands OR lib/credentials, in both
+// `from '…'` and `import('…')` forms. The trailing quote after the module name means
+// lib/apiErrors (a legitimate sibling) is NOT matched — only the api client, its live
+// impl, and the credential WRITE seam are. The demo has no credential surface at all
+// (it mounts neither Settings nor the composer), and this keeps it that way.
 const FORBIDDEN_IMPORT =
-  /(?:from\s+|import\s*\(\s*)['"][^'"]*\blib\/(?:api|liveRunCommands)['"]/;
+  /(?:from\s+|import\s*\(\s*)['"][^'"]*\blib\/(?:api|liveRunCommands|credentials)['"]/;
 const API_IMPORT = /from\s+['"][^'"]*lib\/api['"]/;
 
 const swept = Object.entries(SOURCES).filter(
   ([path]) => !isTestModule(path) && !path.endsWith(`/${EXCEPTION}`),
 );
 
-describe('the demo never imports the api client or its live commands', () => {
+describe('the demo never imports the api client, its live commands, or the credential seam', () => {
   it('sweeps at least the known command-path + data modules (glob resolved something)', () => {
     // Guards against a glob that silently matches nothing (which would pass vacuously).
     expect(swept.length).toBeGreaterThan(5);
   });
 
   for (const [path, src] of swept) {
-    it(`${path} imports neither lib/api nor lib/liveRunCommands`, () => {
+    it(`${path} imports no lib/api, lib/liveRunCommands or lib/credentials`, () => {
       expect(src).not.toMatch(FORBIDDEN_IMPORT);
     });
   }

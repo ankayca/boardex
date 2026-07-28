@@ -16,9 +16,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateRunResponse } from '@boardex/contract';
 import { Button } from '../../design';
 import { api } from '../../lib/api';
+import {
+  CREDENTIALS_QUERY_KEY,
+  credentialsApi,
+  providersOrNull,
+  unconfiguredProviderFor,
+} from '../../lib/credentials';
 import { addRecentRepoPath } from '../../lib/settings';
 import { useBenchStatus } from '../../lib/useBenchStatus';
 import { BenchReadiness } from './BenchReadiness';
+import { CredentialsNotice } from './CredentialsNotice';
 import { ContextChips } from './ContextChips';
 import { QuickStartPanel, useQuickStart } from './QuickStartPanel';
 import { buildQuickStartProfile } from './quickStartProfile';
@@ -32,6 +39,8 @@ interface ComposerPrefill {
   boardProfileId?: string;
   /** Boards' empty state leads with Quick Start and lands here already in it. */
   quickStart?: boolean;
+  /** Quick Start's typed path, so a trip to Settings and back loses no draft. */
+  repoPath?: string;
 }
 
 type BoardMode = 'existing' | 'quickstart';
@@ -54,7 +63,7 @@ export default function NewRunPage() {
   // Quick Start (v0). An explicit choice wins; otherwise the mode follows the data —
   // with no profiles on the runner there is nothing to select, so the composer leads
   // with Quick Start instead of an empty dropdown.
-  const quick = useQuickStart();
+  const quick = useQuickStart(prefill.repoPath ?? '');
   const [modeChoice, setModeChoice] = useState<BoardMode | null>(
     prefill.quickStart ? 'quickstart' : null,
   );
@@ -71,6 +80,21 @@ export default function NewRunPage() {
   const showModelSelect = models.length > 1;
   const [modelChoice, setModelChoice] = useState<string | null>(null);
   const model = showModelSelect ? (modelChoice ?? models[0]) : undefined;
+
+  // Credentials pre-flight (feature-detected, advisory). The model the run will ACTUALLY
+  // use is the effective one — with a single advertised model no picker renders and no
+  // `model` rides on POST /runs, but the runner still runs models[0], so that is the
+  // string whose provider must have a key.
+  const effectiveModel = modelChoice ?? models[0];
+  const credentialsQuery = useQuery({
+    queryKey: CREDENTIALS_QUERY_KEY,
+    queryFn: () => credentialsApi.fetchCapability(),
+    retry: false,
+  });
+  const unconfigured = unconfiguredProviderFor(
+    effectiveModel,
+    providersOrNull(credentialsQuery.data),
+  );
 
   const create = useMutation({
     mutationFn: async (): Promise<CreateRunResponse> => {
@@ -124,6 +148,25 @@ export default function NewRunPage() {
           autoFocus
           className="w-full resize-y rounded-card border border-border bg-surface p-5 text-composer text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
         />
+
+        {/* Advisory pre-flight: the runner says the model's provider has no key. Create
+            Run Plan stays enabled — the runner may hold one in its environment without
+            advertising it, and blocking would claim knowledge we do not have. The draft
+            rides along to Settings so the trip costs the user nothing. */}
+        {unconfigured && (
+          <CredentialsNotice
+            provider={unconfigured.provider}
+            returnState={
+              {
+                taskPrompt,
+                ...(profileId ? { boardProfileId: profileId } : {}),
+                ...(boardMode === 'quickstart'
+                  ? { quickStart: true, repoPath: quick.repoPath }
+                  : {}),
+              } satisfies ComposerPrefill
+            }
+          />
+        )}
 
         {boardMode === 'quickstart' ? (
           <QuickStartPanel

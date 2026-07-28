@@ -135,6 +135,8 @@ async function waitForView(
 
 interface Collector {
   events: Event[];
+  /** Frames exactly as they arrived on the socket, before any parse (leak greps). */
+  raw: string[];
   waitFor: (pred: (e: Event) => boolean) => Promise<Event>;
   close: () => void;
 }
@@ -142,8 +144,10 @@ interface Collector {
 async function connect(query: string): Promise<Collector> {
   const ws = new WebSocket(`${wsBase}/ws?${query}`);
   const events: Event[] = [];
+  const raw: string[] = [];
   const waiters: { pred: (e: Event) => boolean; resolve: (e: Event) => void }[] = [];
   ws.on('message', (data: Buffer) => {
+    raw.push(data.toString());
     const event = EventSchema.parse(JSON.parse(data.toString()));
     events.push(event);
     for (const w of [...waiters]) {
@@ -159,6 +163,7 @@ async function connect(query: string): Promise<Collector> {
   });
   return {
     events,
+    raw,
     waitFor: (pred) =>
       new Promise<Event>((resolve) => {
         const hit = events.find(pred);
@@ -195,16 +200,23 @@ describe('mock runner', () => {
     });
     // T6.3 (riding along for T6.6): the mock advertises exactly one model. An
     // external runner's capabilities are its own; schema-valid is the bar there.
+    // `credentials` rides along mock-prototyped (§10.5 proposal): the advertised
+    // provider is UNCONFIGURED at boot with no hint, since no MOCK_PROVIDER_KEY was set.
     if (!EXTERNAL_BASE) {
       expect(health).toEqual({
         ok: true,
         contractVersion: 'boardex-contract/0.1',
         runnerKind: 'mock',
         capabilities: { models: ['mock-model'] },
+        credentials: [{ provider: 'openrouter', configured: false }],
       });
     }
-    // Validates against the contract schema (capabilities is optional there).
-    expect(HealthResponseSchema.parse(health)).toEqual(health);
+    // Validates against the contract schema (capabilities is optional there). The
+    // parse STRIPS `credentials` — proof it is a mock-prototyped extension and not a
+    // contract field: a v2.0 consumer sees a plain HealthResponse.
+    const parsed = HealthResponseSchema.parse(health);
+    expect(parsed).not.toHaveProperty('credentials');
+    expect(parsed).toEqual({ ...health, credentials: undefined });
   });
 
   it('drives a full run to completion over HTTP + WS with the fixture event count', async () => {
@@ -660,6 +672,129 @@ describe('mock runner', () => {
     // The summary GET /runs serves agrees — one identity, not two.
     const summaries = ListRunsResponseSchema.parse(await getJson('/runs'));
     expect(summaries.find((s) => s.id === runId)?.boardProfileId).toBe('bp_quickstart_compiled');
+  });
+
+  // Provider credentials (v0). Mock-only: PUT /credentials, DELETE /credentials/{p} and
+  // /health's `credentials` advertisement are a §10.5 PROPOSAL prototyped here, not
+  // contract routes — an external runner has no notion of them. The store's own rules
+  // live in credentials.test.ts; this pins the HTTP surface and the reflection.
+  itMockOnly('stores, reflects, and removes a provider key (write-only, hint only)', async () => {
+    const key = 'sk-or-v1-http-surface-0000f92a';
+    const advertised = async (): Promise<{ provider: string; configured: boolean; hint?: string }> =>
+      (await getJson<{ credentials: { provider: string; configured: boolean; hint?: string }[] }>(
+        '/health',
+      )).credentials[0]!;
+
+    expect(await advertised()).toEqual({ provider: 'openrouter', configured: false });
+
+    const put = (body: unknown): Promise<Response> =>
+      fetch(`${base}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    expect((await put({ provider: 'openrouter', apiKey: key })).status).toBe(204);
+    // Reflection: presence plus the masked tail — the key itself is nowhere in it.
+    expect(await advertised()).toEqual({ provider: 'openrouter', configured: true, hint: '…f92a' });
+
+    // Validation. An unknown provider is 404 (the route, not the payload); a key that
+    // is empty or not a string is 400; a null/non-object body is 400, never a 500.
+    expect((await put({ provider: 'anthropic', apiKey: key })).status).toBe(404);
+    expect((await put({ provider: 'openrouter', apiKey: '' })).status).toBe(400);
+    expect((await put({ provider: 'openrouter', apiKey: 42 })).status).toBe(400);
+    expect((await put({ provider: 'openrouter' })).status).toBe(400);
+    const rawPut = (body: string): Promise<Response> =>
+      fetch(`${base}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+    expect((await rawPut('null')).status).toBe(400);
+    expect((await rawPut('"not an object"')).status).toBe(400);
+
+    // NO read-back route exists, by design: the store is write-only, so a GET is simply
+    // not a method this resource has.
+    expect((await fetch(`${base}/credentials`)).status).toBe(405);
+    expect((await fetch(`${base}/credentials/openrouter`)).status).toBe(405);
+
+    // None of the rejections disturbed the stored key.
+    expect(await advertised()).toMatchObject({ configured: true, hint: '…f92a' });
+
+    const del = (provider: string): Promise<Response> =>
+      fetch(`${base}/credentials/${provider}`, { method: 'DELETE' });
+    expect((await del('anthropic')).status).toBe(404);
+    expect((await del('openrouter')).status).toBe(204);
+    expect(await advertised()).toEqual({ provider: 'openrouter', configured: false });
+    // Removing what is already gone is not an error — Settings' Remove is idempotent.
+    expect((await del('openrouter')).status).toBe(204);
+  });
+
+  // The invariant the whole feature rests on: a stored key is unreachable from every
+  // OTHER surface. Set one, drive a complete run, then grep the run's entire event
+  // output, every artifact body it produced, and a batch of error responses for the key.
+  itMockOnly('never leaks a stored key into events, artifacts, or error bodies', async () => {
+    const key = 'sk-or-v1-leak-canary-abcdef123456';
+    expect(
+      (
+        await fetch(`${base}/credentials`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'openrouter', apiKey: key }),
+        })
+      ).status,
+    ).toBe(204);
+
+    const runId = await createRun();
+    // A security grep must read WIRE BYTES: schema parsing STRIPS unknown keys, so a key
+    // echoed into a non-contract payload field would be laundered by the parse — passing
+    // a grep over the parsed view while still going out on the socket and the replay.
+    const wsCollector = await connect(`runId=${runId}`);
+    const events = await driveToCompletion(runId);
+    expect(events.length).toBeGreaterThan(1);
+
+    // The live socket's frames, exactly as they arrived.
+    await wsCollector.waitFor((e) => e.type === 'run.completed');
+    expect(wsCollector.raw.length).toBeGreaterThan(0);
+    for (const frame of wsCollector.raw) expect(frame).not.toContain(key);
+    wsCollector.close();
+
+    // And the HTTP replay body, unparsed.
+    const replayBody = await (await fetch(`${base}/runs/${runId}/events?afterSeq=0`)).text();
+    expect(replayBody.length).toBeGreaterThan(0);
+    expect(replayBody).not.toContain(key);
+
+    // Every artifact the run produced, fetched by reference exactly as the UI does.
+    const artifactIds = events.flatMap((e) =>
+      e.type === 'artifact.created' ? [e.payload.artifact.id] : [],
+    );
+    expect(artifactIds.length).toBeGreaterThan(0);
+    const bodies = await Promise.all(
+      artifactIds.map(async (id) => (await fetch(`${base}/artifacts/${id}`)).text()),
+    );
+    for (const body of bodies) expect(body).not.toContain(key);
+
+    // Error bodies, including the ones produced by mishandling the credential routes
+    // themselves — a rejection must never echo the submitted key back.
+    const errorResponses = await Promise.all([
+      fetch(`${base}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'anthropic', apiKey: key }),
+      }),
+      fetch(`${base}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'openrouter', apiKey: '' }),
+      }),
+      fetch(`${base}/credentials`),
+      fetch(`${base}/runs/run_does_not_exist/events?afterSeq=0`),
+      fetch(`${base}/artifacts/art_does_not_exist`),
+      fetch(`${base}/health`),
+    ]);
+    for (const res of errorResponses) expect(await res.text()).not.toContain(key);
+
+    await fetch(`${base}/credentials/openrouter`, { method: 'DELETE' });
   });
 
   it('returns 404 for an unknown run id on every run route', async () => {

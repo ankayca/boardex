@@ -5,12 +5,15 @@
 //     (api singleton + both WS clients) via lib/config's resolvers.
 //   • Model — the runner's advertised models, read-only (the composer picks among them
 //     when it advertises more than one; feature-detected, never assumed).
+//   • Model provider — per-provider API keys, feature-detected on /health's advertised
+//     `credentials` (ProviderCredentials.tsx; absent capability → no section at all).
 //   • Appearance & behavior — collapse-sidebar-by-default and a replay-onboarding reset,
 //     the existing scattered prefs folded into one place.
 // Persistence is MODULE MEMORY (lib/settings) — the same mechanism the sidebar and demo
 // tour already use; no storage, per the T6.6 constraint. Tokens only; D14 reserved.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, StatusDot } from '../../design';
 import { api, createApiClient } from '../../lib/api';
@@ -23,7 +26,20 @@ import {
   useSettingsVersion,
 } from '../../lib/settings';
 import { resetTourMemory } from '../../demo/Tour';
+import { ProviderCredentials } from './ProviderCredentials';
 import { classifyHealth, type ConnectionResult } from './testConnection';
+
+/**
+ * A screen that sent the user here to fix something carries the way back, plus the
+ * draft it was holding: the composer's credentials pre-flight links here mid-compose,
+ * and a typed task prompt must survive the round trip (router state, like "Edit task").
+ */
+interface SettingsReturn {
+  returnTo?: string;
+  label?: string;
+  /** Opaque here — handed straight back to the returning route as its own state. */
+  state?: unknown;
+}
 
 type TestState =
   | { status: 'idle' }
@@ -95,6 +111,8 @@ function TestResult({ test }: { test: TestState }) {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const from = (useLocation().state ?? {}) as SettingsReturn;
   // Re-render when module-memory settings change (Save/Reset/collapse toggle).
   useSettingsVersion();
   const override = getRunnerUrlOverride();
@@ -141,6 +159,15 @@ export default function SettingsPage() {
   return (
     // §7.7 / P1 #11: a 680–760px reading column for the sectioned prose page.
     <main className="mx-auto max-w-[720px] px-6 pb-16 pt-10">
+      {from.returnTo && (
+        <button
+          type="button"
+          onClick={() => navigate(from.returnTo as string, { state: from.state })}
+          className="mb-4 text-meta text-accent underline underline-offset-2 hover:text-accent-hover"
+        >
+          ← {from.label ?? 'Back'}
+        </button>
+      )}
       <p className="text-body text-text-secondary">
         Connection and preferences. Changes apply immediately and reset on reload.
       </p>
@@ -220,6 +247,10 @@ export default function SettingsPage() {
             </p>
           )}
         </Section>
+
+        {/* Feature-detected: renders nothing when the runner advertises no
+            `credentials` capability, so the section is absent rather than empty. */}
+        <ProviderCredentials />
 
         <Section
           title="Appearance & behavior"
