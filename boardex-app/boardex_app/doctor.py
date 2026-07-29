@@ -50,20 +50,28 @@ def expected_key_vars(environ: Mapping[str, str] | None = None) -> list[str]:
     ``OPENROUTER_API_KEY`` exported it reports a key the agent will never read,
     and it names the wrong variable in the fix. So the derivation is the
     runner's own — ``credentials.providers_from_models`` + ``env_var_for``, the
-    same two functions the store seeds itself with — rather than a second
-    opinion that can drift from it.
+    same two functions the store seeds itself with.
 
-    Falls back to the fixed list when AGENT_MODELS is unset (the runner would
-    then use its default model, and naming one variable would over-claim) or
-    when boardex-runner is not importable at all (``boardex doctor`` must still
-    run in a half-broken install — that is when it is needed most).
+    An UNSET ``AGENT_MODELS`` is derivable too, and precisely: the runner then
+    advertises exactly ``DEFAULT_MODEL``, so exactly one provider's key can ever
+    be read, and naming it is the same claim ``/health`` makes. The fallback
+    below mirrors ``credentials._models_from_env`` — same constant, same rule
+    that the default applies to an ABSENT variable and not to an empty one —
+    reproduced here rather than called because the store reads ``os.environ``
+    directly and this has to answer for an environment handed to it.
+
+    The fixed list survives only for what genuinely cannot be derived: a
+    boardex-runner that will not import (``boardex doctor`` has to run in a
+    half-broken install — that is when it is needed most) and a model string
+    with no provider prefix, where the store says "no provider" too.
     """
     env = os.environ if environ is None else environ
     try:
         from boardex_runner import credentials
     except ImportError:
         return list(PROVIDER_KEY_ENV)
-    models = [model.strip() for model in env.get("AGENT_MODELS", "").split(",") if model.strip()]
+    raw = env.get("AGENT_MODELS", credentials.DEFAULT_MODEL)
+    models = [model.strip() for model in raw.split(",") if model.strip()]
     providers = credentials.providers_from_models(models)
     if not providers:
         return list(PROVIDER_KEY_ENV)
