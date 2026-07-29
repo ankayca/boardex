@@ -3,8 +3,9 @@
 Primary provider is OpenRouter (default model openrouter/anthropic/claude-sonnet-4.6,
 key via OPENROUTER_API_KEY); any LiteLLM model string works with that provider's
 standard env var (ANTHROPIC_API_KEY / OPENAI_API_KEY / ... for direct providers).
-Keys are read from the process environment by LiteLLM at call time and nowhere
-else — never logged, never stored, never on the wire. ``litellm`` itself is
+Keys are resolved at CALL time from the write-only credential store, falling
+back to the process environment (see ``credentials.py``) — never logged, never
+in an event, never on the wire back to a client. ``litellm`` itself is
 imported lazily so BENCH=fake|real deployments (and the test suite) need no
 agent extras installed.
 """
@@ -200,6 +201,10 @@ class LiteLLMProvider:
     ) -> ModelTurn:
         import litellm
 
+        # Imported here, not at module scope: credentials derives its provider
+        # list from DEFAULT_MODEL above, so a top-level import would be circular.
+        from .credentials import resolve_key
+
         litellm.suppress_debug_info = True
         if self._cache_prompts is None:
             self._cache_prompts = _model_supports_prompt_caching(litellm, self.model)
@@ -208,6 +213,16 @@ class LiteLLMProvider:
         extra: dict[str, Any] = {}
         if self.max_tokens is not None:
             extra["max_tokens"] = self.max_tokens
+        # Key resolution happens HERE, per call — not in __init__. A key set in
+        # the dashboard mid-session must take effect on the next run without a
+        # runner restart, which capturing it at construction would forbid. The
+        # store answers first and the environment is the fallback, so a runner
+        # started with OPENROUTER_API_KEY set behaves exactly as it did before
+        # the store existed. Absent both, api_key is not passed at all and
+        # LiteLLM reads the environment itself, unchanged.
+        api_key = resolve_key(self.model)
+        if api_key is not None:
+            extra["api_key"] = api_key
         response = await litellm.acompletion(
             model=self.model,
             messages=messages,
