@@ -38,15 +38,30 @@ missing. Nothing it reports blocks `boardex up`; it always exits 0.
 | `sigrok-cli` | logic-analyzer capture and protocol decode |
 | `arm-none-eabi-gcc` | building the firmware under test |
 | USB access (udev rules on Linux) | reaching the probe without root |
-| A model provider API key | agent runs (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, …) |
+| A model provider API key | agent runs (see below) |
 
-The key is read from the environment by the runner at call time and is never
-stored or logged. Export it before `boardex up`:
+### The API key — no shell required
+
+`boardex up`, then **Settings → Model provider** in the page that opens: paste
+the key, Save. The runner holds it for the session (write-only — no route serves
+a key back, so only the last few characters are ever shown again) and it takes
+effect on the next run, no restart. Nothing is stored in the browser and nothing
+is written to disk.
+
+Exporting the provider-standard variable before launch still works and boots the
+runner already configured — the dashboard then shows it as configured rather
+than offering to set what is already set:
 
 ```bash
-export OPENROUTER_API_KEY=...
+export OPENROUTER_API_KEY=...   # or ANTHROPIC_API_KEY, … — the fallback path
 boardex up
 ```
+
+Because the store lives in the runner process, a key set in the dashboard is
+gone when you stop `boardex up`; an exported one is back on every launch. And
+the credential routes require a loopback `Host`, so set keys from the machine
+running the runner — with `--host 0.0.0.0`, a browser on another machine can use
+everything else but cannot set a key.
 
 ## Commands
 

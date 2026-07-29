@@ -152,6 +152,46 @@ def test_non_html_request_for_an_unknown_path_gets_a_json_404(tmp_path: Path) ->
     run(scenario())
 
 
+def test_the_ui_catch_all_cannot_become_a_credential_read_back(tmp_path: Path) -> None:
+    """Cross-feature seam: the UI catch-all + the write-only key store.
+
+    The store's whole property is that NO route serves key material back
+    (credentials.py). The catch-all answers GETs the API leaves unclaimed — and
+    ``/credentials`` is exactly such a path, since it implements only PUT — so
+    it must be pinned that what it answers with is the app document or a 404,
+    never anything key-derived, and never a 200 JSON body that could read as a
+    read-back route existing.
+    """
+    from boardex_runner import credentials
+
+    credentials.configure(["openrouter/anthropic/claude-sonnet-4.6"])
+    assert credentials.set_key("openrouter", "sk-or-v1-SECRETKEYMATERIAL0001") is None
+
+    async def scenario() -> None:
+        async with UiHarness(make_bundle(tmp_path)) as h:
+            for accept in ("application/json", "text/html", "*/*"):
+                async with h.get("/credentials", headers={"Accept": accept}) as res:
+                    body = await res.text()
+                    assert "SECRETKEYMATERIAL0001" not in body, accept
+                    if "text/html" in accept:
+                        # The SPA document — carries nothing about the store.
+                        assert res.status == 200
+                        assert res.headers["Content-Type"].startswith("text/html")
+                    else:
+                        assert res.status == 404, accept
+
+            # The hint is the only readable trace, and it lives on /health.
+            async with h.get("/health") as res:
+                assert (await res.json())["credentials"] == [
+                    {"provider": "openrouter", "configured": True, "hint": "…0001"}
+                ]
+
+    try:
+        run(scenario())
+    finally:
+        credentials.configure([])
+
+
 def test_traversal_out_of_the_bundle_is_refused(tmp_path: Path) -> None:
     secret = tmp_path / "secret.txt"
     secret.write_text("do not serve me", encoding="utf-8")

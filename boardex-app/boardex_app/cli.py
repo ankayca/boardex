@@ -12,6 +12,12 @@ interaction at all (see README-quickstart.md for why that path was chosen). Its
 runner runs the fake bench, so stepping out of the demo into the live app lands
 somewhere that works rather than on an agent bench with no key.
 
+A first run needs a model provider key, and no shell is needed for it: the
+runner holds a write-only credential store, so the key goes in at Settings →
+Model provider in the browser. An exported provider variable still works and
+boots the runner already configured — ``boardex up`` says which of the two it
+found (nothing is stored anywhere by this CLI; it only reports).
+
 ``boardex doctor`` reports what the machine is missing, with the fix per item.
 """
 
@@ -197,11 +203,15 @@ def command_up(args: argparse.Namespace) -> int:
         print(f"    runner   {health.get('runnerKind', 'real')} · bench {bench} · {url}")
         print(f"    UI       {'embedded' if ui_root else 'not bundled (API only)'}")
         if bench == "agent" and not doctor_module.check_provider_key().ok:
+            # No key at boot. The runner holds a credential store, so the fix is
+            # in the page that just opened — say that first; the environment is
+            # the fallback, not the instruction.
             print(
-                "    note     no model provider API key in the environment — the UI "
-                "loads and\n"
-                "             the demo replays; an agent run needs one "
-                "(`boardex doctor` explains)."
+                "    note     no provider key yet — set one at Settings → Model "
+                "provider\n"
+                "             in the page above (or export a key before launch). "
+                "The UI and\n"
+                "             the demo need none."
             )
         print("    Ctrl-C to stop.")
         print(flush=True)

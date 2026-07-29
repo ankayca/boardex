@@ -22,6 +22,22 @@ def test_provider_key_is_a_warning_not_a_failure() -> None:
     assert "sk-or-test" not in doctor.format_report([present])
 
 
+def test_the_key_story_leads_with_the_dashboard_not_the_shell() -> None:
+    """The runner holds a credential store (PR #18), so a missing key is not an
+    instruction to open a shell — the primary path is Settings → Model provider,
+    and the environment is the fallback that boots the runner pre-configured."""
+    absent = doctor.check_provider_key({})
+    fix = doctor.fix_command(absent, "Linux")
+    assert "Settings → Model provider" in absent.detail
+    assert "Settings → Model provider" in fix
+    assert fix.index("Settings") < fix.index("export"), "the no-shell path leads"
+    # The environment is still named as the fallback, never dropped.
+    assert "export" in fix
+
+    seeded = doctor.check_provider_key({"ANTHROPIC_API_KEY": "sk-ant-test"})
+    assert "boots configured" in seeded.detail
+
+
 def test_blank_key_reads_as_absent() -> None:
     assert doctor.check_provider_key({"ANTHROPIC_API_KEY": "   "}).status == "warn"
 

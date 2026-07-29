@@ -44,17 +44,28 @@ _STATUS_MARK = {"ok": "ok     ", "warn": "warn   ", "missing": "MISSING"}
 
 
 def check_provider_key(environ: Mapping[str, str] | None = None) -> CheckResult:
-    """An agent run needs a model provider key; everything else does not."""
+    """Whether a provider key is exported — the runner's *fallback* path.
+
+    Since the runner's credential store landed, the dashboard is the primary
+    way to set a key (Settings → Model provider, stored runner-side for the
+    session) and the environment is the fallback that boots pre-configured. So
+    an absent variable is not "you must open a shell": it is "no key yet, set
+    one either way", and doctor can only see the environment half from here.
+    """
     env = os.environ if environ is None else environ
     present = [name for name in PROVIDER_KEY_ENV if (env.get(name) or "").strip()]
     if present:
-        return CheckResult("provider-key", "ok", f"{', '.join(present)} set in the environment")
+        return CheckResult(
+            "provider-key",
+            "ok",
+            f"{', '.join(present)} set in the environment (the runner boots configured)",
+        )
     return CheckResult(
         "provider-key",
         "warn",
-        "no model provider API key in the environment — `boardex up` still "
-        "runs (UI, demo, bench checks); an agent run needs one",
-        hint="export a provider key before starting an agent run",
+        "no provider key exported — `boardex up` still runs (UI, demo, bench "
+        "checks); an agent run needs one, set in Settings → Model provider or here",
+        hint="set a key in Settings → Model provider, or export one before launch",
     )
 
 
@@ -128,7 +139,12 @@ def fix_command(check: CheckResult, system: str | None = None) -> str:
             )
         return check.hint
     if check.name == "provider-key":
-        return "export OPENROUTER_API_KEY=...    # or ANTHROPIC_API_KEY / OPENAI_API_KEY"
+        # Two real paths since the runner's credential store landed; the
+        # dashboard one needs no shell at all, so it leads.
+        return (
+            "`boardex up`, then Settings → Model provider (no shell needed) — "
+            "or export OPENROUTER_API_KEY=... before launch"
+        )
     if check.name in ("embedded-ui", "contract-schema"):
         return "pip install --force-reinstall boardex"
     return check.hint
