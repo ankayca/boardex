@@ -2,7 +2,8 @@
 
 ``boardex up`` launches ``boardex-runner`` in a child process with the embedded
 UI bundle wired in (``BOARDEX_SERVE_UI``), waits for ``/health``, prints the URL
-and opens a browser. Single origin: the bundled UI is built with an empty
+and opens a browser — or says the URL is yours to open, on a machine where no
+opener works. Single origin: the bundled UI is built with an empty
 ``VITE_RUNNER_URL``, so it talks to whatever host:port served it — no ports to
 reconcile, no CORS.
 
@@ -24,9 +25,11 @@ found (nothing is stored anywhere by this CLI; it only reports).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import json
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -35,6 +38,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -180,6 +184,103 @@ def _restore_sigterm_handler(previous: Any) -> None:
         pass
 
 
+# -- opening a browser -----------------------------------------------------------------
+
+# Where Linux records the kernel it is running; a WSL kernel names Microsoft.
+PROC_VERSION = Path("/proc/version")
+# How long an opener gets before we stop waiting and fall back to the printed
+# URL. `cmd.exe` on a cold Windows side can take a second or two; a hang past
+# this would otherwise sit between the banner and the run.
+OPEN_TIMEOUT_S = 15.0
+
+
+@contextlib.contextmanager
+def muted_stderr() -> Iterator[None]:
+    """Silence whatever the opener writes to stderr, for the length of the call.
+
+    ``webbrowser`` does not open anything itself — it hands the URL to a helper
+    (``gio open``, ``xdg-open``, a browser binary) that INHERITS our stderr. On a
+    box where that helper cannot work, its complaint is the only thing the user
+    sees: on WSL, `gio: …: Operation not supported`, printed right under a banner
+    that just told them everything was up. The URL is already on screen and is
+    the honest fallback; the helper's diagnostic is noise.
+
+    The file descriptor is redirected, not ``sys.stderr``: the noise comes from a
+    child process, which never sees a Python-level replacement. A platform where
+    fd 2 cannot be duplicated (a stripped embedding) just gets the old behavior.
+    """
+    sys.stderr.flush()
+    try:
+        saved = os.dup(2)
+    except OSError:  # pragma: no cover - no fd 2 to save
+        yield
+        return
+    try:
+        with open(os.devnull, "wb") as devnull:
+            os.dup2(devnull.fileno(), 2)
+        yield
+    finally:
+        sys.stderr.flush()
+        os.dup2(saved, 2)
+        os.close(saved)
+
+
+def is_wsl(proc_version: Path = PROC_VERSION) -> bool:
+    """Are we inside WSL? (Where Linux browser openers reach no browser.)"""
+    try:
+        return "microsoft" in proc_version.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+
+
+def wsl_open(url: str, run: Any = subprocess.run) -> bool:
+    """Hand the URL to the Windows side. True if an opener took it.
+
+    Inside WSL there is usually no Linux browser at all — the browser lives on
+    the Windows side, so the open has to cross over. ``wslview`` (from wslu) is
+    the purpose-built one and is quiet; ``cmd.exe /c start`` is the fallback that
+    is present on effectively every WSL install. Both are best-effort: a machine
+    with neither, or one where the call fails, falls back to the printed URL.
+
+    ``start`` reads a lone quoted first argument as the window title, so the
+    empty one is what keeps a URL from being consumed as the title.
+    """
+    for command in (["wslview", url], ["cmd.exe", "/c", "start", "", url]):
+        opener = shutil.which(command[0])
+        if opener is None:
+            continue
+        try:
+            completed = run(
+                [opener, *command[1:]],
+                stdout=subprocess.DEVNULL,
+                # cmd.exe announces "UNC paths are not supported" from a Linux
+                # cwd and opens the URL anyway — the same noise as gio's.
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=OPEN_TIMEOUT_S,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if completed.returncode == 0:
+            return True
+    return False
+
+
+def open_in_browser(url: str) -> bool:
+    """Open `url` if this machine can. Quietly, and never fatally.
+
+    False means nothing opened — the caller says so and leaves the printed URL
+    standing, which is the only honest thing to do on a headless box.
+    """
+    if is_wsl() and wsl_open(url):
+        return True
+    try:
+        with muted_stderr():
+            return bool(webbrowser.open(url))
+    except Exception:  # a box with no browser at all; never fatal
+        return False
+
+
 # -- boardex up ------------------------------------------------------------------------
 
 
@@ -295,14 +396,12 @@ def command_up(args: argparse.Namespace) -> int:
                 "The UI and\n"
                 "             the demo need none."
             )
+        if not args.no_open and not open_in_browser(target):
+            # Nothing opened, and the opener's own complaint was swallowed. Say
+            # it plainly instead: the URL above is the fallback, not a failure.
+            print(f"    open this in your browser:  {target}")
         print("    Ctrl-C to stop.")
         print(flush=True)
-
-        if not args.no_open:
-            try:
-                webbrowser.open(target)
-            except Exception:  # a headless box has no browser; never fatal
-                pass
 
         return process.wait()
     except KeyboardInterrupt:
