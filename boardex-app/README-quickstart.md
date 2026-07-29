@@ -2,17 +2,57 @@
 
 Agentic hardware bring-up on your own bench. One install, one command.
 
-## Install and run
+## Install
+
+First, `pipx` itself.
+
+```bash
+sudo apt install pipx && pipx ensurepath      # Debian / Ubuntu
+brew install pipx && pipx ensurepath          # macOS
+```
+
+Use your package manager's pipx, not pip's. On Ubuntu 23.04+ and Debian 12+,
+`pip install --user pipx` stops with `error: externally-managed-environment`
+(PEP 668) — the system Python refuses installs outside a venv, and that refusal
+is the first thing a new machine hits.
+
+### The wheel — the primary path
+
+```bash
+pipx install ./boardex-0.1.0-py3-none-any.whl
+```
+
+Nothing is compiled at install time and **no Node is needed**: the wheel carries
+the UI already built, and the runner serves it from the same origin it serves
+the API on. ("Developing on it" below builds one.)
+
+One caveat, the same one that keeps this off PyPI: a wheel built from a checkout
+of this repo carries `file://` requirements pointing into that checkout's
+`servers/` (see "Where the dependencies come from"). Install it on a machine
+where that checkout is present, at the path it was built from.
+
+### From git — the alternate, and it needs Node 20+
 
 ```bash
 pipx install "git+ssh://git@github.com/ankayca/boardex.git#subdirectory=boardex-app"
+```
+
+pip clones the whole repo into a temp directory and builds `boardex-app` there,
+so the build hook builds the UI too: `npm ci` at the repo root (that clone has no
+`node_modules`), then `npm run build -w apps/ui`. Node 20+ and `npm` on `PATH`
+are therefore required; without them the build refuses and says so, pointing at
+the wheel instead.
+
+## Run
+
+```bash
 boardex doctor     # what this machine has and what it is missing (advisory)
 boardex up         # starts the runner, serves the UI, opens the browser
 ```
 
 `boardex up` prints the URL (default <http://127.0.0.1:4380>) and stops on Ctrl-C.
-No Node is needed: the wheel carries the built UI, and the runner serves it from
-the same origin it serves the API on.
+If no browser opens — a headless box, an SSH session, a WSL install with nothing
+on the Windows side — it says so and leaves you the URL to open yourself.
 
 **No hardware? No API key? Take the tour:**
 
@@ -110,8 +150,16 @@ BOARDEX_SKIP_UI_BUILD=1 pip install -e ./boardex-app
 pytest boardex-app/tests
 ```
 
-The build hook runs `npm run build -w apps/ui` for you unless
-`BOARDEX_SKIP_UI_BUILD=1` is set, and copies `apps/ui/dist` plus the probe udev
-rules into `boardex_app/_bundled/` (git-ignored, re-included in the wheel by
+Building the wheel that "Install" starts from:
+
+```bash
+python -m build --wheel boardex-app         # → boardex-app/dist/boardex-*.whl
+```
+
+The build hook does the UI for you unless `BOARDEX_SKIP_UI_BUILD=1` is set: `npm
+ci` at the repo root **when there is no `node_modules` yet** (an existing one is
+left alone — `npm ci` would delete and reinstall it), then `npm run build -w
+apps/ui`. It copies `apps/ui/dist`, the emitted contract schemas, and the probe
+udev rules into `boardex_app/_bundled/` (git-ignored, re-included in the wheel by
 hatch's `artifacts`). The UI is built with `VITE_RUNNER_URL=""` so its runner
 base is relative — that is what makes the single-origin serve work.
