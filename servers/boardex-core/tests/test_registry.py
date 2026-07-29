@@ -98,6 +98,57 @@ def test_resolve_raises_for_missing_device(registry):
         registry.resolve("nope:999")
 
 
+class _VolatileProbe(FakeProbe):
+    """Scans a device whose id carries a re-enumeration-volatile suffix."""
+
+    backend_name = "vol"
+
+    def __init__(self, device_ids: list[str]) -> None:
+        super().__init__()
+        self._device_ids = device_ids
+
+    def scan(self) -> list[DeviceInfo]:
+        return [
+            DeviceInfo(
+                device_id=did,
+                kind="logic_analyzer",
+                vendor="Boardex",
+                model="VolatileProbe",
+                backend=self.backend_name,
+            )
+            for did in self._device_ids
+        ]
+
+
+def test_resolve_matches_connection_agnostic_id():
+    """A stable id resolves to the sole device with a volatile conn suffix."""
+    reg: BackendRegistry[TargetController] = BackendRegistry()
+    reg.register("vol", lambda: _VolatileProbe(["vol:fx2lafw:conn=3.8"]))
+    assert reg.resolve("vol:fx2lafw").backend_name == "vol"
+
+
+def test_resolve_ambiguous_shorthand_raises():
+    """A shorthand that matches multiple attached devices must fail loudly."""
+    reg: BackendRegistry[TargetController] = BackendRegistry()
+    reg.register(
+        "vol",
+        lambda: _VolatileProbe(["vol:fx2lafw:conn=3.8", "vol:fx2lafw:conn=4.2"]),
+    )
+    with pytest.raises(DeviceNotFoundError, match="Ambiguous"):
+        reg.resolve("vol:fx2lafw")
+
+
+def test_resolve_prefers_exact_over_prefix():
+    """An exact id still wins even when it is a prefix of another device."""
+    reg: BackendRegistry[TargetController] = BackendRegistry()
+    reg.register(
+        "vol",
+        lambda: _VolatileProbe(["vol:demo", "vol:demo:conn=1.1"]),
+    )
+    # Exact match must not trip the ambiguity guard for the longer sibling.
+    assert reg.resolve("vol:demo").backend_name == "vol"
+
+
 def test_write_then_read_roundtrip(registry):
     probe = registry.resolve("fake:001")
     probe.write_memory("fake:001", 0x2000_0000, b"\xde\xad\xbe\xef")
