@@ -35,6 +35,16 @@ describe('runner URL precedence — user > env > default', () => {
     expect(getRunnerHttpBase()).toBe('http://runner.example:9000');
   });
 
+  it('an empty VITE_RUNNER_URL means same-origin: relative HTTP and WS bases', () => {
+    // How the packaged app ships (`boardex up`): the runner serves the built UI
+    // from its own origin, so the bundle is built with VITE_RUNNER_URL="" and
+    // every request is relative. An empty base is the point, not a misconfiguration.
+    vi.stubEnv('VITE_RUNNER_URL', '');
+    expect(getEnvRunnerHttpBase()).toBe('');
+    expect(getRunnerHttpBase()).toBe('');
+    expect(getRunnerWsBase()).toBe('');
+  });
+
   it('a user override beats env; clearing it falls back to env (env wins when unset)', () => {
     vi.stubEnv('VITE_RUNNER_URL', 'http://runner.example:9000');
     setRunnerUrlOverride('http://custom:1234');

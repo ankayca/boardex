@@ -60,6 +60,21 @@ describe('runner connection setting', () => {
     expect(getRunnerUrlOverride()).toBeNull();
   });
 
+  it('names the origin when the build is same-origin (packaged `boardex up`)', async () => {
+    // VITE_RUNNER_URL="" is how the embedded UI is built: the runner serves it,
+    // so every request is relative. The base is legitimately empty — the page
+    // must say which origin that is, not render a blank where a URL goes.
+    vi.stubEnv('VITE_RUNNER_URL', '');
+    renderPage();
+    expect(await screen.findByText(/\(environment default\)/)).toBeInTheDocument();
+    expect(screen.getByText(/this page’s origin/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Runner URL')).toHaveAttribute(
+      'placeholder',
+      'this page’s origin',
+    );
+    vi.unstubAllEnvs();
+  });
+
   it('persists a user override on Save and reflects it as the effective (custom) base', async () => {
     const user = userEvent.setup();
     renderPage();
