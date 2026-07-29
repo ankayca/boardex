@@ -82,12 +82,43 @@ class UpProcess:
                 *self.args,
             ],
             env=env,
+            # Its own process group, so the harness can reap the whole tree.
+            # The CLI is the group leader, so the group id is its pid — captured
+            # now, because once it exits there is nothing left to ask.
+            start_new_session=os.name != "nt",
         )
+        self.pgid = self.process.pid
         self.url = f"http://127.0.0.1:{self.port}"
         return self
 
     def __exit__(self, *exc: object) -> None:
         stop_process(self.process)
+        self.reap_group()
+
+    def reap_group(self, grace: float = 5.0) -> None:
+        """Make sure the RUNNER is gone, not just the CLI that started it.
+
+        Stopping the CLI is not the same as stopping what it spawned: the CLI
+        exits, the runner is reparented, and the test suite quietly leaves a
+        listening server behind for every case it ran. The CLI shutting its own
+        runner down is the actual fix (it handles SIGTERM now); this is the
+        harness refusing to depend on that being true — a regression there
+        should surface as a failing suite guard, not as orphans on the machine.
+        """
+        if os.name == "nt":  # no process groups to reap
+            return
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(self.pgid, sig)
+            except (ProcessLookupError, PermissionError):
+                return  # the group is empty: nothing survived
+            deadline = time.monotonic() + grace
+            while time.monotonic() < deadline:
+                try:
+                    os.killpg(self.pgid, 0)
+                except (ProcessLookupError, PermissionError):
+                    return
+                time.sleep(0.1)
 
     def wait_ready(self, timeout: float = 120.0) -> dict:
         health = wait_for_health(self.url, self.process, timeout=timeout)
@@ -249,6 +280,36 @@ def test_up_serves_the_embedded_ui_from_the_runner_origin() -> None:
         status, content_type, _ = http_get(up.url + asset.group(1), accept="*/*")
         assert status == 200
         assert content_type.startswith("text/javascript")
+
+
+@needs_runner
+@needs_signals
+def test_up_stops_the_runner_on_sigterm_too() -> None:
+    """The SIGTERM twin of the Ctrl-C test.
+
+    A supervisor, `docker stop`, `kill`, or a test harness stops `boardex up`
+    with SIGTERM, not with a keyboard. Unhandled, the CLI dies where it stands
+    and leaves its runner holding the port — this asserts the same clean end as
+    Ctrl-C: the CLI exits, the runner is gone, the port is free.
+    """
+    with UpProcess("--bench", "fake") as up:
+        up.wait_ready()
+
+        up.process.send_signal(signal.SIGTERM)
+        assert up.process.wait(timeout=30) == 0
+
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and probe_health(up.url, timeout=0.5) is not None:
+            time.sleep(0.2)
+        assert probe_health(up.url, timeout=0.5) is None, "the runner outlived the CLI"
+
+        # Nothing left in the group at all — no orphan holding the port quietly.
+        with pytest.raises(ProcessLookupError):
+            os.killpg(up.pgid, 0)
+
+        with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", up.port))
 
 
 @needs_runner

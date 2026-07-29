@@ -27,6 +27,7 @@ import argparse
 import importlib.util
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -140,6 +141,45 @@ def runner_missing() -> bool:
     return importlib.util.find_spec("boardex_runner") is None
 
 
+# Sentinel: signal.signal returns SIG_DFL (0) for "no handler was installed",
+# which is falsey but very much a value to restore.
+_NO_PREVIOUS_HANDLER = object()
+
+
+def _stop_like_ctrl_c(_signum: int, _frame: Any) -> None:
+    """Route SIGTERM into the KeyboardInterrupt path — one way down, not two.
+
+    Whoever stops `boardex up` is usually not a terminal: a supervisor, a
+    container stop, a test harness, `kill`. Without this the CLI dies where it
+    stands and the runner it spawned is reparented and keeps holding the port —
+    an invisible server nobody asked for.
+    """
+    raise KeyboardInterrupt
+
+
+def _install_sigterm_handler() -> Any:
+    """Install the handler, returning what to put back (or the sentinel).
+
+    Signals can only be installed from the main thread; a caller running
+    command_up off-thread (a harness, an embedding) gets the old behavior rather
+    than an exception, which is why the failure is swallowed rather than raised.
+    """
+    try:
+        return signal.signal(signal.SIGTERM, _stop_like_ctrl_c)
+    except (ValueError, OSError, AttributeError):  # pragma: no cover - platform/thread
+        return _NO_PREVIOUS_HANDLER
+
+
+def _restore_sigterm_handler(previous: Any) -> None:
+    """Leave the process's signal disposition exactly as it was found."""
+    if previous is _NO_PREVIOUS_HANDLER:
+        return
+    try:
+        signal.signal(signal.SIGTERM, previous)
+    except (ValueError, OSError, AttributeError):  # pragma: no cover - platform/thread
+        pass
+
+
 # -- boardex up ------------------------------------------------------------------------
 
 
@@ -207,7 +247,7 @@ def command_up(args: argparse.Namespace) -> int:
         print(
             f"boardex: port {args.port} is in use — is another boardex/runner "
             "already running?\n"
-            f"  fix: stop it, or `boardex up --port <other>`",
+            "  fix: stop it, or `boardex up --port <other>`",
             file=sys.stderr,
         )
         return 1
@@ -225,6 +265,7 @@ def command_up(args: argparse.Namespace) -> int:
     )
     process = subprocess.Popen([sys.executable, "-m", "boardex_runner.server"], env=env)
 
+    previous_term = _install_sigterm_handler()
     try:
         health = wait_for_health(url, process)
         if health is None:
@@ -265,10 +306,12 @@ def command_up(args: argparse.Namespace) -> int:
 
         return process.wait()
     except KeyboardInterrupt:
+        # Ctrl-C, or the SIGTERM the handler above turns into one.
         print("\nboardex: stopping the runner…")
         return stop_process(process)
     finally:
         stop_process(process)
+        _restore_sigterm_handler(previous_term)
 
 
 # -- boardex doctor --------------------------------------------------------------------

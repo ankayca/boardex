@@ -77,6 +77,7 @@ def expected_key_vars(environ: Mapping[str, str] | None = None) -> list[str]:
         return list(PROVIDER_KEY_ENV)
     return [credentials.env_var_for(provider) for provider in providers]
 
+
 _STATUS_MARK = {"ok": "ok     ", "warn": "warn   ", "missing": "MISSING"}
 
 
