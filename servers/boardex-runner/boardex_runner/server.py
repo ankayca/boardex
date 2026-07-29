@@ -27,6 +27,7 @@ from .contract import (
 from .engine import Conflict, RunEngine, new_run_id
 from .fake_bench import FakeBench, fake_board_profile
 from .recorder import FixtureRecorder
+from .static_ui import add_ui_routes, ui_root_from_env
 
 DEFAULT_PORT = 4380
 _LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
@@ -241,7 +242,9 @@ async def _read_body(request: web.Request) -> Any:
     return json.loads(raw)
 
 
-def build_app(state: RunnerApp) -> web.Application:
+def build_app(state: RunnerApp, ui_root: Path | None = None) -> web.Application:
+    """The §5.3 API. With ``ui_root`` set, a built UI is also served at ``/``
+    (single origin) — registered last, so every API route keeps priority."""
     app = web.Application()
 
     async def options_handler(request: web.Request) -> web.Response:
@@ -473,6 +476,8 @@ def build_app(state: RunnerApp) -> web.Application:
     app.router.add_get("/artifacts/{artifact_id}/meta", artifact_meta)
     app.router.add_get("/artifacts/{artifact_id}", artifact_content)
     app.router.add_get("/ws", ws_handler)
+    if ui_root is not None:
+        add_ui_routes(app, ui_root)
     return app
 
 
@@ -585,9 +590,14 @@ def state_from_env() -> RunnerApp:
 def main() -> None:
     port = int(os.environ.get("PORT", str(DEFAULT_PORT)))
     host = os.environ.get("HOST", "127.0.0.1")
+    # BOARDEX_SERVE_UI=<dir> — serve a built UI bundle at / from this same
+    # origin (see static_ui). Unset means API only, exactly as before.
+    ui_root = ui_root_from_env()
     state = state_from_env()
-    app = build_app(state)
+    app = build_app(state, ui_root=ui_root)
     print(f"boardex-runner (real) listening on http://{host}:{port}")
+    if ui_root is not None:
+        print(f"boardex-runner serving UI from {ui_root}")
     web.run_app(app, host=host, port=port, print=None)
 
 

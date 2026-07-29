@@ -69,13 +69,23 @@ function Section({
   );
 }
 
+// A same-origin build (VITE_RUNNER_URL="") resolves to an EMPTY base: every request
+// is relative, which is exactly what the packaged `boardex up` serves — the runner
+// hosts the UI on its own origin. Empty is correct but unreadable, so the surfaces
+// that display a base name it instead of rendering a blank.
+const SAME_ORIGIN_LABEL = 'this page’s origin';
+
+function baseLabel(base: string): string {
+  return base || SAME_ORIGIN_LABEL;
+}
+
 // The Test Connection verdict line — its D14 tone drives the only color used here.
 function TestResult({ test }: { test: TestState }) {
   if (test.status === 'idle') return null;
   if (test.status === 'testing') {
     return (
       <p role="status" className="text-meta text-text-secondary">
-        Testing {test.base}…
+        Testing {baseLabel(test.base)}…
       </p>
     );
   }
@@ -86,7 +96,7 @@ function TestResult({ test }: { test: TestState }) {
     return (
       <p role="status" className="flex items-center gap-2 text-meta text-warn">
         <StatusDot state="offline" />
-        Offline — could not reach {test.base}
+        Offline — could not reach {baseLabel(test.base)}
       </p>
     );
   }
@@ -186,7 +196,7 @@ export default function SettingsPage() {
               type="url"
               inputMode="url"
               spellCheck={false}
-              placeholder={envBase}
+              placeholder={baseLabel(envBase)}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               className="min-w-0 flex-1 rounded-control border border-border bg-surface px-3 py-1.5 font-mono text-body text-text-primary focus:border-accent focus:outline-none"
@@ -206,8 +216,8 @@ export default function SettingsPage() {
                 </>
               ) : (
                 <>
-                  Using <span className="font-mono text-text-primary">{envBase}</span> (environment
-                  default)
+                  Using <span className="font-mono text-text-primary">{baseLabel(envBase)}</span>{' '}
+                  (environment default)
                 </>
               )}
             </p>
