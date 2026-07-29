@@ -139,12 +139,29 @@ class BackendRegistry(Generic[B]):
 
         Refreshes the inventory first if the id is unknown, so agents don't have
         to call a scan tool before every operation.
+
+        A stable, connection-agnostic id (e.g. ``sigrok:fx2lafw``) resolves to a
+        fully-qualified device whose id carries a volatile suffix (e.g.
+        ``sigrok:fx2lafw:conn=3.8``, where ``conn`` is a USB bus.addr that
+        changes on re-enumeration) — but only when exactly one attached device
+        matches, so a shorthand can never silently pick the wrong instrument.
         """
         if device_id not in self._owner:
             self.scan()
-        if device_id not in self._owner:
-            known = ", ".join(sorted(self._owner)) or "<none>"
+        if device_id in self._owner:
+            return self._instance(self._owner[device_id])
+
+        prefix = device_id + ":"
+        matches = sorted(d for d in self._owner if d.startswith(prefix))
+        if len(matches) == 1:
+            return self._instance(self._owner[matches[0]])
+        if len(matches) > 1:
             raise DeviceNotFoundError(
-                f"No device with id '{device_id}'. Known devices: {known}."
+                f"Ambiguous device id '{device_id}' matches multiple devices: "
+                f"{', '.join(matches)}. Use a fully-qualified id."
             )
-        return self._instance(self._owner[device_id])
+
+        known = ", ".join(sorted(self._owner)) or "<none>"
+        raise DeviceNotFoundError(
+            f"No device with id '{device_id}'. Known devices: {known}."
+        )
