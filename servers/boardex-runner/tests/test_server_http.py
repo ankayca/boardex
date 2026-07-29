@@ -137,6 +137,10 @@ def test_health_reports_real_and_contract_version() -> None:
                 "ok": True,
                 "contractVersion": "boardex-contract/0.1",
                 "runnerKind": "real",
+                # Non-contract credential advertisement (the UI feature-detects
+                # on it); empty here because this harness never configures the
+                # store, which state_from_env does at boot.
+                "credentials": [],
             }
 
     run(scenario())
