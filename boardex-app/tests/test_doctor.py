@@ -42,6 +42,54 @@ def test_blank_key_reads_as_absent() -> None:
     assert doctor.check_provider_key({"ANTHROPIC_API_KEY": "   "}).status == "warn"
 
 
+def test_the_key_check_follows_this_runners_advertised_models() -> None:
+    """AGENT_MODELS decides which variable matters — derived as the store derives it.
+
+    A fixed list lies both ways on a runner pointed at a non-default provider:
+    it calls an irrelevant OPENROUTER_API_KEY a pass, and it names the wrong
+    variable in the fix.
+    """
+    anthropic_only = {"AGENT_MODELS": "anthropic/claude-sonnet-4.6"}
+    assert doctor.expected_key_vars(anthropic_only) == ["ANTHROPIC_API_KEY"]
+
+    irrelevant = doctor.check_provider_key({**anthropic_only, "OPENROUTER_API_KEY": "sk-or-x"})
+    assert irrelevant.status == "warn", "a key for a provider this runner never calls is not a pass"
+    assert "ANTHROPIC_API_KEY" in irrelevant.detail
+    assert "ANTHROPIC_API_KEY" in doctor.fix_command(irrelevant, "Linux")
+
+    right_one = doctor.check_provider_key({**anthropic_only, "ANTHROPIC_API_KEY": "sk-ant-x"})
+    assert right_one.status == "ok"
+
+    # Several advertised models -> every provider they name, in order, deduped.
+    assert doctor.expected_key_vars(
+        {"AGENT_MODELS": "openrouter/anthropic/claude-sonnet-4.6, anthropic/claude-opus, openrouter/x"}
+    ) == ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]
+
+
+def test_the_key_check_falls_back_to_the_fixed_list_without_agent_models() -> None:
+    """Unset AGENT_MODELS: the runner would use its default model, so naming one
+    variable would over-claim — accept any of the known provider keys."""
+    assert doctor.expected_key_vars({}) == list(doctor.PROVIDER_KEY_ENV)
+    # A bare model string derives no provider (the store says the same), so the
+    # fixed list stands rather than a guess.
+    assert doctor.expected_key_vars({"AGENT_MODELS": "some-local-model"}) == list(
+        doctor.PROVIDER_KEY_ENV
+    )
+    assert doctor.check_provider_key({"OPENAI_API_KEY": "sk-x"}).status == "ok"
+
+
+def test_the_derivation_is_the_runners_own_not_a_second_opinion() -> None:
+    """Pinned against credentials.py directly: if the store's rule changes,
+    doctor changes with it instead of drifting."""
+    credentials = pytest.importorskip("boardex_runner.credentials")
+    models = ["openrouter/anthropic/claude-sonnet-4.6", "gemini/gemini-2.5-pro"]
+    expected = [
+        credentials.env_var_for(provider)
+        for provider in credentials.providers_from_models(models)
+    ]
+    assert doctor.expected_key_vars({"AGENT_MODELS": ", ".join(models)}) == expected
+
+
 def test_every_non_ok_check_carries_a_fix() -> None:
     for name in (
         "python",

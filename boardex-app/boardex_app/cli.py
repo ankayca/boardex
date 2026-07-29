@@ -27,6 +27,7 @@ import argparse
 import importlib.util
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -58,6 +59,37 @@ STOP_GRACE_S = 10.0
 def browse_host(host: str) -> str:
     """A host a browser can actually open (0.0.0.0/:: are bind addresses)."""
     return {"0.0.0.0": "127.0.0.1", "::": "[::1]", "": "127.0.0.1"}.get(host, host)
+
+
+def port_available(host: str, port: int) -> bool:
+    """Can the runner bind here? Asked BEFORE spawning it.
+
+    Without this, an occupied port produces the runner's own bind traceback
+    followed by our health-timeout message — two failures for one cause, neither
+    of which says "something is already listening". Worse, if the occupant is a
+    previous `boardex up`, /health answers and the banner would announce a
+    server this process does not own and cannot stop.
+
+    SO_REUSEADDR matches what aiohttp's TCPSite does, so this asks the question
+    the runner will ask: it succeeds over a TIME_WAIT socket and fails against a
+    live listener. A probe that cannot run at all (an exotic host string) is
+    never treated as "occupied" — the launch proceeds and the runner speaks for
+    itself.
+    """
+    try:
+        infos = socket.getaddrinfo(host or "127.0.0.1", port, type=socket.SOCK_STREAM)
+    except OSError:
+        return True
+    for family, socktype, proto, _canon, address in infos:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(address)
+        except OSError:
+            return False
+        except Exception:  # pragma: no cover - defensive: never block a launch
+            return True
+    return True
 
 
 def probe_health(url: str, timeout: float = 1.0) -> dict[str, Any] | None:
@@ -170,6 +202,15 @@ def command_up(args: argparse.Namespace) -> int:
             "  fix: pip install --force-reinstall boardex",
             file=sys.stderr,
         )
+
+    if not port_available(args.host, args.port):
+        print(
+            f"boardex: port {args.port} is in use — is another boardex/runner "
+            "already running?\n"
+            f"  fix: stop it, or `boardex up --port <other>`",
+            file=sys.stderr,
+        )
+        return 1
 
     bench = resolve_bench(args.bench, args.demo)
     url = f"http://{browse_host(args.host)}:{args.port}"

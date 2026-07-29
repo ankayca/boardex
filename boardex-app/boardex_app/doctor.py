@@ -30,8 +30,9 @@ from boardex_core.doctor import (
 from . import __version__
 from .ui_assets import contract_schema_dir, udev_rules_path, ui_bundle_dir
 
-# Provider-standard env vars, read by LiteLLM at call time (never stored by
-# Boardex). The runner's default model is an OpenRouter one, so that key leads.
+# Fallback list, used only when this install cannot say which provider THIS
+# runner would actually use (no AGENT_MODELS set, or no runner importable).
+# Provider-standard names, read by LiteLLM at call time, never stored by Boardex.
 PROVIDER_KEY_ENV = (
     "OPENROUTER_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -39,6 +40,34 @@ PROVIDER_KEY_ENV = (
     "GEMINI_API_KEY",
     "AZURE_API_KEY",
 )
+
+
+def expected_key_vars(environ: Mapping[str, str] | None = None) -> list[str]:
+    """The env vars that matter for THIS runner, derived as the store derives them.
+
+    A doctor that looks for a fixed list lies in both directions on a runner
+    pointed elsewhere: with ``AGENT_MODELS=anthropic/...`` and only
+    ``OPENROUTER_API_KEY`` exported it reports a key the agent will never read,
+    and it names the wrong variable in the fix. So the derivation is the
+    runner's own — ``credentials.providers_from_models`` + ``env_var_for``, the
+    same two functions the store seeds itself with — rather than a second
+    opinion that can drift from it.
+
+    Falls back to the fixed list when AGENT_MODELS is unset (the runner would
+    then use its default model, and naming one variable would over-claim) or
+    when boardex-runner is not importable at all (``boardex doctor`` must still
+    run in a half-broken install — that is when it is needed most).
+    """
+    env = os.environ if environ is None else environ
+    try:
+        from boardex_runner import credentials
+    except ImportError:
+        return list(PROVIDER_KEY_ENV)
+    models = [model.strip() for model in env.get("AGENT_MODELS", "").split(",") if model.strip()]
+    providers = credentials.providers_from_models(models)
+    if not providers:
+        return list(PROVIDER_KEY_ENV)
+    return [credentials.env_var_for(provider) for provider in providers]
 
 _STATUS_MARK = {"ok": "ok     ", "warn": "warn   ", "missing": "MISSING"}
 
@@ -53,7 +82,8 @@ def check_provider_key(environ: Mapping[str, str] | None = None) -> CheckResult:
     one either way", and doctor can only see the environment half from here.
     """
     env = os.environ if environ is None else environ
-    present = [name for name in PROVIDER_KEY_ENV if (env.get(name) or "").strip()]
+    expected = expected_key_vars(env)
+    present = [name for name in expected if (env.get(name) or "").strip()]
     if present:
         return CheckResult(
             "provider-key",
@@ -63,9 +93,11 @@ def check_provider_key(environ: Mapping[str, str] | None = None) -> CheckResult:
     return CheckResult(
         "provider-key",
         "warn",
-        "no provider key exported — `boardex up` still runs (UI, demo, bench "
-        "checks); an agent run needs one, set in Settings → Model provider or here",
-        hint="set a key in Settings → Model provider, or export one before launch",
+        f"no provider key exported ({' / '.join(expected)}) — `boardex up` still "
+        "runs (UI, demo, bench checks); an agent run needs one, set in "
+        "Settings → Model provider or here",
+        # The variable named here is the one THIS runner would read, not a guess.
+        hint=f"export {expected[0]}=...",
     )
 
 
@@ -140,10 +172,12 @@ def fix_command(check: CheckResult, system: str | None = None) -> str:
         return check.hint
     if check.name == "provider-key":
         # Two real paths since the runner's credential store landed; the
-        # dashboard one needs no shell at all, so it leads.
+        # dashboard one needs no shell at all, so it leads. The export half
+        # comes from the check's own hint, so it names the variable this
+        # runner's advertised model would actually read.
         return (
             "`boardex up`, then Settings → Model provider (no shell needed) — "
-            "or export OPENROUTER_API_KEY=... before launch"
+            f"or {check.hint or 'export OPENROUTER_API_KEY=...'} before launch"
         )
     if check.name in ("embedded-ui", "contract-schema"):
         return "pip install --force-reinstall boardex"

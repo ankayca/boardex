@@ -22,10 +22,12 @@ from pathlib import Path
 
 import pytest
 
+from boardex_app import doctor
 from boardex_app.cli import (
     browse_host,
     build_parser,
     main,
+    port_available,
     probe_health,
     resolve_bench,
     runner_env,
@@ -282,6 +284,129 @@ def test_a_run_started_from_the_packaged_install_emits_validated_events() -> Non
                 time.sleep(0.2)
         assert events, "the run emitted no events — contract schemas not resolvable?"
         assert events[0]["type"] == "run.created"
+
+
+# -- launch decisions, without a real runner ---------------------------------------------
+
+
+class FakeProcess:
+    """A spawned runner that is already up and exits 0 when waited on."""
+
+    def __init__(self) -> None:
+        self.returncode = 0
+        self.terminated = False
+
+    def poll(self) -> int:
+        return 0
+
+    def wait(self, timeout: float | None = None) -> int:
+        return 0
+
+    def terminate(self) -> None:  # pragma: no cover - poll() says it is gone
+        self.terminated = True
+
+
+def stub_launch(monkeypatch: pytest.MonkeyPatch, *, health: dict | None = None) -> list[str]:
+    """Run command_up without spawning anything; return the list of opened URLs."""
+    spawned: list[list[str]] = []
+
+    def fake_popen(cmd, **kwargs):  # noqa: ANN001, ANN202
+        spawned.append(cmd)
+        return FakeProcess()
+
+    opened: list[str] = []
+    monkeypatch.setattr("boardex_app.cli.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(
+        "boardex_app.cli.wait_for_health",
+        lambda *a, **k: health if health is not None else {"ok": True, "runnerKind": "real"},
+    )
+    monkeypatch.setattr("boardex_app.cli.webbrowser.open", lambda url: opened.append(url) or True)
+    return opened
+
+
+def test_up_opens_the_app_the_demo_or_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    port = free_port()
+    base = f"http://127.0.0.1:{port}"
+
+    opened = stub_launch(monkeypatch)
+    assert main(["up", "--bench", "fake", "--port", str(port)]) == 0
+    assert opened == [base], "plain `up` opens the app root"
+
+    opened = stub_launch(monkeypatch)
+    assert main(["up", "--demo", "--port", str(port)]) == 0
+    assert opened == [f"{base}/demo"], "`up --demo` opens the client-side tour"
+
+    opened = stub_launch(monkeypatch)
+    assert main(["up", "--no-open", "--bench", "fake", "--port", str(port)]) == 0
+    assert opened == [], "--no-open opens nothing"
+
+
+def test_the_keyless_advisory_appears_only_where_a_key_is_needed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Agent bench with no key: one advisory, leading with the dashboard.
+
+    The fake bench calls no provider, so the same advisory there would be noise
+    telling a demo user to go configure something they will never use.
+    """
+    for name in doctor.PROVIDER_KEY_ENV:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("AGENT_MODELS", raising=False)
+    port = free_port()
+
+    stub_launch(monkeypatch)
+    assert main(["up", "--no-open", "--port", str(port)]) == 0
+    advisory = " ".join(capsys.readouterr().out.split())
+    assert (
+        "note no provider key yet — set one at Settings → Model provider in the "
+        "page above (or export a key before launch). The UI and the demo need none."
+    ) in advisory
+
+    stub_launch(monkeypatch)
+    assert main(["up", "--no-open", "--bench", "fake", "--port", str(port)]) == 0
+    assert "provider key" not in capsys.readouterr().out
+
+    # And with a key exported, the agent bench says nothing either.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    stub_launch(monkeypatch)
+    assert main(["up", "--no-open", "--port", str(port)]) == 0
+    assert "provider key" not in capsys.readouterr().out
+
+
+def test_up_refuses_an_occupied_port_before_spawning_anything(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One resolved message, no child, no banner announcing someone else's server."""
+
+    def fail_if_spawned(*args: object, **kwargs: object):  # noqa: ANN202
+        raise AssertionError("a runner was spawned onto an occupied port")
+
+    monkeypatch.setattr("boardex_app.cli.subprocess.Popen", fail_if_spawned)
+
+    with socket.socket() as occupant:
+        occupant.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        occupant.bind(("127.0.0.1", 0))
+        occupant.listen(1)
+        port = occupant.getsockname()[1]
+
+        assert main(["up", "--no-open", "--port", str(port)]) == 1
+        captured = capsys.readouterr()
+
+    assert f"port {port} is in use" in captured.err
+    assert "already running" in captured.err and "--port" in captured.err
+    assert "is up:" not in captured.out, "no banner for a server we did not start"
+
+
+def test_port_available_reads_the_actual_socket_state() -> None:
+    port = free_port()
+    assert port_available("127.0.0.1", port) is True
+    with socket.socket() as occupant:
+        occupant.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        occupant.bind(("127.0.0.1", port))
+        occupant.listen(1)
+        assert port_available("127.0.0.1", port) is False
+    # A host that cannot even be resolved must not be reported as occupied.
+    assert port_available("no-such-host.invalid", port) is True
 
 
 def test_up_refuses_cleanly_when_the_runner_is_not_installed(
