@@ -13,8 +13,9 @@ four fall back to version pins. Path requirements are also why a wheel built
 here cannot be uploaded to PyPI as-is — see README-quickstart.md.
 
 **BuildHook — what makes the wheel self-contained.**
-It builds the UI (`npm run build -w apps/ui`, with `VITE_RUNNER_URL=""` so the
-bundle talks to whatever origin serves it) and copies three things into
+It builds the UI (`npm ci` at the repo root first when the clone has no
+`node_modules` yet, then `npm run build -w apps/ui` with `VITE_RUNNER_URL=""` so
+the bundle talks to whatever origin serves it) and copies three things into
 `boardex_app/_bundled/`:
 
 * `ui/` — the built UI, so the installed machine needs no Node;
@@ -59,6 +60,8 @@ SIBLINGS = (
 
 UI_WORKSPACE = "apps/ui"
 UI_DIST = "apps/ui/dist"
+NODE_MODULES = "node_modules"
+LOCKFILE = "package-lock.json"
 CONTRACT_SCHEMA = "packages/contract/json-schema"
 UDEV_RULES = "servers/boardex-target/contrib/udev/49-boardex-probes.rules"
 BUNDLE_DIR = "boardex_app/_bundled"
@@ -75,6 +78,44 @@ def sibling_dependencies(repo_root: Path) -> list[str]:
     ]
 
 
+# What to tell someone whose machine cannot build from source. The wheel is
+# built elsewhere and carries the UI already compiled, so it needs no Node at
+# all — see README-quickstart.md § "Install".
+WHEEL_INSTALL_HINT = "pipx install ./boardex-*-py3-none-any.whl"
+NO_NPM_MESSAGE = (
+    "npm is not on PATH: building from source requires Node 20+ — or install "
+    f"the prebuilt wheel instead ({WHEEL_INSTALL_HINT}), which ships the UI "
+    "already built. (Inside a checkout that already has apps/ui/dist, "
+    "BOARDEX_SKIP_UI_BUILD=1 reuses it.)"
+)
+
+
+def install_node_modules(repo_root: Path, npm: str, run: object = subprocess.run) -> None:
+    """Install the workspace's npm dependencies, if the clone has none.
+
+    `pip install "git+…#subdirectory=boardex-app"` clones the WHOLE repo into a
+    temp dir and builds here — a clone with no `node_modules`, where
+    `npm run build -w apps/ui` exits 127 with "vite: not found". This step is
+    the difference between that and a working from-source install; it was
+    invisible for as long as every build happened in a checkout that had been
+    `npm install`-ed by hand.
+
+    Skipped when `node_modules` is already there: `npm ci` deletes and reinstalls
+    the tree, and a developer running `pip install -e ./boardex-app` should not
+    pay for that (or lose a local link) on every install.
+    """
+    if (repo_root / NODE_MODULES).is_dir():
+        return
+    # `npm ci` is the reproducible one, but it REQUIRES a lockfile — an sdist or
+    # a partial tree without one gets the resolving install rather than a hard error.
+    command = "ci" if (repo_root / LOCKFILE).is_file() else "install"
+    run(  # type: ignore[operator]
+        [npm, command],
+        cwd=str(repo_root),
+        check=True,
+    )
+
+
 def build_ui(repo_root: Path, run: object = subprocess.run) -> None:
     """`npm run build -w apps/ui` against the same origin that will serve it.
 
@@ -83,10 +124,8 @@ def build_ui(repo_root: Path, run: object = subprocess.run) -> None:
     """
     npm = shutil.which("npm")
     if npm is None:
-        raise RuntimeError(
-            "npm is required to build the embedded UI. Install Node 20+, or set "
-            "BOARDEX_SKIP_UI_BUILD=1 to reuse an existing apps/ui/dist."
-        )
+        raise RuntimeError(NO_NPM_MESSAGE)
+    install_node_modules(repo_root, npm, run)
     env = {**os.environ, "VITE_RUNNER_URL": ""}
     run(  # type: ignore[operator]
         [npm, "run", "build", "-w", UI_WORKSPACE],

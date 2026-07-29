@@ -57,20 +57,106 @@ def test_the_pinned_version_tracks_servers_version() -> None:
     assert hatch_build.SERVERS_VERSION == recorded
 
 
-def test_ui_build_uses_a_relative_runner_base(tmp_path: Path) -> None:
-    """The embedded bundle must talk to whatever origin serves it (§ single origin)."""
-    calls: list[dict] = []
+def record_npm(monkeypatch: pytest.MonkeyPatch, *, npm: str | None = "/usr/bin/npm") -> list[dict]:
+    """Drive build_ui without a real npm; return the invocations it made."""
+    monkeypatch.setattr(hatch_build.shutil, "which", lambda _name: npm)
+    return []
 
+
+def fake_runner(calls: list[dict]):  # noqa: ANN201
     def fake_run(cmd, **kwargs):  # noqa: ANN001, ANN202
         calls.append({"cmd": cmd, **kwargs})
 
-    hatch_build.build_ui(tmp_path, run=fake_run)
+    return fake_run
+
+
+def make_clone(tmp_path: Path, *, node_modules: bool, lockfile: bool = True) -> Path:
+    """A checkout as pip hands it to the build: with or without npm's install output."""
+    repo = tmp_path / "clone"
+    (repo / hatch_build.UI_WORKSPACE).mkdir(parents=True)
+    (repo / hatch_build.UI_WORKSPACE / "package.json").write_text("{}", encoding="utf-8")
+    (repo / "package.json").write_text('{"workspaces": ["apps/*"]}', encoding="utf-8")
+    if lockfile:
+        (repo / hatch_build.LOCKFILE).write_text('{"lockfileVersion": 3}', encoding="utf-8")
+    if node_modules:
+        (repo / hatch_build.NODE_MODULES).mkdir()
+    return repo
+
+
+def test_ui_build_uses_a_relative_runner_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The embedded bundle must talk to whatever origin serves it (§ single origin)."""
+    calls = record_npm(monkeypatch)
+    repo = make_clone(tmp_path, node_modules=True)
+
+    hatch_build.build_ui(repo, run=fake_runner(calls))
     assert calls, "npm was never invoked"
-    call = calls[0]
-    assert call["cmd"][1:] == ["run", "build", "-w", "apps/ui"]
-    assert call["env"]["VITE_RUNNER_URL"] == ""
-    assert call["cwd"] == str(tmp_path)
-    assert call["check"] is True
+    build = calls[-1]
+    assert build["cmd"][1:] == ["run", "build", "-w", "apps/ui"]
+    assert build["env"]["VITE_RUNNER_URL"] == ""
+    assert build["cwd"] == str(repo)
+    assert build["check"] is True
+
+
+def test_a_clone_with_no_node_modules_is_installed_before_it_is_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The from-source install path, reproduced.
+
+    `pipx install "git+…#subdirectory=boardex-app"` builds in a FRESH clone: no
+    `node_modules`, so `npm run build -w apps/ui` exits 127 with "vite: not
+    found". Only checkouts that had been npm-installed by hand ever worked.
+    """
+    calls = record_npm(monkeypatch)
+    repo = make_clone(tmp_path, node_modules=False)
+
+    hatch_build.build_ui(repo, run=fake_runner(calls))
+    assert [call["cmd"][1:] for call in calls] == [
+        ["ci"],
+        ["run", "build", "-w", "apps/ui"],
+    ], "the install must come first, and exactly once"
+    assert calls[0]["cwd"] == str(repo), "dependencies install at the workspace ROOT"
+    assert calls[0]["check"] is True, "a failed install must not fall through to the build"
+
+
+def test_an_existing_node_modules_is_not_reinstalled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`npm ci` deletes and reinstalls the tree — never on a developer's checkout."""
+    calls = record_npm(monkeypatch)
+    repo = make_clone(tmp_path, node_modules=True)
+
+    hatch_build.build_ui(repo, run=fake_runner(calls))
+    assert [call["cmd"][1:] for call in calls] == [["run", "build", "-w", "apps/ui"]]
+
+
+def test_a_tree_without_a_lockfile_installs_rather_than_failing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`npm ci` REQUIRES a lockfile; without one the resolving install is the
+    only thing that can work at all."""
+    calls = record_npm(monkeypatch)
+    repo = make_clone(tmp_path, node_modules=False, lockfile=False)
+
+    hatch_build.build_ui(repo, run=fake_runner(calls))
+    assert calls[0]["cmd"][1:] == ["install"]
+
+
+def test_no_npm_at_all_names_node_and_offers_the_wheel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal a machine without Node gets: what it needs, or what to install
+    instead — not a bare "npm is required"."""
+    calls = record_npm(monkeypatch, npm=None)
+    repo = make_clone(tmp_path, node_modules=False)
+
+    with pytest.raises(RuntimeError) as err:
+        hatch_build.build_ui(repo, run=fake_runner(calls))
+    message = str(err.value)
+    assert "building from source requires Node 20+" in message
+    assert "prebuilt wheel" in message and hatch_build.WHEEL_INSTALL_HINT in message
+    assert not calls, "nothing may be run when npm is absent"
 
 
 def make_repo(tmp_path: Path) -> Path:

@@ -26,13 +26,17 @@ from boardex_app import doctor
 from boardex_app.cli import (
     browse_host,
     build_parser,
+    is_wsl,
     main,
+    muted_stderr,
+    open_in_browser,
     port_available,
     probe_health,
     resolve_bench,
     runner_env,
     stop_process,
     wait_for_health,
+    wsl_open,
 )
 from boardex_app.ui_assets import ui_bundle_dir
 
@@ -367,7 +371,9 @@ class FakeProcess:
         self.terminated = True
 
 
-def stub_launch(monkeypatch: pytest.MonkeyPatch, *, health: dict | None = None) -> list[str]:
+def stub_launch(
+    monkeypatch: pytest.MonkeyPatch, *, health: dict | None = None, opens: bool = True
+) -> list[str]:
     """Run command_up without spawning anything; return the list of opened URLs."""
     spawned: list[list[str]] = []
 
@@ -381,7 +387,11 @@ def stub_launch(monkeypatch: pytest.MonkeyPatch, *, health: dict | None = None) 
         "boardex_app.cli.wait_for_health",
         lambda *a, **k: health if health is not None else {"ok": True, "runnerKind": "real"},
     )
-    monkeypatch.setattr("boardex_app.cli.webbrowser.open", lambda url: opened.append(url) or True)
+    # Stubbed at open_in_browser, not at webbrowser: on WSL the real one would
+    # reach past webbrowser to cmd.exe and pop a window mid-suite.
+    monkeypatch.setattr(
+        "boardex_app.cli.open_in_browser", lambda url: opened.append(url) or opens
+    )
     return opened
 
 
@@ -468,6 +478,144 @@ def test_port_available_reads_the_actual_socket_state() -> None:
         assert port_available("127.0.0.1", port) is False
     # A host that cannot even be resolved must not be reported as occupied.
     assert port_available("no-such-host.invalid", port) is True
+
+
+# -- opening a browser -------------------------------------------------------------------
+
+
+class Completed:
+    def __init__(self, returncode: int) -> None:
+        self.returncode = returncode
+
+
+def test_a_browser_that_never_opens_leaves_the_url_and_a_clean_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """WSL's actual first-run experience: nothing opens.
+
+    `webbrowser.open` hands off to `gio open`, which answers "Operation not
+    supported" — so the launch must not read as a failure. The URL is already
+    printed; the fallback line says it is the user's to open, and `boardex up`
+    still exits on its own terms.
+    """
+    port = free_port()
+    opened = stub_launch(monkeypatch, opens=False)
+
+    assert main(["up", "--bench", "fake", "--port", str(port)]) == 0
+    captured = capsys.readouterr()
+    assert opened == [f"http://127.0.0.1:{port}"], "the open was still attempted"
+    assert f"open this in your browser:  http://127.0.0.1:{port}" in captured.out
+    assert "Ctrl-C to stop." in captured.out, "the banner still finishes"
+    assert captured.err == "", "a browser that will not open is not an error"
+
+    # And when one does open, the line is not printed at all.
+    stub_launch(monkeypatch, opens=True)
+    assert main(["up", "--bench", "fake", "--port", str(port)]) == 0
+    assert "open this in your browser" not in capsys.readouterr().out
+
+
+def test_muted_stderr_swallows_a_child_processs_noise(capfd: pytest.CaptureFixture[str]) -> None:
+    """The noise is written by a CHILD to fd 2, so only the fd can silence it.
+
+    capfd captures at the descriptor level — the same level `gio` writes at —
+    which is exactly why this is asserted with capfd and not capsys.
+    """
+    with muted_stderr():
+        subprocess.run(
+            [sys.executable, "-c", "import sys; sys.stderr.write('gio: Operation not supported\\n')"],
+            check=True,
+        )
+    os.write(2, b"after the block\n")
+    captured = capfd.readouterr()
+    assert "Operation not supported" not in captured.err
+    assert "after the block" in captured.err, "fd 2 must be restored, not lost"
+
+
+def test_wsl_is_detected_from_the_kernel_string(tmp_path: Path) -> None:
+    named = tmp_path / "version-wsl"
+    named.write_text(
+        "Linux version 6.6.87.2-microsoft-standard-WSL2 (gcc ...)", encoding="utf-8"
+    )
+    assert is_wsl(named) is True
+
+    plain = tmp_path / "version-linux"
+    plain.write_text("Linux version 6.8.0-41-generic (gcc ...)", encoding="utf-8")
+    assert is_wsl(plain) is False
+
+    # No /proc/version at all (macOS, Windows) is simply not WSL.
+    assert is_wsl(tmp_path / "absent") is False
+
+
+def test_wsl_open_crosses_to_windows_and_reports_whether_it_landed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def only(*names: str):  # noqa: ANN202 - which openers this machine "has"
+        return lambda name: f"/usr/bin/{name}" if name in names else None
+
+    def run(cmd, **kwargs):  # noqa: ANN001, ANN202
+        calls.append(cmd)
+        assert kwargs["stderr"] == subprocess.DEVNULL, "cmd.exe's UNC warning is noise"
+        assert kwargs["check"] is False, "a failed open is a return value, not a raise"
+        return Completed(0)
+
+    monkeypatch.setattr("boardex_app.cli.shutil.which", only("wslview", "cmd.exe"))
+    assert wsl_open("http://127.0.0.1:4380/demo", run=run) is True
+    assert calls == [["/usr/bin/wslview", "http://127.0.0.1:4380/demo"]]
+
+    # Without wslu, cmd.exe carries it — with the empty title argument, or
+    # `start` would swallow the URL as the window title.
+    calls.clear()
+    monkeypatch.setattr("boardex_app.cli.shutil.which", only("cmd.exe"))
+    assert wsl_open("http://127.0.0.1:4380", run=run) is True
+    assert calls == [["/usr/bin/cmd.exe", "/c", "start", "", "http://127.0.0.1:4380"]]
+
+    # Neither present: nothing is run and nothing is claimed.
+    calls.clear()
+    monkeypatch.setattr("boardex_app.cli.shutil.which", only())
+    assert wsl_open("http://127.0.0.1:4380", run=run) is False
+    assert calls == []
+
+
+def test_wsl_open_survives_an_opener_that_fails_or_hangs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("boardex_app.cli.shutil.which", lambda name: f"/usr/bin/{name}")
+
+    def wslview_hangs_then_cmd_works(cmd, **kwargs):  # noqa: ANN001, ANN202
+        if "wslview" in cmd[0]:
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        return Completed(0)
+
+    assert wsl_open("http://127.0.0.1:4380", run=wslview_hangs_then_cmd_works) is True
+    # Every opener failing is reported honestly rather than raising.
+    assert wsl_open("http://127.0.0.1:4380", run=lambda cmd, **k: Completed(1)) is False
+
+
+def test_open_in_browser_prefers_the_wsl_path_and_falls_back_to_webbrowser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("boardex_app.cli.is_wsl", lambda: True)
+    monkeypatch.setattr("boardex_app.cli.wsl_open", lambda url: True)
+    monkeypatch.setattr(
+        "boardex_app.cli.webbrowser.open",
+        lambda url: pytest.fail("the Linux opener was tried on WSL anyway"),
+    )
+    assert open_in_browser("http://127.0.0.1:4380") is True
+
+    # WSL with no Windows opener still tries the normal path before giving up.
+    monkeypatch.setattr("boardex_app.cli.wsl_open", lambda url: False)
+    monkeypatch.setattr("boardex_app.cli.webbrowser.open", lambda url: True)
+    assert open_in_browser("http://127.0.0.1:4380") is True
+
+    # webbrowser reports failure two ways; neither may escape.
+    monkeypatch.setattr("boardex_app.cli.webbrowser.open", lambda url: False)
+    assert open_in_browser("http://127.0.0.1:4380") is False
+
+    def explode(url: str) -> bool:
+        raise RuntimeError("no browser here")
+
+    monkeypatch.setattr("boardex_app.cli.webbrowser.open", explode)
+    assert open_in_browser("http://127.0.0.1:4380") is False
 
 
 def test_up_refuses_cleanly_when_the_runner_is_not_installed(
