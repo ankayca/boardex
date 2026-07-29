@@ -91,15 +91,25 @@ def _resolve(root: Path, relative: str) -> Path | None:
     """The file ``relative`` names inside ``root``, or None.
 
     None covers every not-a-file case including traversal: the candidate is
-    resolved and re-checked against the root, so ``../../etc/passwd`` (or a
-    symlink pointing out of the bundle) resolves outside and is refused.
+    resolved and re-checked against the root, so ``../../etc/passwd`` — which
+    reaches here as a real ``../`` segment, since the router hands over the
+    DECODED path and ``%2e%2e%2f`` survives client-side normalization — or a
+    symlink pointing out of the bundle resolves outside and is refused.
+
+    Hostile inputs that the filesystem itself rejects are also just "no such
+    file": a ``%00`` in the path raises ValueError (embedded null byte) and an
+    over-long segment raises OSError (ENAMETOOLONG). Neither is a server fault,
+    so neither may become a 500 with a traceback in the log.
     """
     if not relative:
         return None
-    candidate = (root / relative).resolve()
-    if candidate != root and root not in candidate.parents:
+    try:
+        candidate = (root / relative).resolve()
+        if candidate != root and root not in candidate.parents:
+            return None
+        return candidate if candidate.is_file() else None
+    except (OSError, ValueError):
         return None
-    return candidate if candidate.is_file() else None
 
 
 def add_ui_routes(app: web.Application, ui_root: Path) -> None:

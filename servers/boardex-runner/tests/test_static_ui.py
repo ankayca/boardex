@@ -7,12 +7,15 @@ is all the route's contract depends on.
 
 from __future__ import annotations
 
+import logging
+import sys
 from pathlib import Path
 from typing import Any
 
 import aiohttp
 import pytest
 from aiohttp import web
+from yarl import URL
 
 from boardex_runner.artifacts import ArtifactStore
 from boardex_runner.clock import VirtualClock
@@ -65,6 +68,12 @@ class UiHarness:
 
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.session.get(self.base + path, **kwargs)
+
+    def get_raw(self, path: str, **kwargs: Any) -> Any:
+        """GET without client-side normalization — the request line goes out
+        exactly as written, so an encoded traversal actually reaches the
+        server instead of being collapsed by yarl before it is sent."""
+        return self.session.get(URL(self.base + path, encoded=True), **kwargs)
 
 
 def test_serves_index_and_assets_with_correct_mime(tmp_path: Path) -> None:
@@ -193,19 +202,77 @@ def test_the_ui_catch_all_cannot_become_a_credential_read_back(tmp_path: Path) -
 
 
 def test_traversal_out_of_the_bundle_is_refused(tmp_path: Path) -> None:
+    """A REAL traversal, delivered past the client's normalization.
+
+    ``session.get("/../secret.txt")`` is normalized away by the client and never
+    reaches the server, so the encoded form is sent with ``encoded=True``: the
+    router then hands the handler a decoded ``../secret.txt``, which is exactly
+    the input the root re-check exists for. 404 is asserted specifically — an
+    absent secret is not enough, because a 500 also lacks the secret while
+    meaning the resolver blew up on the way.
+    """
     secret = tmp_path / "secret.txt"
     secret.write_text("do not serve me", encoding="utf-8")
 
     async def scenario() -> None:
         async with UiHarness(make_bundle(tmp_path)) as h:
-            # aiohttp normalizes ../ in the request line, so hit the resolver
-            # with the encoded form too — both must miss the file.
-            for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/assets/../../secret.txt"):
-                async with h.get(path, headers={"Accept": "application/json"}) as res:
-                    body = await res.text()
-                    assert "do not serve me" not in body, path
+            for path in (
+                "/%2e%2e%2fsecret.txt",
+                "/..%2fsecret.txt",
+                "/assets%2f..%2f..%2fsecret.txt",
+            ):
+                async with h.get_raw(path, headers={"Accept": "application/json"}) as res:
+                    assert res.status == 404, f"{path} -> {res.status}"
+                    assert "do not serve me" not in await res.text(), path
 
     run(scenario())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlink creation needs privileges on Windows")
+def test_a_symlink_pointing_out_of_the_bundle_is_refused(tmp_path: Path) -> None:
+    """The bundle is a directory of files, not a set of pointers to anywhere.
+
+    A symlink is resolved before the root re-check, so a link planted inside
+    assets/ that aims at a file outside the bundle refuses like any other
+    traversal — the check is on where the path LANDS, not on how it was spelled.
+    """
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do not serve me", encoding="utf-8")
+    root = make_bundle(tmp_path)
+    (root / "assets" / "escape.txt").symlink_to(secret)
+
+    async def scenario() -> None:
+        async with UiHarness(root) as h:
+            async with h.get("/assets/escape.txt", headers={"Accept": "application/json"}) as res:
+                assert res.status == 404
+                assert "do not serve me" not in await res.text()
+
+    run(scenario())
+
+
+def test_paths_the_filesystem_itself_rejects_are_404s_not_500s(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A null byte and an over-long segment are "no such file", not a fault.
+
+    Both raise out of pathlib (ValueError / OSError ENAMETOOLONG). Unhandled,
+    aiohttp answers 500 and logs a traceback for what is a malformed request —
+    noise in the operator's console that reads like the runner broke.
+    """
+    long_segment = "a" * 400
+
+    async def scenario() -> None:
+        async with UiHarness(make_bundle(tmp_path)) as h:
+            for path in ("/%00.txt", f"/assets/{long_segment}.js", f"/%00{long_segment}"):
+                async with h.get_raw(path, headers={"Accept": "application/json"}) as res:
+                    assert res.status == 404, f"{path[:24]}… -> {res.status}"
+
+    with caplog.at_level(logging.ERROR):
+        run(scenario())
+    assert not [record for record in caplog.records if record.exc_info], (
+        "a malformed path logged a traceback: "
+        f"{[record.getMessage() for record in caplog.records]}"
+    )
 
 
 def test_no_ui_root_leaves_the_api_alone(tmp_path: Path) -> None:

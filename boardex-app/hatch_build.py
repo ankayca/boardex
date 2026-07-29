@@ -133,6 +133,47 @@ def bundle_assets(repo_root: Path, project_root: Path, *, skip_ui_build: bool = 
     return bundle
 
 
+def missing_bundle_parts(bundle: Path) -> list[str]:
+    """Which required halves of the bundle are absent (empty = complete).
+
+    Both are load-bearing at runtime: without ``ui`` the wheel serves no app,
+    and without ``contract-schema`` the runner cannot emit a single event (it
+    validates first, and an installed wheel has no checkout to walk up into).
+    """
+    return [
+        name
+        for name, probe in (
+            ("ui", "ui/index.html"),
+            ("contract-schema", "contract-schema/events.schema.json"),
+        )
+        if not (bundle / probe).is_file()
+    ]
+
+
+def prepare_bundle(repo_root: Path, project_root: Path, *, skip_ui_build: bool = False) -> Path:
+    """Everything BuildHook.initialize does — one path, one verification.
+
+    Inside the monorepo the bundle is (re)built from source. Outside it — an
+    sdist build, where the bundle travelled in the archive and nothing here
+    could regenerate it — it is taken as found. EITHER WAY the result is then
+    verified, because a wheel missing either half is broken in a way that only
+    shows up on the user's machine, and "the build fails loudly" has to mean
+    every route to a wheel, not just the one that does the copying.
+    """
+    bundle = project_root / BUNDLE_DIR
+    if (repo_root / UI_WORKSPACE / "package.json").is_file():
+        bundle_assets(repo_root, project_root, skip_ui_build=skip_ui_build)
+    missing = missing_bundle_parts(bundle)
+    if missing:
+        raise RuntimeError(
+            f"incomplete bundle at {bundle} — missing {', '.join(missing)}. "
+            "Build from the monorepo (this hook then builds the UI and copies "
+            "the emitted contract schemas), or install an sdist that already "
+            "carries them."
+        )
+    return bundle
+
+
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -149,20 +190,8 @@ class BuildHook(BuildHookInterface):  # type: ignore[misc]
 
     def initialize(self, version: str, build_data: dict) -> None:
         project_root = Path(self.root)
-        repo_root = project_root.parent
-        bundled = project_root / BUNDLE_DIR
-
-        if not (repo_root / UI_WORKSPACE / "package.json").is_file():
-            # Building outside the monorepo (e.g. from an sdist): the bundle is
-            # already in hand, or there is nothing that could produce it.
-            if (bundled / "ui" / "index.html").is_file():
-                return
-            raise RuntimeError(
-                "cannot build boardex without either the monorepo (to build the "
-                f"UI) or a pre-built {BUNDLE_DIR}/ui bundle."
-            )
-        bundle_assets(
-            repo_root,
+        prepare_bundle(
+            project_root.parent,
             project_root,
             skip_ui_build=_truthy(os.environ.get("BOARDEX_SKIP_UI_BUILD")),
         )

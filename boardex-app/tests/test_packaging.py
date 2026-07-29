@@ -77,6 +77,10 @@ def make_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     dist = repo / hatch_build.UI_DIST
     (dist / "assets").mkdir(parents=True)
+    # What marks a checkout as a checkout for prepare_bundle.
+    (repo / hatch_build.UI_WORKSPACE / "package.json").write_text(
+        '{"name": "@boardex/ui"}', encoding="utf-8"
+    )
     (dist / "index.html").write_text("<html></html>", encoding="utf-8")
     (dist / "assets" / "app-abc.js").write_text("//", encoding="utf-8")
     schemas = repo / hatch_build.CONTRACT_SCHEMA
@@ -129,6 +133,55 @@ def test_a_wheel_without_the_contract_schemas_is_refused(tmp_path: Path) -> None
     project.mkdir()
     with pytest.raises(RuntimeError, match="contract schemas"):
         hatch_build.bundle_assets(repo, project, skip_ui_build=True)
+
+
+def test_an_sdist_build_verifies_the_bundle_it_was_handed(tmp_path: Path) -> None:
+    """The no-monorepo path (an sdist build) must verify, not assume.
+
+    Nothing there can regenerate the bundle, so the only question is whether
+    what travelled in the archive is complete — and a wheel with a UI but no
+    contract schemas installs fine and then cannot emit an event, which is the
+    failure this refuses to ship.
+    """
+    project = tmp_path / "boardex-app"
+    bundle = project / hatch_build.BUNDLE_DIR
+    (bundle / "ui").mkdir(parents=True)
+    (bundle / "ui" / "index.html").write_text("<html></html>", encoding="utf-8")
+    no_monorepo = tmp_path / "elsewhere"
+    no_monorepo.mkdir()
+
+    with pytest.raises(RuntimeError, match="contract-schema"):
+        hatch_build.prepare_bundle(no_monorepo, project)
+
+    (bundle / "contract-schema").mkdir()
+    (bundle / "contract-schema" / "events.schema.json").write_text("{}", encoding="utf-8")
+    # Complete: taken as found, no build attempted, no raise.
+    assert hatch_build.prepare_bundle(no_monorepo, project) == bundle
+
+
+def test_a_build_with_neither_a_monorepo_nor_a_bundle_names_both_halves(tmp_path: Path) -> None:
+    project = tmp_path / "boardex-app"
+    project.mkdir()
+    with pytest.raises(RuntimeError) as err:
+        hatch_build.prepare_bundle(tmp_path / "elsewhere", project)
+    assert "ui" in str(err.value) and "contract-schema" in str(err.value)
+
+
+def test_the_monorepo_path_is_verified_too(tmp_path: Path) -> None:
+    """Same verification after a real build — one path, one post-condition."""
+    repo = make_repo(tmp_path)
+    project = tmp_path / "boardex-app"
+    project.mkdir()
+    assert hatch_build.missing_bundle_parts(
+        hatch_build.prepare_bundle(repo, project, skip_ui_build=True)
+    ) == []
+
+
+def test_missing_bundle_parts_names_each_half(tmp_path: Path) -> None:
+    assert hatch_build.missing_bundle_parts(tmp_path) == ["ui", "contract-schema"]
+    (tmp_path / "ui").mkdir()
+    (tmp_path / "ui" / "index.html").write_text("<html></html>", encoding="utf-8")
+    assert hatch_build.missing_bundle_parts(tmp_path) == ["contract-schema"]
 
 
 def test_the_bundled_schemas_are_the_repos_own(tmp_path: Path) -> None:
