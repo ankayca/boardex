@@ -54,6 +54,7 @@ VITE_RUNNER_URL=http://localhost:4380 npm run dev -w apps/ui
 | `AGENT_MODELS` | Comma-separated LiteLLM model strings advertised via `/health` `capabilities.models` (`BENCH=agent`; default `openrouter/anthropic/claude-sonnet-4.6`) |
 | `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 60) |
 | `BOARDEX_CONTRACT_SCHEMA_DIR` | Override the JSON Schema location (defaults to repo lookup) |
+| `BOARDEX_MCP_BIN_DIR` | Directory containing `boardex-target` / `boardex-logic` (defaults to the running interpreter's `bin` / `Scripts`) |
 
 A `bench.json` for `BENCH=real` carries the wire `BoardProfile` plus bench
 wiring, e.g.:
@@ -79,8 +80,9 @@ behind the same engine and wire layer. Highlights:
 
 - **Two phases.** The plan phase binds meta-tools only (`declare_plan`,
   `record_check`, `declare_diagnosis`, `declare_iteration`, `write_report`);
-  the MCP servers (`<checkout>/.venv/bin/boardex-target` + `boardex-logic`
-  over stdio) are spawned only after `POST /runs/{id}/plan/approve`.
+  the MCP servers (`boardex-target` + `boardex-logic` from the running
+  interpreter's scripts dir, or `BOARDEX_MCP_BIN_DIR`) are spawned over stdio
+  only after `POST /runs/{id}/plan/approve`.
 - **Gate floor (audit MEDIUM-5 amendment).** `flash_*`/`reset_*`/`erase_*`/
   `recover_*`/`write_*`-prefixed tools, the composites `run_checkpoint`/
   `verify_bringup`, and any tool whose description's summary line declares a

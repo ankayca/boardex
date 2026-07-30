@@ -27,11 +27,11 @@ from typing import Any, Awaitable, Callable
 import jsonschema
 
 from .bench import ApprovalSpec
-from .contract import CONTRACT_VERSION, definition_errors, schema_dir
+from .contract import CONTRACT_VERSION, definition_errors
 from .engine import Conflict, RunEngine
 from .events import RunTerminated
 from .interception import is_risk_gated, risk_level_for
-from .mcp_host import McpHostError, McpToolHost, ToolHost
+from .mcp_host import McpHostError, McpToolHost, ToolHost, default_mcp_bin_dir
 from .meta_tools import META_TOOL_NAMES, META_TOOL_SCHEMAS, meta_tools_as_openai
 from .prompts import BENCH_NOTE_DEFAULT, SYSTEM_PROMPT, plan_phase_user_message
 from .provider import DEFAULT_MODEL, LiteLLMProvider, MalformedToolArguments, ModelTurn, ToolCall
@@ -133,12 +133,6 @@ def agent_bench_status() -> dict[str, Any]:
     return {"runnerOnline": True, "contractVersion": CONTRACT_VERSION, "devices": []}
 
 
-def _default_venv_root() -> Path:
-    # schema_dir() = <checkout>/packages/contract/json-schema; the MCP server
-    # binaries live in <checkout>/.venv/bin (same invocation as .cursor/mcp.json).
-    return schema_dir().parents[2]
-
-
 class AgentBench:
     """Per-run agent-bench configuration and resource lifecycle."""
 
@@ -154,13 +148,17 @@ class AgentBench:
         max_turns: int = DEFAULT_MAX_TURNS,
         provider_factory: Callable[[str], Any] = LiteLLMProvider,
         toolhost_factory: Callable[[], Awaitable[ToolHost | None]] | None = None,
-        venv_root: Path | None = None,
+        mcp_bin_dir: Path | None = None,
         size_policy: SizePolicy | None = None,
     ) -> None:
         self.max_turns = max_turns
         self.provider_factory = provider_factory
         self._toolhost_factory = toolhost_factory
-        self.venv_root = venv_root
+        self.mcp_bin_dir = mcp_bin_dir
+        # Set when connect_tools fails so the harness can tell the agent (and
+        # the run log) *why* hardware tools are unbound — silent None was how
+        # the packaged-app schema-dir/venv-root mixup hid for a full run.
+        self.mcp_connect_error: str | None = None
         # Resolved here, at construction: an invalid AGENT_* cap must fail
         # before the run starts, not on the first tool result mid-run.
         self.size_policy = size_policy if size_policy is not None else SizePolicy.from_env()
@@ -173,18 +171,24 @@ class AgentBench:
         """Bind the MCP servers (execute phase only — spec §2). Returns None
         when the bench tool layer is unavailable: the run degrades to
         workspace + meta tools instead of dying at the plan gate."""
+        self.mcp_connect_error = None
         if self._toolhost_factory is not None:
             return await self._toolhost_factory()
         host = McpToolHost()
+        bin_dir = self.mcp_bin_dir if self.mcp_bin_dir is not None else default_mcp_bin_dir()
         try:
-            await host.connect(self.venv_root or _default_venv_root())
-        except McpHostError:
-            try:
-                await host.close()
-            except Exception:
-                pass
-            return None
-        return host
+            await host.connect(bin_dir)
+        except McpHostError as exc:
+            self.mcp_connect_error = str(exc)
+        except Exception as exc:  # SDK / spawn surprises after plan approval
+            self.mcp_connect_error = f"{type(exc).__name__}: {exc}"
+        else:
+            return host
+        try:
+            await host.close()
+        except Exception:
+            pass
+        return None
 
     def halt(self) -> None:
         """Hardware sessions live inside the per-run MCP server subprocesses;
@@ -246,13 +250,15 @@ class AgentRunEngine(RunEngine):
             await self._plan_phase()
             self._mcp = await self.bench.connect_tools()
             if self._mcp is None:
+                detail = self.bench.mcp_connect_error or "unknown error"
                 self._messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "HARNESS: the bench MCP servers are unavailable; hardware "
-                            "tools are NOT bound. Proceed with the workspace and meta "
-                            "tools only, and record honestly what could not be measured."
+                            "HARNESS: the bench MCP servers are unavailable "
+                            f"({detail}); hardware tools are NOT bound. Proceed "
+                            "with the workspace and meta tools only, and record "
+                            "honestly what could not be measured."
                         ),
                     }
                 )
