@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
+import tarfile
 from pathlib import Path
 
+import hatchling.build
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -23,8 +26,25 @@ def make_monorepo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_siblings_resolve_to_local_paths_inside_a_checkout(tmp_path: Path) -> None:
-    deps = hatch_build.sibling_dependencies(make_monorepo(tmp_path))
+PINS = [
+    "boardex-core==0.1.0",
+    "boardex-logic==0.1.0",
+    "boardex-target==0.1.0",
+    "boardex-runner[agent]==0.1.0",
+]
+
+
+def test_siblings_are_pinned_by_default_even_inside_a_checkout(tmp_path: Path) -> None:
+    """The default is the one that survives leaving this machine.
+
+    A checkout used to be enough to switch the four to `file://` paths, which is
+    how a plain `python -m build` produced artifacts that installed nowhere else.
+    """
+    assert hatch_build.sibling_dependencies(make_monorepo(tmp_path)) == PINS
+
+
+def test_siblings_resolve_to_local_paths_when_asked_inside_a_checkout(tmp_path: Path) -> None:
+    deps = hatch_build.sibling_dependencies(make_monorepo(tmp_path), local=True)
     assert len(deps) == 4
     for dep in deps:
         assert " @ file://" in dep
@@ -34,13 +54,7 @@ def test_siblings_resolve_to_local_paths_inside_a_checkout(tmp_path: Path) -> No
 
 
 def test_siblings_fall_back_to_version_pins_without_a_checkout(tmp_path: Path) -> None:
-    deps = hatch_build.sibling_dependencies(tmp_path)
-    assert deps == [
-        "boardex-core==0.1.0",
-        "boardex-logic==0.1.0",
-        "boardex-target==0.1.0",
-        "boardex-runner[agent]==0.1.0",
-    ]
+    assert hatch_build.sibling_dependencies(tmp_path, local=True) == PINS
 
 
 def test_a_partial_checkout_is_not_treated_as_a_checkout(tmp_path: Path) -> None:
@@ -48,13 +62,155 @@ def test_a_partial_checkout_is_not_treated_as_a_checkout(tmp_path: Path) -> None
     different versions of the same lockstep set."""
     root = make_monorepo(tmp_path)
     (root / "servers/boardex-logic/pyproject.toml").unlink()
-    assert all("file://" not in dep for dep in hatch_build.sibling_dependencies(root))
+    assert all(
+        "file://" not in dep for dep in hatch_build.sibling_dependencies(root, local=True)
+    )
 
 
 def test_the_pinned_version_tracks_servers_version() -> None:
     """The four server packages version in lockstep via servers/VERSION."""
     recorded = (REPO_ROOT / "servers" / "VERSION").read_text(encoding="utf-8").strip()
     assert hatch_build.SERVERS_VERSION == recorded
+
+
+# --- What the published metadata says --------------------------------------
+#
+# The property: a distribution built from this repo installs on a machine that
+# has never seen this repo. That reduces to one readable line — the four
+# `boardex-*` requirements are `==` pins, and nothing in the metadata headers
+# points at a path, because a `file://` requirement names a directory the
+# installing machine does not have.
+
+
+def header_block(metadata: str) -> str:
+    """The RFC 822 headers of a METADATA/PKG-INFO document.
+
+    Everything past the first blank line is the long description — this
+    project's README, which is prose ABOUT packaging and may legitimately write
+    `file://`. Requirements live in the headers, so the headers are what the
+    path-freedom assertions read.
+    """
+    return metadata.split("\n\n", 1)[0]
+
+
+def requires_dist(metadata: str) -> list[str]:
+    """The unconditional Requires-Dist entries (the `dev` extra is not shipped state)."""
+    return [
+        line.partition(":")[2].strip()
+        for line in header_block(metadata).splitlines()
+        if line.startswith("Requires-Dist:") and "extra ==" not in line
+    ]
+
+
+def servers_version() -> str:
+    return (REPO_ROOT / "servers" / "VERSION").read_text(encoding="utf-8").strip()
+
+
+def wheel_metadata(project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """The METADATA hatchling really writes, via the real PEP 517 hook.
+
+    `prepare_metadata_for_build_wheel` runs the metadata hook and nothing else —
+    the same text the wheel carries, without building the UI bundle to get it.
+    """
+    out = tmp_path / "metadata"
+    out.mkdir(exist_ok=True)
+    monkeypatch.chdir(project)
+    return (out / hatchling.build.prepare_metadata_for_build_wheel(str(out)) / "METADATA").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_this_projects_built_metadata_pins_the_four_and_names_no_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rendered from THIS checkout — where the siblings are present and the leak was."""
+    monkeypatch.delenv(hatch_build.LOCAL_SIBLINGS_ENV, raising=False)
+    metadata = wheel_metadata(REPO_ROOT / "boardex-app", tmp_path, monkeypatch)
+
+    version = servers_version()
+    assert requires_dist(metadata) == [
+        f"boardex-core=={version}",
+        f"boardex-logic=={version}",
+        f"boardex-runner[agent]=={version}",
+        f"boardex-target=={version}",
+    ], "the published pins must be the four server names at servers/VERSION"
+    assert "file://" not in header_block(metadata)
+    assert " @ " not in header_block(metadata), "no direct reference of any scheme"
+
+
+def test_the_local_path_form_still_exists_and_takes_asking_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The from-source install (BOARDEX_LOCAL_SIBLINGS=1) reaches real metadata.
+
+    Its `file://` requirements are exactly what must never be the default; that
+    they still work is what keeps `pip install ./boardex-app` possible while the
+    four servers are on no index.
+    """
+    monkeypatch.setenv(hatch_build.LOCAL_SIBLINGS_ENV, "1")
+    deps = requires_dist(wheel_metadata(REPO_ROOT / "boardex-app", tmp_path, monkeypatch))
+
+    assert len(deps) == 4
+    for dep in deps:
+        assert " @ file://" in dep
+    assert any((REPO_ROOT / "servers/boardex-core").as_uri() in dep for dep in deps)
+
+
+def make_distributable_project(tmp_path: Path) -> Path:
+    """This project's real pyproject + hook, with a stub package and bundle.
+
+    A stand-in, so the build under test is a few milliseconds instead of an `npm
+    ci` — but the parts that decide the metadata are the shipped files
+    themselves, and it sits inside a fake monorepo, since siblings-present is
+    the configuration that used to leak.
+    """
+    repo = make_monorepo(tmp_path)
+    project = repo / "boardex-app"
+    (project / "boardex_app").mkdir(parents=True)
+    (project / "boardex_app" / "__init__.py").write_text("", encoding="utf-8")
+    bundle = project / hatch_build.BUNDLE_DIR
+    (bundle / "ui").mkdir(parents=True)
+    (bundle / "ui" / "index.html").write_text("<html></html>", encoding="utf-8")
+    (bundle / "contract-schema").mkdir(parents=True)
+    (bundle / "contract-schema" / "events.schema.json").write_text("{}", encoding="utf-8")
+    for shipped in ("pyproject.toml", "hatch_build.py", "README-quickstart.md"):
+        shutil.copy2(REPO_ROOT / "boardex-app" / shipped, project / shipped)
+    return project
+
+
+def sdist_pkg_info(project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    out = tmp_path / "dist"
+    out.mkdir(exist_ok=True)
+    monkeypatch.chdir(project)
+    archive_path = out / hatchling.build.build_sdist(str(out))
+    with tarfile.open(archive_path) as archive:
+        member = next(name for name in archive.getnames() if name.endswith("/PKG-INFO"))
+        return archive.extractfile(member).read().decode("utf-8")  # type: ignore[union-attr]
+
+
+def test_a_built_sdist_carries_pins_not_the_paths_of_the_machine_that_built_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The regression this exists to prevent, at the place it does the most damage.
+
+    An sdist's PKG-INFO is not advisory: hatchling reads that static metadata
+    instead of re-running the hook, so a `file://` requirement recorded here
+    reappears in every wheel built from the sdist — which is how `python -m
+    build` from a clean clone produced a matching PAIR of artifacts that
+    installed only on the machine that built them.
+    """
+    monkeypatch.delenv(hatch_build.LOCAL_SIBLINGS_ENV, raising=False)
+    pkg_info = sdist_pkg_info(make_distributable_project(tmp_path), tmp_path, monkeypatch)
+
+    version = servers_version()
+    assert requires_dist(pkg_info) == [
+        f"boardex-core=={version}",
+        f"boardex-logic=={version}",
+        f"boardex-runner[agent]=={version}",
+        f"boardex-target=={version}",
+    ]
+    assert "file://" not in header_block(pkg_info)
+    assert str(tmp_path) not in pkg_info, "no path of the build machine, anywhere in PKG-INFO"
 
 
 def record_npm(monkeypatch: pytest.MonkeyPatch, *, npm: str | None = "/usr/bin/npm") -> list[dict]:

@@ -18,14 +18,16 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Embedded Systems",
 ]
-# Resolved by the metadata hook in hatch_build.py: local path requirements when
-# the four sibling packages are present (a monorepo checkout — which is also
-# what pip holds when installing from a git URL), version pins otherwise.
-# See README-quickstart.md § "Where the dependencies come from".
+# Resolved by the metadata hook in hatch_build.py: `==<version>` pins on the four
+# sibling packages by default — what a published sdist/wheel must carry —
+# and local path requirements only under BOARDEX_LOCAL_SIBLINGS=1 (the
+# from-source install). See README-quickstart.md § "Where the dependencies come from".
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# hatchling: the build backend itself, so the packaging tests can render this
+# project's real metadata through the real PEP 517 hook rather than a stand-in.
+dev = ["pytest>=8.0", "hatchling>=1.24"]
 
 [project.urls]
 Homepage = "https://github.com/ankayca/boardex"
@@ -39,7 +41,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
-# The sibling packages resolve as local path requirements in a checkout.
+# Only BOARDEX_LOCAL_SIBLINGS=1 emits direct references; the default build has none.
 allow-direct-references = true
 
 [tool.hatch.metadata.hooks.custom]
