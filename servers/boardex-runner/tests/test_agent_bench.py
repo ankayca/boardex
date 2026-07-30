@@ -413,6 +413,22 @@ def test_invalid_cap_fails_at_bench_construction_not_mid_run(monkeypatch, var, b
         AgentBench()
 
 
+def test_connect_tools_records_why_mcp_is_unbound(tmp_path: Path) -> None:
+    """A missing bin dir must degrade with a reason, not a silent None."""
+    empty = tmp_path / "no-bin"
+    empty.mkdir()
+    bench = AgentBench(mcp_bin_dir=empty)
+
+    async def _go() -> None:
+        host = await bench.connect_tools()
+        assert host is None
+        assert bench.mcp_connect_error is not None
+        assert "boardex-target" in bench.mcp_connect_error
+        assert str(empty) in bench.mcp_connect_error
+
+    asyncio.run(_go())
+
+
 def test_bounded_decode_stays_well_formed_json_under_the_cap(task_repo: Path) -> None:
     """F3: with both sequences bounded by element count, the inline echo of a
     pathologically large decode parses — TOOL_RESULT_CAP never cuts mid-JSON."""

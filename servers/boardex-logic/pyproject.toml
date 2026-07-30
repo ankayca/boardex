@@ -25,7 +25,8 @@ classifiers = [
 # is not a Python package, so there is no vendor SDK dependency here.
 dependencies = [
     "boardex-core",
-    "mcp>=1.2.0",
+    # Servers use FastMCP (`mcp.server.fastmcp`); mcp 2.x renamed that API.
+    "mcp>=1.2.0,<2",
 ]
 
 [project.optional-dependencies]

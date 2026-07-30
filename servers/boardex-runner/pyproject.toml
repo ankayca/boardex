@@ -45,7 +45,8 @@ agent = [
     # crashes on ModuleNotFoundError.
     "fastapi>=0.100",
     "orjson>=3.9",
-    "mcp>=1.0",
+    # Client host + servers share the v1 FastMCP surface; mcp 2.x breaks both.
+    "mcp>=1.0,<2",
 ]
 
 [project.urls]

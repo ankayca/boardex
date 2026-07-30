@@ -24,7 +24,8 @@ classifiers = [
 ]
 dependencies = [
     "boardex-core",
-    "mcp>=1.2.0",
+    # Servers use FastMCP (`mcp.server.fastmcp`); mcp 2.x renamed that API.
+    "mcp>=1.2.0,<2",
     "pyocd>=0.36.0",
     # ELF/DWARF parsing for symbol + source-line resolution (address <-> symbol,
     # locating _SEGGER_RTT). Also a transitive pyOCD dep, but we use it directly.
