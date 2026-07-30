@@ -3,14 +3,23 @@
 Two custom hooks, because both jobs are monorepo-specific:
 
 **MetadataHook — where the four server packages come from.**
-`boardex` is a thin launcher over `boardex-core/-logic/-target/-runner`, none of
-which is published to an index yet. When the sibling `servers/` tree is present
-the four resolve to local path requirements; that covers both `pip install
-./boardex-app` and `pip install "git+ssh://…#subdirectory=boardex-app"`, since
-pip clones the WHOLE repo and then builds this subdirectory. With no siblings in
-sight (a future index-published world, or an sdist built elsewhere) the same
-four fall back to version pins. Path requirements are also why a wheel built
-here cannot be uploaded to PyPI as-is — see README-quickstart.md.
+`boardex` is a thin launcher over `boardex-core/-logic/-target/-runner`. By
+default the four resolve to `==SERVERS_VERSION` pins — the only requirement that
+means anything on a machine that does not have this repo, and therefore the only
+one a published sdist or wheel may carry. `BOARDEX_LOCAL_SIBLINGS=1` opts into
+local path requirements against the sibling `servers/` tree instead: that is the
+from-source install (`pip install ./boardex-app`, or the
+`git+ssh://…#subdirectory=boardex-app` form, where pip clones the WHOLE repo and
+builds this subdirectory), which is what works TODAY, since none of the four is
+on an index yet.
+
+The default is the publishable one on purpose. Metadata leaks: a `file://`
+requirement baked into an sdist's PKG-INFO reappears in every wheel built from
+that sdist — hatchling reads the sdist's static metadata rather than re-running
+this hook — so `python -m build` produced two artifacts that only installed on
+the machine that built them, and nothing about either announced it. Pinning by
+default means the accident is now the opt-in. See README-quickstart.md
+§ "Where the dependencies come from".
 
 **BuildHook — what makes the wheel self-contained.**
 It builds the UI (`npm ci` at the repo root first when the clone has no
@@ -49,6 +58,9 @@ except ImportError:  # the pure helpers below are unit-tested without hatchling
 # Lockstep with servers/VERSION — the four server packages version together.
 SERVERS_VERSION = "0.1.0"
 
+# Opt in to local path requirements for the four siblings (from-source installs).
+LOCAL_SIBLINGS_ENV = "BOARDEX_LOCAL_SIBLINGS"
+
 # (distribution name, path under the repo root, extras). The runner carries
 # [agent] because `boardex up` defaults to BENCH=agent.
 SIBLINGS = (
@@ -67,10 +79,16 @@ UDEV_RULES = "servers/boardex-target/contrib/udev/49-boardex-probes.rules"
 BUNDLE_DIR = "boardex_app/_bundled"
 
 
-def sibling_dependencies(repo_root: Path) -> list[str]:
-    """The four server requirements: local paths in a checkout, pins without one."""
+def sibling_dependencies(repo_root: Path, *, local: bool = False) -> list[str]:
+    """The four server requirements: version pins, or local paths when asked.
+
+    Pins are the default because they are the only form that survives leaving
+    this machine. Local paths are returned only when ``local`` is set AND all
+    four siblings are actually there — all four or none, since a half-local,
+    half-pinned set would resolve two different versions of one lockstep set.
+    """
     present = all((repo_root / relative / "pyproject.toml").is_file() for _, relative, _ in SIBLINGS)
-    if not present:
+    if not (local and present):
         return [f"{name}{extras}=={SERVERS_VERSION}" for name, _, extras in SIBLINGS]
     return [
         f"{name}{extras} @ {(repo_root / relative).resolve().as_uri()}"
@@ -221,7 +239,10 @@ class MetadataHook(MetadataHookInterface):  # type: ignore[misc]
     PLUGIN_NAME = "custom"
 
     def update(self, metadata: dict) -> None:
-        metadata["dependencies"] = sibling_dependencies(Path(self.root).parent)
+        metadata["dependencies"] = sibling_dependencies(
+            Path(self.root).parent,
+            local=_truthy(os.environ.get(LOCAL_SIBLINGS_ENV)),
+        )
 
 
 class BuildHook(BuildHookInterface):  # type: ignore[misc]

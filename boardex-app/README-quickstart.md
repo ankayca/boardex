@@ -16,32 +16,48 @@ Use your package manager's pipx, not pip's. On Ubuntu 23.04+ and Debian 12+,
 (PEP 668) — the system Python refuses installs outside a venv, and that refusal
 is the first thing a new machine hits.
 
-### The wheel — the primary path
+### From an index — the canonical install (available after the first release)
 
 ```bash
-pipx install ./boardex-0.1.0-py3-none-any.whl
+pipx install boardex
 ```
 
-Nothing is compiled at install time and **no Node is needed**: the wheel carries
-the UI already built, and the runner serves it from the same origin it serves
-the API on. ("Developing on it" below builds one.)
+Nothing is compiled at install time and **no Node is needed**: the published
+wheel carries the UI already built, and the runner serves it from the same origin
+it serves the API on.
 
-One caveat, the same one that keeps this off PyPI: a wheel built from a checkout
-of this repo carries `file://` requirements pointing into that checkout's
-`servers/` (see "Where the dependencies come from"). Install it on a machine
-where that checkout is present, at the path it was built from.
+This is the install to reach for the moment `boardex` and its four
+`boardex-*` server packages are published. Until that day the index has none of
+them, and the two paths below are the ones that work.
 
-### From git — the alternate, and it needs Node 20+
+### From git — works today, and it needs Node 20+
 
 ```bash
-pipx install "git+ssh://git@github.com/ankayca/boardex.git#subdirectory=boardex-app"
+BOARDEX_LOCAL_SIBLINGS=1 pipx install "git+ssh://git@github.com/ankayca/boardex.git#subdirectory=boardex-app"
 ```
 
 pip clones the whole repo into a temp directory and builds `boardex-app` there,
 so the build hook builds the UI too: `npm ci` at the repo root (that clone has no
 `node_modules`), then `npm run build -w apps/ui`. Node 20+ and `npm` on `PATH`
-are therefore required; without them the build refuses and says so, pointing at
-the wheel instead.
+are therefore required; without them the build refuses and says so.
+
+`BOARDEX_LOCAL_SIBLINGS=1` is what points the four server requirements at the
+clone pip already made, instead of at an index that does not carry them yet (see
+"Where the dependencies come from"). Without it this install stops at
+`No matching distribution found for boardex-core==0.1.0`.
+
+### The wheel
+
+```bash
+python -m build boardex-app                    # → boardex-app/dist/boardex-0.1.0*.whl
+pipx install ./boardex-app/dist/boardex-0.1.0-py3-none-any.whl
+```
+
+The wheel is self-contained in everything except the four server packages: it
+needs no Node and compiles nothing, but its `boardex-core==0.1.0` … requirements
+have to resolve somewhere — an index once they are published, or an environment
+that already has them (a dev checkout, "Developing on it" below). It is a
+publishable artifact, not yet a standalone installer.
 
 ## Run
 
@@ -125,20 +141,31 @@ own UI build.
 
 `boardex` is a launcher; the work is done by four packages in this repo —
 `boardex-core`, `boardex-logic`, `boardex-target`, `boardex-runner[agent]`. None
-of them is on PyPI, so the build resolves them itself (`hatch_build.py`):
+of them is on PyPI yet, so the build decides how to name them (`hatch_build.py`):
 
-- **Inside a checkout of the monorepo** — which is what pip has in hand for both
-  `pip install ./boardex-app` and the `git+ssh://…#subdirectory=boardex-app`
-  form above, since pip clones the whole repo before building this subdirectory
-  — the four resolve to local path requirements.
-- **Without the siblings** they fall back to `==0.1.0` pins, for the day the
-  four are published to an index.
+- **By default** — `==0.1.0` pins, the version in `servers/VERSION` (the four
+  release in lockstep). This is the only form that means anything on a machine
+  that does not have this repo, so it is what every built sdist and wheel
+  carries.
+- **Under `BOARDEX_LOCAL_SIBLINGS=1`** — local path requirements into the
+  checkout's `servers/`, when all four are there. That is the from-source
+  install: `pip install ./boardex-app` and the `git+ssh://…` form above, where
+  pip clones the whole repo before building this subdirectory.
 
-Consequence, stated plainly: a wheel built from a checkout carries `file://`
-requirements and **cannot be uploaded to PyPI as-is**. Publishing `boardex` to
-PyPI requires publishing the four server packages there too (they version in
-lockstep via `servers/VERSION`), after which the pinned fallback is exactly the
-right metadata.
+The default is the publishable one deliberately. A `file://` requirement baked
+into an sdist's `PKG-INFO` is not advisory — hatchling reads that static
+metadata instead of re-running the hook, so it reappears in every wheel built
+from that sdist, and `python -m build` used to emit a matching pair of artifacts
+that installed only on the machine that built them. `boardex-app/tests` asserts
+the built metadata is free of path references.
+
+Publishing `boardex` still requires publishing the four server packages
+alongside it; the pins are then exactly the right metadata, and
+`pipx install boardex` is the whole install.
+
+A developer's `pip install -e ./boardex-app` needs no flag: the four are already
+installed (editable, below), and pip resolves a pin against what is installed
+without ever asking an index.
 
 ## Developing on it
 
@@ -146,9 +173,12 @@ right metadata.
 pip install -e "servers/boardex-core[dev]" -e "servers/boardex-logic[dev]" \
             -e "servers/boardex-target[dev]" -e "servers/boardex-runner[dev,agent]"
 npm run build -w apps/ui                    # VITE_RUNNER_URL="" for a same-origin bundle
-BOARDEX_SKIP_UI_BUILD=1 pip install -e ./boardex-app
+BOARDEX_SKIP_UI_BUILD=1 pip install -e "./boardex-app[dev]"
 pytest boardex-app/tests
 ```
+
+The `[dev]` extra is pytest plus `hatchling` — the packaging tests render this
+project's real metadata through the real build backend rather than a stand-in.
 
 Building the wheel that "Install" starts from:
 
