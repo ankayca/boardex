@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Boardex orchestrator: scripted run engine over the MCP tool layer, exposing the BIBLE §5 event stream + command API (runnerKind: real)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "TBD" }
+license = "Apache-2.0"
 authors = [{ name = "Boardex contributors" }]
 # Lockstep version with the other server packages — bump via servers/VERSION
 # + servers/scripts/sync_versions.py, never by hand.

@@ -2,6 +2,7 @@
   "name": "boardex-workspace",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Boardex UI monorepo (UI + contract + mock runner). servers/ is Python-land, invisible to npm — see docs/BIBLE.md §3.",
   "workspaces": [
