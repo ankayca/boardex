@@ -1,5 +1,8 @@
 # Boardex
 
+[![CI](https://github.com/ankayca/boardex/actions/workflows/ci.yml/badge.svg)](https://github.com/ankayca/boardex/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/boardex)](https://pypi.org/project/boardex/)
+
 **An AI agent environment for hardware engineers.**
 
 Boardex is a Cursor-style workspace for embedded and electronics engineers. Instead of just generating code, Boardex agents close the entire hardware development loop: write firmware, flash it to a target board, drive real lab equipment to validate it, read back the results, and iterate — automatically.
@@ -119,4 +122,4 @@ backend" section of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## License
 
-TBD
+Apache License 2.0 — see [`LICENSE`](LICENSE).
