@@ -2,7 +2,7 @@
 name = "boardex"
 version = "0.1.0"
 description = "Boardex in one command: `boardex up` launches the runner with the UI embedded."
-readme = "README-quickstart.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Boardex contributors" }]
@@ -21,7 +21,7 @@ classifiers = [
 # Resolved by the metadata hook in hatch_build.py: `==<version>` pins on the four
 # sibling packages by default — what a published sdist/wheel must carry —
 # and local path requirements only under BOARDEX_LOCAL_SIBLINGS=1 (the
-# from-source install). See README-quickstart.md § "Where the dependencies come from".
+# from-source install). See the README beside this file.
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
@@ -61,4 +61,4 @@ packages = ["boardex_app"]
 [tool.hatch.build.targets.sdist]
 # The sdist carries the bundle too, so `pip install boardex-0.1.0.tar.gz` needs
 # no Node either.
-include = ["boardex_app", "hatch_build.py", "README-quickstart.md", "tests"]
+include = ["boardex_app", "hatch_build.py", "README.md", "tests"]
