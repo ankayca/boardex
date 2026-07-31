@@ -50,8 +50,12 @@ jobs:
       # Dependency order matters: unpublished local packages must be installed
       # before anything that lists them (boardex-target[dev] needs boardex-logic).
       # The runner's [agent] extra is needed for the provider tests. boardex-app
-      # is installed with BOARDEX_LOCAL_SIBLINGS=1 so its four sibling
-      # requirements resolve against the editable installs, not an index.
+      # goes in with --no-deps: its sibling requirements are already satisfied
+      # by the editable installs, and letting pip resolve them (path or pin)
+      # would REINSTALL the four non-editable into site-packages — outside the
+      # checkout, where the runner cannot find the contract schemas by walking
+      # up, and the runner suite fails wholesale. hatchling is boardex-app's
+      # [dev] extra, added by hand because --no-deps skips extras too.
       - name: Run the full test suite first (servers + boardex-app)
         run: |
           python -m pip install --upgrade pip
@@ -59,7 +63,8 @@ jobs:
           pip install -e "servers/boardex-logic[dev]"
           pip install -e "servers/boardex-target[dev]"
           pip install -e "servers/boardex-runner[dev,agent]"
-          BOARDEX_LOCAL_SIBLINGS=1 BOARDEX_SKIP_UI_BUILD=1 pip install -e "boardex-app[dev]"
+          BOARDEX_SKIP_UI_BUILD=1 pip install --no-deps -e boardex-app
+          pip install "hatchling>=1.24"
           pytest servers/boardex-core/tests servers/boardex-target/tests \
                  servers/boardex-logic/tests servers/boardex-runner/tests
           # Separate invocation: boardex-app's test module basenames
