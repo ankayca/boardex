@@ -1,11 +1,14 @@
 # Boardex server release — tag-driven (servers-vX.Y.Z).
 #
-# Publishes the four Python server packages (wheels + sdists) to a GitHub
-# Release. Installers / signed desktop packaging stay deferred (BIBLE §2.3 #7);
-# these artifacts are the backend tool layer + the §5 runner only.
+# Publishes the four Python server packages PLUS the `boardex` launcher
+# (boardex-app/, UI bundle embedded) as wheels + sdists on a GitHub Release —
+# the complete product: `pip install boardex_*.whl boardex-*.whl` then
+# `boardex up`. Installers / signed desktop packaging stay deferred
+# (BIBLE §2.3 #7).
 #
-# Gate order: version-lockstep check -> full pytest -> build -> install the
-# built wheels into a clean venv and smoke the runner from them -> publish.
+# Gate order: version-lockstep check -> full pytest (servers + boardex-app) ->
+# build (UI bundle first, then all five packages) -> install the built wheels
+# into a clean venv, smoke the runner AND `boardex up` from them -> publish.
 
 name: Release (servers)
 
@@ -28,28 +31,49 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - name: Tag matches servers/VERSION and pyprojects are in lockstep
         run: python servers/scripts/sync_versions.py --check --tag "$GITHUB_REF_NAME"
 
+      # The UI bundle the `boardex` wheel embeds. Built once here with an empty
+      # VITE_RUNNER_URL (single-origin: the app talks to whoever serves it);
+      # the build hook reuses it via BOARDEX_SKIP_UI_BUILD below.
+      - name: Build the UI bundle
+        run: |
+          npm ci
+          VITE_RUNNER_URL="" npm run build -w apps/ui
+
       # Dependency order matters: unpublished local packages must be installed
       # before anything that lists them (boardex-target[dev] needs boardex-logic).
-      # The runner's [agent] extra is needed for the provider tests.
-      - name: Run the full server test suite first
+      # The runner's [agent] extra is needed for the provider tests. boardex-app
+      # is installed with BOARDEX_LOCAL_SIBLINGS=1 so its four sibling
+      # requirements resolve against the editable installs, not an index.
+      - name: Run the full test suite first (servers + boardex-app)
         run: |
           python -m pip install --upgrade pip
           pip install -e "servers/boardex-core[dev]"
           pip install -e "servers/boardex-logic[dev]"
           pip install -e "servers/boardex-target[dev]"
           pip install -e "servers/boardex-runner[dev,agent]"
+          BOARDEX_LOCAL_SIBLINGS=1 BOARDEX_SKIP_UI_BUILD=1 pip install -e "boardex-app[dev]"
           pytest servers/boardex-core/tests servers/boardex-target/tests \
-                 servers/boardex-logic/tests servers/boardex-runner/tests
+                 servers/boardex-logic/tests servers/boardex-runner/tests \
+                 boardex-app/tests
 
-      - name: Build all four packages
+      # boardex-app is built WITHOUT the local-siblings flag: the published
+      # artifacts must carry `==<version>` pins, never file:// paths
+      # (docs/decisions.md, 2026-07-30 publishable-metadata).
+      - name: Build all five packages
         run: |
           pip install build
           for pkg in boardex-core boardex-target boardex-logic boardex-runner; do
             python -m build --outdir dist "servers/$pkg"
           done
+          BOARDEX_SKIP_UI_BUILD=1 python -m build --outdir dist boardex-app
           ls -l dist/
 
       - uses: actions/upload-artifact@v4
@@ -90,6 +114,21 @@ jobs:
           python servers/scripts/release_smoke.py --base http://127.0.0.1:4390
           kill "$RUNNER_PID"
 
+      # The complete-product path: `boardex up` from the wheel must serve the
+      # embedded UI and the API from one origin, with no checkout to lean on.
+      - name: Smoke `boardex up` from the wheel (embedded UI, fake bench)
+        run: |
+          /tmp/release-venv/bin/boardex up --bench fake --no-open --port 4391 &
+          BOARDEX_PID=$!
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:4391/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4391/health | grep -q '"ok": true'
+          curl -fsS http://127.0.0.1:4391/ | grep -qi '<!doctype html'
+          kill "$BOARDEX_PID"
+          wait "$BOARDEX_PID" || true
+
   publish:
     name: publish GitHub Release
     needs: install-smoke
@@ -107,6 +146,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "Boardex servers $GITHUB_REF_NAME" \
+            --title "Boardex $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "Python wheels + sdists for boardex-core, boardex-target, boardex-logic, boardex-runner. Install: download all four wheels, then \`pip install boardex_*.whl\`. See docs/RELEASING.md."
+            --notes "The complete Boardex release: the \`boardex\` launcher (embedded UI — \`boardex up\`, \`boardex up --demo\`) plus the four server packages (boardex-core, boardex-target, boardex-logic, boardex-runner), as wheels + sdists. Install: download all five wheels, then \`pip install boardex*.whl\`. See docs/RELEASING.md."

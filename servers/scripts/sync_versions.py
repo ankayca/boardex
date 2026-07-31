@@ -21,9 +21,17 @@ import sys
 from pathlib import Path
 
 SERVERS_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = SERVERS_DIR.parent
 PACKAGES = ("boardex-core", "boardex-target", "boardex-logic", "boardex-runner")
 _VERSION_LINE = re.compile(r'^version = "(?P<version>[^"]+)"$', re.MULTILINE)
 TAG_PREFIX = "servers-v"
+
+# The `boardex` launcher (boardex-app/) releases in lockstep with the four
+# server packages: its own version, plus the SERVERS_VERSION constant its
+# metadata hook uses to pin the four siblings in published artifacts.
+APP_PYPROJECT = REPO_ROOT / "boardex-app" / "pyproject.toml"
+APP_HATCH_BUILD = REPO_ROOT / "boardex-app" / "hatch_build.py"
+_PIN_LINE = re.compile(r'^SERVERS_VERSION = "(?P<version>[^"]+)"$', re.MULTILINE)
 
 
 def read_version() -> str:
@@ -31,13 +39,6 @@ def read_version() -> str:
     if not re.fullmatch(r"\d+\.\d+\.\d+([a-z0-9.+-]*)?", version):
         raise SystemExit(f"servers/VERSION holds a malformed version: {version!r}")
     return version
-
-
-def package_version(pyproject: Path) -> str:
-    match = _VERSION_LINE.search(pyproject.read_text(encoding="utf-8"))
-    if match is None:
-        raise SystemExit(f"{pyproject}: no static `version = \"...\"` line found")
-    return match["version"]
 
 
 def main() -> int:
@@ -57,25 +58,33 @@ def main() -> int:
             f"({TAG_PREFIX}{version} expected)"
         )
 
-    for name in PACKAGES:
-        pyproject = SERVERS_DIR / name / "pyproject.toml"
-        current = package_version(pyproject)
+    targets: list[tuple[str, Path, re.Pattern[str], str]] = [
+        (name, SERVERS_DIR / name / "pyproject.toml", _VERSION_LINE, f'version = "{version}"')
+        for name in PACKAGES
+    ]
+    targets.append(("boardex (app)", APP_PYPROJECT, _VERSION_LINE, f'version = "{version}"'))
+    targets.append(
+        ("boardex (sibling pins)", APP_HATCH_BUILD, _PIN_LINE, f'SERVERS_VERSION = "{version}"')
+    )
+
+    for name, path, pattern, replacement in targets:
+        match = pattern.search(path.read_text(encoding="utf-8"))
+        if match is None:
+            raise SystemExit(f"{path}: no version line matching {pattern.pattern!r} found")
+        current = match["version"]
         if current == version:
             continue
         if args.check:
             drift.append(f"{name}: {current} != {version}")
         else:
-            text = pyproject.read_text(encoding="utf-8")
-            pyproject.write_text(
-                _VERSION_LINE.sub(f'version = "{version}"', text, count=1),
-                encoding="utf-8",
-            )
+            text = path.read_text(encoding="utf-8")
+            path.write_text(pattern.sub(replacement, text, count=1), encoding="utf-8")
             print(f"{name}: {current} -> {version}")
 
     if drift:
         print("version drift:\n  " + "\n  ".join(drift), file=sys.stderr)
         return 1
-    print(f"all server packages at {version}")
+    print(f"all server packages (and the boardex launcher) at {version}")
     return 0
 
 
