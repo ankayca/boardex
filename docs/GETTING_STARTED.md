@@ -133,8 +133,8 @@ for the session, write-only — no route serves a key back, nothing is written t
 nothing is stored in the browser. Stop `boardex up` and it is gone.
 
 You need an account with a model provider first. OpenRouter is the default (the key looks
-like `sk-or-v1-…`); Anthropic, OpenAI, Gemini and Azure keys work too, and the dashboard
-shows a row for whichever provider this runner is configured to call.
+like `sk-or-v1-…`); other providers work when the runner is configured for them, and the
+dashboard shows a row per configured provider.
 
 If you would rather boot pre-configured, exporting the provider's standard variable before
 launch still works:

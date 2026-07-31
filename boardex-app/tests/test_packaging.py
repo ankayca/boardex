@@ -173,7 +173,7 @@ def make_distributable_project(tmp_path: Path) -> Path:
     (bundle / "ui" / "index.html").write_text("<html></html>", encoding="utf-8")
     (bundle / "contract-schema").mkdir(parents=True)
     (bundle / "contract-schema" / "events.schema.json").write_text("{}", encoding="utf-8")
-    for shipped in ("pyproject.toml", "hatch_build.py", "README-quickstart.md"):
+    for shipped in ("pyproject.toml", "hatch_build.py", "README.md"):
         shutil.copy2(REPO_ROOT / "boardex-app" / shipped, project / shipped)
     return project
 

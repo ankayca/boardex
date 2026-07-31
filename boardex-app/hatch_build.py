@@ -18,8 +18,8 @@ requirement baked into an sdist's PKG-INFO reappears in every wheel built from
 that sdist — hatchling reads the sdist's static metadata rather than re-running
 this hook — so `python -m build` produced two artifacts that only installed on
 the machine that built them, and nothing about either announced it. Pinning by
-default means the accident is now the opt-in. See README-quickstart.md
-§ "Where the dependencies come from".
+default means the accident is now the opt-in. See the 2026-07-30 publishable-
+metadata entry in docs/decisions.md.
 
 **BuildHook — what makes the wheel self-contained.**
 It builds the UI (`npm ci` at the repo root first when the clone has no
@@ -98,7 +98,7 @@ def sibling_dependencies(repo_root: Path, *, local: bool = False) -> list[str]:
 
 # What to tell someone whose machine cannot build from source. The wheel is
 # built elsewhere and carries the UI already compiled, so it needs no Node at
-# all — see README-quickstart.md § "Install".
+# all — see docs/GETTING_STARTED.md § "Install".
 WHEEL_INSTALL_HINT = "pipx install ./boardex-*-py3-none-any.whl"
 NO_NPM_MESSAGE = (
     "npm is not on PATH: building from source requires Node 20+ — or install "

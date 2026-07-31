@@ -9,7 +9,8 @@ reconcile, no CORS.
 
 ``boardex up --demo`` is the same launch pointed at ``/demo``, the UI's
 client-side replay of a recorded agent run: no hardware, no API key, no runner
-interaction at all (see README-quickstart.md for why that path was chosen). Its
+interaction at all (see docs/decisions.md, 2026-07-29 (e), for why that path
+was chosen). Its
 runner runs the fake bench, so stepping out of the demo into the live app lands
 somewhere that works rather than on an agent bench with no key.
 
