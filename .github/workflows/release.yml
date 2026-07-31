@@ -1,14 +1,16 @@
 # Boardex server release — tag-driven (servers-vX.Y.Z).
 #
 # Publishes the four Python server packages PLUS the `boardex` launcher
-# (boardex-app/, UI bundle embedded) as wheels + sdists on a GitHub Release —
-# the complete product: `pip install boardex_*.whl boardex-*.whl` then
-# `boardex up`. Installers / signed desktop packaging stay deferred
-# (BIBLE §2.3 #7).
+# (boardex-app/, UI bundle embedded) as wheels + sdists — to a GitHub Release
+# and to PyPI (trusted publishing), which is what makes the complete product a
+# one-liner: `pipx install boardex` then `boardex up`. Installers / signed
+# desktop packaging stay deferred (BIBLE §2.3 #7).
 #
 # Gate order: version-lockstep check -> full pytest (servers + boardex-app) ->
-# build (UI bundle first, then all five packages) -> install the built wheels
-# into a clean venv, smoke the runner AND `boardex up` from them -> publish.
+# build (UI bundle first, then all five packages) -> the built `boardex`
+# metadata is the publishable form (==pins, no file:// paths) -> install the
+# built wheels into a clean venv, smoke the runner AND `boardex up` from them
+# -> publish the GitHub Release, then PyPI (last: an upload is irreversible).
 
 name: Release (servers)
 
@@ -84,6 +86,46 @@ jobs:
           BOARDEX_SKIP_UI_BUILD=1 python -m build --outdir dist boardex-app
           ls -l dist/
 
+      # The pipeline twin of boardex-app/tests/test_packaging.py, read off the
+      # bytes that actually get published rather than off metadata rendered
+      # in-process. Naming the artifacts by servers/VERSION makes a drifted
+      # `boardex` version fail here; a `file://` requirement means
+      # BOARDEX_LOCAL_SIBLINGS reached this build, and the pair would install
+      # only on the runner that made them, announcing nothing
+      # (docs/decisions.md, 2026-07-30 publishable-metadata).
+      - name: The `boardex` artifacts are lockstep-versioned and publishable
+        run: |
+          version="$(cat servers/VERSION)"
+          sdist="dist/boardex-$version.tar.gz"
+          wheel="dist/boardex-$version-py3-none-any.whl"
+          for artifact in "$sdist" "$wheel"; do
+            if [ ! -f "$artifact" ]; then
+              echo "::error::missing $artifact — the boardex version drifted from servers/VERSION ($version)"
+              ls -1 dist/
+              exit 1
+            fi
+          done
+          # Requirements live in the RFC 822 headers. Past the first blank line
+          # is the long description — README-quickstart, prose about packaging
+          # that writes file:// legitimately — so only the headers are read.
+          tar -xzOf "$sdist" "boardex-$version/PKG-INFO" | sed -n '1,/^$/p' > "$RUNNER_TEMP/PKG-INFO"
+          unzip -p "$wheel" "boardex-$version.dist-info/METADATA" | sed -n '1,/^$/p' > "$RUNNER_TEMP/METADATA"
+          for doc in "$RUNNER_TEMP/PKG-INFO" "$RUNNER_TEMP/METADATA"; do
+            if grep -n 'file://' "$doc"; then
+              echo "::error::$(basename "$doc") carries a file:// requirement — the release build must not set BOARDEX_LOCAL_SIBLINGS"
+              exit 1
+            fi
+            for pin in "boardex-core==$version" "boardex-logic==$version" \
+                       "boardex-target==$version" "boardex-runner[agent]==$version"; do
+              if ! grep -qxF "Requires-Dist: $pin" "$doc"; then
+                echo "::error::$(basename "$doc") does not pin $pin"
+                grep '^Requires-Dist:' "$doc"
+                exit 1
+              fi
+            done
+          done
+          echo "boardex $version: sdist + wheel pin the four siblings, no file:// requirement"
+
       - uses: actions/upload-artifact@v4
         with:
           name: server-dist
@@ -156,4 +198,32 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Boardex $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "The complete Boardex release: the \`boardex\` launcher (embedded UI — \`boardex up\`, \`boardex up --demo\`) plus the four server packages (boardex-core, boardex-target, boardex-logic, boardex-runner), as wheels + sdists. Install: download all five wheels, then \`pip install boardex*.whl\`. See docs/RELEASING.md."
+            --notes "The complete Boardex release: the \`boardex\` launcher (embedded UI — \`boardex up\`, \`boardex up --demo\`) plus the four server packages (boardex-core, boardex-target, boardex-logic, boardex-runner), as wheels + sdists. Install from PyPI with \`pipx install boardex\`, or download all five wheels and \`pip install boardex*.whl\`. See docs/RELEASING.md."
+
+  # PyPI — what makes `pipx install boardex` work for someone who has never
+  # seen this repo: the launcher's four `==<VERSION>` pins resolve from the
+  # index instead of from a checkout, so all five go up or none do.
+  #
+  # REQUIRES a trusted publisher registered on PyPI for EACH of the five
+  # projects (boardex, boardex-core, boardex-target, boardex-logic,
+  # boardex-runner): owner ankayca, repository boardex, workflow release.yml.
+  # No API token lives in this repo — the OIDC exchange below mints a
+  # short-lived token scoped to the projects that trust this workflow. If a
+  # publisher was registered WITH a GitHub environment name, add the matching
+  # `environment:` here or the claim will not match.
+  #
+  # Runs last on purpose: a PyPI version can never be re-uploaded, so the
+  # reversible gate (the GitHub Release) clears first.
+  publish-pypi:
+    name: publish to PyPI (all five)
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # trusted publishing; this job needs nothing else
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
