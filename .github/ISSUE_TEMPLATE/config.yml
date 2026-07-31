@@ -1,0 +1,7 @@
+# A blank issue is always allowed: the forms are there to make the common reports
+# complete, not to stop anyone from saying something that does not fit them.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ankayca/boardex/security/policy
+    about: Please do not file security issues publicly — report them privately instead.
