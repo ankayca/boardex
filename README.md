@@ -146,4 +146,4 @@ backend" section of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## License
 
-TBD
+Apache License 2.0 — see [`LICENSE`](LICENSE).

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Boardex in one command: `boardex up` launches the runner with the UI embedded."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "TBD" }
+license = "Apache-2.0"
 authors = [{ name = "Boardex contributors" }]
 classifiers = [
     "Development Status :: 3 - Alpha",

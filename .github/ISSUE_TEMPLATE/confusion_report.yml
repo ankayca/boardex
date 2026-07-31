@@ -1,0 +1,64 @@
+name: 'I got confused'
+description: Somewhere you stopped being sure what was happening. Tell us where.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a first-class report, not a lesser one. Boardex is early and has very few
+        users, and the most useful thing you can send is not "it broke" but *where you
+        stopped being sure what was happening* — a command that did not do what its name
+        suggested, a screen you could not tell was waiting for you, a message you had to
+        read three times.
+
+        Nothing has to be broken for this to be worth filing. "It worked and I still did
+        not understand why" is exactly the report we want.
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Where you lost the thread
+      description: >
+        The screen, the command, the message, or the moment. Roughly what you were
+        trying to do at the time helps.
+      placeholder: |
+        I approved the plan and then the right-hand side went blank for about a minute.
+        I could not tell whether it was working, waiting for me, or stuck.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you thought was going to happen
+      description: >
+        The mental model you had. If it turned out to be wrong, that gap is the bug —
+        Boardex should have set you straight before you got there.
+    validations:
+      required: false
+
+  - type: textarea
+    id: resolution
+    attributes:
+      label: How you got unstuck
+      description: >
+        Did you find the answer, guess, or give up? If you found it, where — the docs,
+        the source, a log, trial and error? The place you eventually found it is usually
+        where it should have been all along.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `boardex --version`, if you have it handy.
+      placeholder: '0.1.0'
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Screenshots welcome — drag them into any field above. If a run was involved and
+        you can share it, a recording (`RECORD=<dir> boardex up`) lets us replay exactly
+        what you were looking at.

@@ -1,0 +1,92 @@
+name: Bug report
+description: Boardex did something other than what it said it would do.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Two things make a bug report immediately actionable
+        here: your `boardex doctor` output, and — if a run was involved — the run's
+        recording. Both are asked for below.
+
+        **Please do not paste API keys.** If a key appears in something you are about to
+        attach, replace it before posting. For a suspected security issue, do not use
+        this form at all — see the
+        [security policy](https://github.com/ankayca/boardex/security/policy).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what Boardex did. Exact messages beat paraphrases.
+      placeholder: |
+        I ran `boardex up`, created a run against my Nucleo, approved the plan, and the
+        flash step failed with "..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >
+        Sometimes this is obvious and sometimes it is the whole bug — if Boardex did
+        exactly what it was told and the problem is that it should have told you
+        something else, say that here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: '`boardex doctor` output'
+      description: >
+        Paste the whole thing, including the OK lines. Doctor checks the host tools,
+        USB access and the install itself, and most environment-shaped bugs are visible
+        in it immediately. It never prints your API key — only whether one is set.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: recording
+    attributes:
+      label: Recording (if a run was involved)
+      description: >
+        Relaunch with `RECORD=<dir> boardex up` and Boardex tees the whole run to
+        `<dir>/recorded_run.jsonl` plus an `artifacts/` folder. Attach both (zip the
+        folder and drag it in) — that is the complete run, every event and every
+        capture, and it beats any description of what happened. Ctrl-C after the run
+        reaches a terminal state, so the recording flushes.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `boardex --version`.
+      placeholder: '0.1.0'
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: >
+        Including the flavour that matters — WSL, a container, an SSH session, a
+        headless box.
+      placeholder: 'Ubuntu 24.04 on WSL2 / macOS 15.1 (Apple silicon) / Windows 11'
+    validations:
+      required: true
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: >
+        The board, the probe, the analyzer, the firmware project — whatever you think
+        might matter.
+    validations:
+      required: false
