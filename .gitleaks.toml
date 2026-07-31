@@ -1,0 +1,82 @@
+# gitleaks configuration for Boardex.
+#
+# Every rule gitleaks ships with stays on. The only thing this file does is stop the
+# scanner from tripping over credentials the test suite fabricates on purpose.
+#
+# Boardex holds a model-provider API key in memory for the length of a session, and the
+# promise the whole feature rests on is that the key is unreachable from every other
+# surface: no route serves it back, and it must never appear in an event, an artifact, a
+# log line, an error body, or a recording. The tests that hold us to that promise set a
+# fabricated key and then grep the RAW WIRE BYTES of everything the runner serves for
+# that exact string — wire bytes rather than parsed views, because schema parsing strips
+# unknown fields and would launder a key that was still going out on the socket.
+#
+# So these strings have to sit in the test files in the clear: they are the needles.
+# They authenticate nothing, anywhere.
+#
+# Deliberately narrow. The allowlists hang off the rule that actually fires
+# (`generic-api-key`) rather than the global allowlist, because a global allowlist with
+# `paths` makes gitleaks skip those files whole — every rule, every line, forever. These
+# suppress a finding only when BOTH the file is one of the named test files AND the
+# matched value has a fabricated shape. Everything else in those same files is still
+# scanned: see the checks at the bottom of this file for the evidence.
+#
+# `condition = "AND"` needs gitleaks >= 8.21 (verified against 8.30.1).
+
+[extend]
+useDefault = true
+
+# Extends the built-in `generic-api-key` rule — the id is the whole point, the rule's
+# own pattern and entropy threshold come from the default config unchanged.
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = """
+  The leak canary. Both runner test suites — the Python one and the mock runner's —
+  set this exact key and then assert it appears nowhere in the run's events, artifacts,
+  or error bodies. Fabricated leak-test needle; the tests grep wire bytes for this
+  string.
+  """
+  condition = "AND"
+  paths = [
+    '''servers/boardex-runner/tests/test_credentials\.py$''',
+    '''tools/mock-runner/src/server\.test\.ts$''',
+  ]
+  regexes = [
+    '''^sk-or-v1-leak-canary-abcdef123456$''',
+  ]
+
+  [[rules.allowlists]]
+  description = """
+  The other fabricated provider keys in the credential tests: environment-versus-
+  dashboard precedence, whitespace trimming, write-only storage, the cross-origin
+  rejection case, the key the static-UI test plants before checking the served bundle,
+  and the fixed key the mock runner's credential round-trip uses. All invented for the
+  tests; none is a real OpenRouter or Anthropic key.
+
+  Length-bounded on purpose: a real OpenRouter key is `sk-or-v1-` plus 64 hex
+  characters and a real Anthropic key is longer still, so neither fits under this
+  ceiling. Paste a genuine key into one of these files and it is still a finding.
+  """
+  condition = "AND"
+  paths = [
+    '''servers/boardex-runner/tests/test_credentials\.py$''',
+    '''servers/boardex-runner/tests/test_static_ui\.py$''',
+    '''tools/mock-runner/src/server\.test\.ts$''',
+    '''tools/mock-runner/src/credentials\.test\.ts$''',
+  ]
+  regexes = [
+    '''^sk-or-v1-[A-Za-z0-9-]{1,32}$''',
+    '''^sk-ant-[A-Za-z0-9-]{1,32}$''',
+  ]
+
+# Checks this config was written against, on a clean tree (gitleaks 8.30.1):
+#
+#   1. Default rules alone report 6 findings, all of them fabricated test keys.
+#   2. With this config: no leaks found.
+#   3. A real-shaped key (`sk-or-v1-` + 64 hex) added to test_credentials.py: still
+#      reported. The allowlist does not blanket the file.
+#   4. A GitHub token added to server.test.ts: still reported, by a different rule.
+#   5. The canary string copied into a file outside the allowlisted paths: still
+#      reported.
