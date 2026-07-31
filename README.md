@@ -1,38 +1,66 @@
 # Boardex
 
-**An AI agent environment for hardware engineers.**
+Boardex is an AI agent that brings up firmware on real hardware — it plans the work,
+writes and builds the code, flashes the board, drives a logic analyzer, and reads the
+results back. It proves what it claims: every check links to a recorded artifact (logic
+captures and protocol decodes, register and memory readbacks, serial logs), and every
+action that touches the board waits behind an approval gate you control.
 
-Boardex is a Cursor-style workspace for embedded and electronics engineers. Instead of just generating code, Boardex agents close the entire hardware development loop: write firmware, flash it to a target board, drive real lab equipment to validate it, read back the results, and iterate — automatically.
+![The Boardex run workspace: streaming build logs on the left, a flash approval card waiting on the right](docs/images/run-workspace-approval.png)
 
-## Why
+## Install
 
-Hardware development is slow not because writing code is hard, but because every change has to survive contact with real silicon: flash, power up, probe, measure, compare against spec, debug, repeat. That loop is manual, repetitive, and eats most of an engineer's day.
+```bash
+pipx install boardex
+```
 
-Boardex automates the loop while keeping the engineer in control of the parts that actually require judgment — architecture decisions, tradeoffs, and final sign-off.
+*(Available after the first release. Until then, see
+[Getting Started](docs/GETTING_STARTED.md#install) for the install that works today.)*
 
-## What it does
+Then take the tour, or start a real run:
 
-- **Writes and edits firmware/embedded code** with full project context (datasheets, schematics, pinouts, register maps).
-- **Flashes target boards** over standard debug interfaces (JTAG/SWD via J-Link, ST-Link, OpenOCD, etc.).
-- **Drives lab equipment programmatically** using vendor Python/SCPI libraries — oscilloscopes, logic analyzers, power supplies, multimeters, function generators.
-- **Captures and interprets results** — pulls waveforms and protocol decodes, checks them against expected behavior or spec, and flags timing violations, signal integrity issues, or protocol errors.
-- **Iterates autonomously** — on failure, the agent proposes a fix, re-flashes, re-tests, and re-measures until the test passes or it needs human input.
+```bash
+boardex up --demo    # a recorded run replayed in your browser
+boardex up           # the real thing: runner + dashboard at http://127.0.0.1:4380
+```
 
-## Typical loop
+Both print the URL and stop on Ctrl-C.
 
-1. Engineer describes the goal or spec ("implement I2C driver for sensor X, verify timing against datasheet").
-2. Agent writes the code.
-3. Agent flashes the board.
-4. Agent runs the test using connected lab equipment.
-5. Agent reads the oscilloscope/logic analyzer output and checks against the spec.
-6. If it fails, the agent debugs and repeats from step 2.
-7. Engineer reviews and approves the final result.
+- **No hardware needed for the demo.** `boardex up --demo` replays a recorded bring-up
+  end to end — plan, approval gate, live logs, a failed measurement, the diagnosis, the
+  fix, the report. It touches no hardware, calls no model, and needs no API key.
+- **Keys go in the dashboard, never the terminal.** Paste your model-provider key into
+  Settings → Model provider in the page that opens. The runner holds it for the session,
+  write-only — nothing is written to disk and no route ever serves a key back.
+- **Everything is recorded and replayable.** A run is an append-only event stream plus
+  its artifacts. The validation report exports as Markdown you can attach to a PR, and
+  every check in it deep-links to the capture it came from.
+
+## Docs
+
+- **[Getting Started](docs/GETTING_STARTED.md)** — install, the demo, your first run,
+  adding hardware, troubleshooting.
+- **[OS support and bench setup](docs/SUPPORT_MATRIX.md)** — what runs where, and how
+  probe/analyzer access works per platform. For Kingst logic analyzers, the one-time
+  [bring-up](docs/kingst-la-bringup.md).
+- **[Contributing](#development)** — the design is in
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); adding an instrument is a one-file job.
+
+## Where this is today
+
+Early software. The loop has been run end to end on STM32 Nucleo-F303RE benches with
+BMP180/BME280-class I2C sensors, an ST-Link probe, and a Kingst logic analyzer. Linux and
+WSL are the primary platforms; macOS and Windows run the software fine, but hardware
+access there is less exercised. Expect rough edges, and please report them.
+
+---
+
+# Development
 
 ## How it's built
 
-Boardex is a **Cursor-style Electron app**. The agent reaches real hardware
-through **MCP (Model Context Protocol) servers — one per capability domain**, not
-one per device model:
+The agent reaches real hardware through **MCP (Model Context Protocol) servers — one per
+capability domain**, not one per device model:
 
 - **`boardex-target`** — flash & debug any MCU (ST-Link, J-Link, OpenOCD, ...).
 - **`boardex-logic`** — capture & decode with any logic analyzer (sigrok).
@@ -48,15 +76,19 @@ design in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ```
 boardex/
 ├── docs/ARCHITECTURE.md          # the design, in one page
+├── boardex-app/                  # the `boardex` CLI (up / doctor), bundles the built UI
 ├── servers/
 │   ├── boardex-core/             # shared interfaces, results, errors, registry
 │   ├── boardex-target/           # MCP server: flash/debug (pyOCD backend)
-│   └── boardex-logic/            # MCP server: capture/decode (sigrok backend)
-├── examples/
-│   └── firmware/                 # minimal reference firmware to validate the tooling
-│       ├── blinky-f303re/        #   bare-metal flash smoke test
-│       └── rtt-f303re/           #   RTT logging demo (read_firmware_log)
-└── app/                          # Electron app (planned)
+│   ├── boardex-logic/            # MCP server: capture/decode (sigrok backend)
+│   └── boardex-runner/           # orchestrator: agent loop + the event stream
+├── packages/contract/            # the wire contract (Zod schemas → TS types + JSON Schema)
+├── apps/ui/                      # the dashboard (React)
+├── tools/mock-runner/            # fixture replay for UI development
+└── examples/
+    └── firmware/                 # minimal reference firmware to validate the tooling
+        ├── blinky-f303re/        #   bare-metal flash smoke test
+        └── rtt-f303re/           #   RTT logging demo (read_firmware_log)
 ```
 
 > **This repo is the Boardex tooling, not a firmware archive.** Only tiny,
@@ -64,20 +96,6 @@ boardex/
 > servers work on real silicon. Your real per-board firmware belongs in its own
 > project and is handed to the agent by absolute path. A top-level `firmware/`
 > directory is git-ignored as a scratch area for local work.
-
-## Status
-
-Early stage. Working today:
-
-- `boardex-core` + `boardex-target` — a loop-complete flash/debug server for an
-  STM32 Nucleo (via its onboard ST-Link): build external firmware, flash it,
-  stream RTT logs, decode crashes from the Cortex-M fault registers, and recover
-  a wedged board with connect-under-reset + mass-erase.
-- `boardex-logic` — a logic-analyzer server over sigrok: discover analyzers,
-  report capabilities, capture channels as compact per-channel transition lists,
-  and decode buses (I2C/SPI/UART/...). Validated end-to-end against sigrok's
-  `demo` device; Kingst LA hardware needs a one-time [bring-up](docs/kingst-la-bringup.md)
-  (recent libsigrok + extracted firmware).
 
 ## Supported equipment
 
@@ -90,26 +108,35 @@ Early stage. Working today:
 | Logic analyzer | Kingst LA1010 | ⚠️ via `boardex-logic` — mainline sigrok lists it untested (streaming-only); [bring-up](docs/kingst-la-bringup.md) |
 | Oscilloscope | Rigol, Siglent | planned via SCPI/pyvisa |
 
-## Getting started
+## Working from a checkout
 
 ```bash
-# 1. install the shared core + a server (editable)
-pip install -e servers/boardex-core
-pip install -e servers/boardex-target   # flash/debug (pyOCD)
-pip install -e servers/boardex-logic    # logic analyzers (sigrok)
+# Python side — the four server packages, editable
+pip install -e "servers/boardex-core[dev]" -e "servers/boardex-logic[dev]" \
+            -e "servers/boardex-target[dev]" -e "servers/boardex-runner[dev,agent]"
 
-# 2. plug in your STM32 Nucleo and list it
-python -c "from boardex_target.server import registry; print(registry.scan())"
+# Node side — UI, contract, mock runner
+npm install
+npm run verify        # typecheck + lint + test across workspaces
 
-# 3. run an MCP server (stdio transport)
-boardex-target
-# ...or the logic-analyzer server (needs a system sigrok-cli on PATH)
-boardex-logic
+# the CLI itself, against the tree you just built
+npm run build -w apps/ui
+BOARDEX_SKIP_UI_BUILD=1 pip install -e "./boardex-app[dev]"
 ```
 
-See [`servers/boardex-target/README.md`](servers/boardex-target/README.md) for
-Nucleo specifics (target names, udev) and how to register the server with an MCP
-client.
+`npm run dev` runs the UI and the mock runner together — the fixture-replay setup the UI
+is developed against, no Python and no hardware required.
+
+Running an MCP server directly (stdio transport), e.g. to register it with another MCP
+client:
+
+```bash
+boardex-target        # flash/debug
+boardex-logic         # logic analyzers (needs a system sigrok-cli on PATH)
+```
+
+See [`servers/boardex-target/README.md`](servers/boardex-target/README.md) for Nucleo
+specifics (target names, udev) and how to register the server with an MCP client.
 
 ## Contributing
 
