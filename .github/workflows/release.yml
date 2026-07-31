@@ -61,8 +61,11 @@ jobs:
           pip install -e "servers/boardex-runner[dev,agent]"
           BOARDEX_LOCAL_SIBLINGS=1 BOARDEX_SKIP_UI_BUILD=1 pip install -e "boardex-app[dev]"
           pytest servers/boardex-core/tests servers/boardex-target/tests \
-                 servers/boardex-logic/tests servers/boardex-runner/tests \
-                 boardex-app/tests
+                 servers/boardex-logic/tests servers/boardex-runner/tests
+          # Separate invocation: boardex-app's test module basenames
+          # (test_doctor.py, conftest.py) collide with the server suites'
+          # under one rootdir.
+          pytest boardex-app/tests
 
       # boardex-app is built WITHOUT the local-siblings flag: the published
       # artifacts must carry `==<version>` pins, never file:// paths
