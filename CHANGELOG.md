@@ -9,8 +9,7 @@ kept stable; anything else may move between releases.
 
 ## [0.1.0] — unreleased
 
-The first release: the whole loop, end to end, on real hardware. Not yet published to
-PyPI — install from git until it is.
+The first release: the whole loop, end to end, on real hardware.
 
 ### Added
 
