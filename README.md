@@ -14,21 +14,25 @@ action that touches the board waits behind an approval gate you control.
 pipx install boardex
 ```
 
-*(Available after the first release. Until then, see
-[Getting Started](docs/GETTING_STARTED.md#install) for the install that works today.)*
-
-Then take the tour, or start a real run:
+Then start it — one command, and the dashboard opens with the tour on offer:
 
 ```bash
-boardex up --demo    # a recorded run replayed in your browser
-boardex up           # the real thing: runner + dashboard at http://127.0.0.1:4380
+boardex up           # runner + dashboard at http://127.0.0.1:4380
+```
+
+The first screen you land on offers **Watch a demo run** alongside starting a real one,
+so you can see the whole loop before plugging anything in. To jump straight there —
+handy for a shared link — skip the click:
+
+```bash
+boardex up --demo    # opens on the demo: a recorded run replayed in your browser
 ```
 
 Both print the URL and stop on Ctrl-C.
 
-- **No hardware needed for the demo.** `boardex up --demo` replays a recorded bring-up
-  end to end — plan, approval gate, live logs, a failed measurement, the diagnosis, the
-  fix, the report. It touches no hardware, calls no model, and needs no API key.
+- **No hardware needed for the demo.** The demo replays a recorded bring-up end to end —
+  plan, approval gate, live logs, a failed measurement, the diagnosis, the fix, the
+  report. It touches no hardware, calls no model, and needs no API key.
 - **Keys go in the dashboard, never the terminal.** Paste your model-provider key into
   Settings → Model provider in the page that opens. The runner holds it for the session,
   write-only — nothing is written to disk and no route ever serves a key back.

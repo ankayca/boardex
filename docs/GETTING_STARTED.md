@@ -39,10 +39,7 @@ pipx install boardex
 Nothing is compiled and no Node is needed: the published wheel carries the dashboard
 already built, and the runner serves it from the same origin it serves the API on.
 
-**This is not published yet.** Until `boardex` and its four `boardex-*` server packages
-are on PyPI, use the form below.
-
-### From git — works today, needs Node 20+
+### From git — a branch or an unreleased fix, needs Node 20+
 
 ```bash
 BOARDEX_LOCAL_SIBLINGS=1 pipx install \
@@ -55,8 +52,9 @@ Two things this form needs that the PyPI one does not:
   directory and builds the app there, and that build builds the dashboard too. Without
   Node the install stops and says so.
 - **`BOARDEX_LOCAL_SIBLINGS=1`**, which points the four server dependencies at the clone
-  pip already made rather than at an index that does not carry them yet. Leave it off and
-  the install stops with `No matching distribution found for boardex-core==0.1.0`.
+  pip already made rather than at their published releases — so what you install is the
+  tree you pointed it at, end to end, and not your branch sitting on top of released
+  servers.
 
 Check it landed:
 
@@ -72,13 +70,25 @@ instead. See **Working from a checkout** in the [README](../README.md#working-fr
 ## The 90-second demo
 
 ```bash
+boardex up
+```
+
+That is the whole command. The dashboard opens on a first-run screen that offers **Watch
+a demo run** beside starting a real one — click it, and Boardex replays a recorded
+bring-up run in your browser with a short guided tour over the top. It touches no
+hardware, calls no model, and needs no API key — the whole thing runs client-side, so it
+cannot half-fail on a machine that is missing something.
+
+There is also a shortcut that opens straight on the demo, skipping the click. This is the
+form to use in a link you are sending someone:
+
+```bash
 boardex up --demo
 ```
 
-This opens a recorded bring-up run and replays it in your browser, with a short guided
-tour over the top. It touches no hardware, calls no model, and needs no API key — the
-whole thing runs client-side, so it cannot half-fail on a machine that is missing
-something.
+It is the same launch pointed at the demo, with one difference behind it: it runs the
+fake bench, so leaving the demo drops you into the live dashboard with something working
+to click around in.
 
 What the replay walks you through:
 
@@ -92,9 +102,6 @@ What the replay walks you through:
   the logs, and the code diff behind it.
 - **The report.** A validation report with the outcome per requirement, exportable as
   Markdown.
-
-Leaving the demo drops you into the live dashboard, running a fake bench, so there is
-something working to click around in.
 
 Stop it with Ctrl-C.
 

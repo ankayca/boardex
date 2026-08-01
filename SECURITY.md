@@ -18,12 +18,10 @@ Use GitHub's private vulnerability reporting: the **Security** tab of this repos
 **Report a vulnerability**. It gets the report to the maintainers privately and gives us
 a place to work with you on a fix.
 
-If that is unavailable to you for any reason, email **security@example.com** instead
-_(placeholder — to be replaced with the project's real security address)_.
+If that is unavailable to you for any reason, email **kerem@humanxsystems.com** instead.
 
-<!-- TODO(maintainers): set the real security contact above before this repository goes
-     public. security@example.com is IANA-reserved and routes nowhere, deliberately:
-     a made-up domain here would send vulnerability reports to whoever registers it. -->
+That address is monitored by the maintainers, and reports sent to it get a best-effort
+response.
 
 Useful things to include, roughly in order of value:
 
