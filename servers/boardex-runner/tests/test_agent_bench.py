@@ -104,6 +104,18 @@ def test_system_prompt_pins_regex_argument_discipline() -> None:
     assert r'{"pattern": "PRESS=\\d+"}' not in SYSTEM_PROMPT
 
 
+def test_system_prompt_pins_batched_turn_shape() -> None:
+    # Run 3 spent ~75% of its wall time in model-turn gaps, ten of them one per
+    # scaffold file. The harness executes every tool call in a turn (pinned by
+    # test_batched_tool_calls_all_execute_in_order_and_gate_individually), so
+    # batching is free to ask for.
+    assert "## Turn shape — batch what is independent" in SYSTEM_PROMPT
+    assert "Independent tool calls belong in ONE turn as multiple tool calls" in SYSTEM_PROMPT
+    assert "executes every call in the turn, in order" in SYSTEM_PROMPT
+    assert "A turn per file wastes minutes and money" in SYSTEM_PROMPT
+    assert "Sequential turns are for steps whose next action depends on the previous" in SYSTEM_PROMPT
+
+
 def test_risk_gate_floor() -> None:
     # name-prefix floor
     assert is_risk_gated("flash_firmware", "")
@@ -282,6 +294,109 @@ def test_a_regex_tool_argument_reaches_the_tool_unchanged(task_repo: Path) -> No
     assert r"\\d" not in pattern
     assert re.search(pattern, "PRESS=91286") is not None  # the run-3 line it missed
     assert events[-1]["type"] == "run.completed"
+
+
+def test_batched_tool_calls_all_execute_in_order_and_gate_individually(
+    task_repo: Path,
+) -> None:
+    """QW3(a)/(c): multiple tool_use blocks in ONE assistant message all execute,
+    sequentially, and every result comes back in one user turn in call order —
+    the behavior the prompt's batching encoding relies on. A gated tool inside a
+    batch still parks its own approval before its own invocation."""
+    host = FakeToolHost(
+        {"build_firmware": BUILD_DESC, "flash_firmware": FLASH_DESC},
+        results={
+            "build_firmware": {
+                "verdict": "pass",
+                "data": {"stdout": "make: ok", "artifact_path": "/x.elf"},
+            }
+        },
+    )
+    scaffold = [
+        (
+            "write_file",
+            {"path": f"src/{name}", "content": f"/* {name} */\n", "reason": "scaffold", "_plan_index": 0},
+        )
+        for name in ("i2c.c", "i2c.h", "main.c")
+    ]
+    script = [
+        make_turn(calls=[("declare_plan", VALID_PLAN_ARGS)]),
+        make_turn(content="Scaffolding three files at once.", calls=scaffold),
+        make_turn(
+            content="Build, flash, then re-read the header.",
+            calls=[
+                ("build_firmware", {"project_dir": "/proj", "_plan_index": 1}),
+                ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+                ("read_file", {"path": "src/i2c.h"}),
+            ],
+        ),
+        make_turn(
+            calls=[
+                (
+                    "record_check",
+                    {
+                        "requirementId": "build_ok",
+                        "actual": {"value": "0"},
+                        "verdict": "pass",
+                        "artifactId": "art_agent1_004_build_log",
+                    },
+                )
+            ]
+        ),
+        make_turn(calls=[("write_report", {"markdown": "# Report\nBatched. Evidence: art_agent1_004_build_log."})]),
+    ]
+    provider = FakeProvider(script)
+    engine = make_agent_engine(task_repo, provider, host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+    assert events[-1]["type"] == "run.completed"
+
+    # Five turns for nine tool calls — the whole point of the encoding.
+    assert provider.calls == 5
+
+    # Every call ran, in the order the model emitted it, across tool families:
+    # three harness workspace writes, then MCP build/flash + a workspace read.
+    assert [e["payload"]["step"]["kind"] for e in events if e["type"] == "step.started"] == [
+        "edit_code", "edit_code", "edit_code",
+        "build", "flash", "understand_context",
+        "report",
+    ]
+    assert host.invocations == [
+        ("build_firmware", {"project_dir": "/proj"}),
+        ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+    ]
+    assert [
+        e["payload"]["artifact"]["kind"] for e in events if e["type"] == "artifact.created"
+    ] == ["code_diff", "code_diff", "code_diff", "build_log", "flash_log", "report_md"]
+
+    # One result per call, in call order, each keyed to its own tool_call_id —
+    # the model gets the whole batch answered in one user turn.
+    tool_messages = [m for m in engine._messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_messages] == [
+        "call_declare_plan_0",
+        "call_write_file_0", "call_write_file_1", "call_write_file_2",
+        "call_build_firmware_0", "call_flash_firmware_1", "call_read_file_2",
+        "call_record_check_0",
+        "call_write_report_0",
+    ]
+    # The batch's read_file answered with that file's content, not the build's.
+    assert "/* i2c.h */" in tool_messages[6]["content"]
+
+    # The gate is per-call inside the batch: flash_firmware parked (and resolved)
+    # after its batch-mate build had already run, and before flash itself started.
+    types_ = [e["type"] for e in events]
+    assert types_.count("approval.requested") == 1
+    i_build_done = next(
+        i for i, e in enumerate(events)
+        if e["type"] == "step.completed" and e["payload"]["summary"].startswith("build_firmware")
+    )
+    i_req = types_.index("approval.requested")
+    i_res = types_.index("approval.resolved")
+    i_flash = next(
+        i for i, e in enumerate(events)
+        if e["type"] == "step.started" and e["payload"]["step"]["kind"] == "flash"
+    )
+    assert i_build_done < i_req < i_res < i_flash
 
 
 def test_coordinated_i2c_capture_emits_decode_and_measured_timing_artifacts(

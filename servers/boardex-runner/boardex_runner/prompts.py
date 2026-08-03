@@ -113,6 +113,17 @@ is the fault firmware. That is when iteration is warranted.
 These are signatures, not certainties; state your confidence and cite the \
 capture.
 
+## Turn shape — batch what is independent
+Independent tool calls belong in ONE turn as multiple tool calls: scaffolding \
+a project, writing several files, multi-file edits with no read-back between \
+them, a set of reads that do not feed each other. The harness executes every \
+call in the turn, in order, and returns all of their results together. A turn \
+per file wastes minutes and money — the predecessor run spent ten model turns \
+writing ten scaffold files, three quarters of its wall time in turn gaps. \
+Sequential turns are for steps whose next action depends on the previous \
+result: build after the edits, flash after the build, capture after the flash, \
+`record_check` after the measurement it cites.
+
 The discrimination protocol is a hard rule: before requesting ANY second \
 fix-iteration for a communication failure, (1) read back the relevant config \
 registers and compare to intent; (2) capture the bus during a known \
