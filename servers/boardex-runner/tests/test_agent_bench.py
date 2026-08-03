@@ -94,10 +94,14 @@ def test_system_prompt_pins_regex_argument_discipline() -> None:
     assert r"write `\d`, `\s`, `\.` directly, never double-escaped" in SYSTEM_PROMPT
     assert r"`\\d` matches a literal backslash" in SYSTEM_PROMPT
     assert "`wait_for_rtt`'s `pattern` argument" in SYSTEM_PROMPT
-    assert r'wait_for_rtt(pattern="PRESS=\\d+")` times out' in SYSTEM_PROMPT
-    # wait_for_rtt matches literally unless regex=True: the escaping fix alone
-    # would still have timed out.
-    assert "matches `pattern` as LITERAL text unless you pass `regex=True`" in SYSTEM_PROMPT
+    # BOTH call forms carry regex=True, so the only variable between the failing
+    # and the working call is the escaping — and the working one actually works:
+    # wait_for_rtt matches literally against its regex=False default, so the
+    # escaping fix alone would still have timed out (review F1).
+    assert r'wait_for_rtt(pattern="PRESS=\\d+", regex=True)` times out' in SYSTEM_PROMPT
+    assert r'wait_for_rtt(pattern="PRESS=\d+", regex=True)` matches it' in SYSTEM_PROMPT
+    assert "matches `pattern` as LITERAL text" in SYSTEM_PROMPT
+    assert "can only time out, whatever its escaping" in SYSTEM_PROMPT
     # Regression pin on the source of the fumble: no example anywhere in the
     # prompt shows a regex with a doubled backslash as the value to pass.
     assert r"PRESS=\d+" in SYSTEM_PROMPT
@@ -115,6 +119,37 @@ def test_system_prompt_pins_measurement_matches_the_check() -> None:
     # The remedy is re-speccing at the plan gate, not a post-hoc citation.
     assert "re-spec the check to what the instrument CAN measure" in SYSTEM_PROMPT
     assert "before the plan gate, not after" in SYSTEM_PROMPT
+    # ...and the rule names where that leads on THIS bench, so it composes with
+    # the house-style bullet instead of contradicting it (review F3).
+    assert (
+        "the stretch-aware frequency check in the house style below, not a "
+        "pulse-width check nothing here can measure" in SYSTEM_PROMPT
+    )
+
+
+def test_system_prompt_pins_stretch_aware_timing_check() -> None:
+    # F3 owner ruling. Two bullets used to disagree: the house style told the
+    # agent to spec a pulse-width check on a stretching bus, while the evidence
+    # law requires an artifact that measures the named quantity — and the
+    # harness mints only scl_frequency_hz (agent_bench._artifacts_from_result).
+    # Following both produced run 3's unevidenceable pulse-width check.
+    assert "**Timing evidence, stretch-aware:**" in SYSTEM_PROMPT
+    # Preferred when measurable...
+    assert "where the analyzer measures pulse width, prefer a pulse-width check" in SYSTEM_PROMPT
+    assert "SCL HIGH width is immune to stretching" in SYSTEM_PROMPT
+    # ...stretch-aware frequency otherwise, never a tight nominal window.
+    assert "Where only frequency is measurable, spec a stretch-aware FREQUENCY" in SYSTEM_PROMPT
+    assert r'a floor bound (`{"min": 20000}`)' in SYSTEM_PROMPT
+    assert "never a tight nominal window" in SYSTEM_PROMPT
+    # run 1's window is the named anti-example, and the caveat rides in the
+    # check's description so the citation states what it proves.
+    assert "run 1's `{\"min\": 90000, \"max\": 110000}` failed a working bus" in SYSTEM_PROMPT
+    assert "state the caveat in the check's `description`" in SYSTEM_PROMPT
+    # Today's bench decides today's check; the preference flips when the
+    # backend can measure pulse width.
+    assert "this bench measures `scl_frequency_hz` and nothing else" in SYSTEM_PROMPT
+    assert "do NOT register a pulse-width check before the analyzer can measure one" in SYSTEM_PROMPT
+    assert "When pulse-width measurement lands, it becomes the preferred citation" in SYSTEM_PROMPT
 
 
 def test_system_prompt_pins_batched_turn_shape() -> None:
@@ -410,6 +445,59 @@ def test_batched_tool_calls_all_execute_in_order_and_gate_individually(
         if e["type"] == "step.started" and e["payload"]["step"]["kind"] == "flash"
     )
     assert i_build_done < i_req < i_res < i_flash
+
+
+def test_a_batch_whose_mid_call_ends_the_run_executes_nothing_after_it(
+    task_repo: Path,
+) -> None:
+    """QW3 companion (review F4): batching must not let a call run after the run
+    is over. write_report seals the log mid-batch; every trailing batch-mate is
+    answered with the sealed error and NONE of them reaches the tool host — the
+    gated flash included, so no approval can be requested for a finished run."""
+    host = FakeToolHost(
+        {"build_firmware": BUILD_DESC, "flash_firmware": FLASH_DESC},
+        results={
+            "build_firmware": {"verdict": "pass", "data": {"stdout": "make: ok"}}
+        },
+    )
+    script = [
+        make_turn(calls=[("declare_plan", {**VALID_PLAN_ARGS, "checks": []})]),
+        make_turn(
+            content="Reporting, then two more calls that must never run.",
+            calls=[
+                ("write_report", {"markdown": "# Report\nDone."}),
+                ("build_firmware", {"project_dir": "/proj"}),
+                ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+            ],
+        ),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+    assert events[-1]["type"] == "run.completed"
+
+    # The tool host was never called — not once, by either trailing batch-mate.
+    assert host.invocations == []
+    assert len(host.invocations) == 0
+    # ...and no step or approval was manufactured for them after the terminal.
+    assert [e["payload"]["step"]["kind"] for e in events if e["type"] == "step.started"] == [
+        "report"
+    ]
+    assert not any(e["type"] == "approval.requested" for e in events)
+
+    # Both trailing calls still got an answer, each keyed to its own id: the
+    # message list stays a well-formed tool-call/tool-result pairing.
+    tool_messages = [m for m in engine._messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_messages] == [
+        "call_declare_plan_0",
+        "call_write_report_0",
+        "call_build_firmware_1",
+        "call_flash_firmware_2",
+    ]
+    assert [json.loads(m["content"]) for m in tool_messages[2:]] == [
+        {"error": "run already ended"},
+        {"error": "run already ended"},
+    ]
 
 
 def test_coordinated_i2c_capture_emits_decode_and_measured_timing_artifacts(
