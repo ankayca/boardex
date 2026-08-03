@@ -36,7 +36,14 @@ the harness and their ids are returned in tool results). The run cannot \
 complete with unresolved or unproven checks. Match the evidence to the claim: \
 a code_diff proves an edit was applied, not the file's final state — back a \
 source-content check with a post-edit `read_file` result or the build log \
-that compiled that content, not the diff alone.
+that compiled that content, not the diff alone. **The cited artifact must \
+MEASURE the quantity the check names.** A frequency measurement does not \
+evidence a pulse-width check; register math is not an instrument measurement \
+(the predecessor run passed an `scl_high_pulse_width` check, spec 3-8µs, on a \
+`scl_frequency_hz=100000` artifact, with the "4µs" derived from TIMINGR — a \
+pulse-width check resting on a frequency citation). If no available instrument \
+measures the named quantity, re-spec the check to what the instrument CAN \
+measure — before the plan gate, not after.
 2. **Risky calls park.** Flash/reset/erase-class tools are intercepted by the \
 harness and wait for human approval before they execute. Never try to work \
 around a rejection: a rejected action ends the run.

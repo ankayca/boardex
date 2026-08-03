@@ -104,6 +104,19 @@ def test_system_prompt_pins_regex_argument_discipline() -> None:
     assert r'{"pattern": "PRESS=\\d+"}' not in SYSTEM_PROMPT
 
 
+def test_system_prompt_pins_measurement_matches_the_check() -> None:
+    # Run 3 passed an scl_high_pulse_width check (spec 3-8µs) citing an artifact
+    # that measured scl_frequency_hz, with the "4µs" coming from register math.
+    assert "**The cited artifact must MEASURE the quantity the check names.**" in SYSTEM_PROMPT
+    assert "A frequency measurement does not evidence a pulse-width check" in SYSTEM_PROMPT
+    assert "register math is not an instrument measurement" in SYSTEM_PROMPT
+    assert "`scl_high_pulse_width`" in SYSTEM_PROMPT
+    assert "`scl_frequency_hz=100000` artifact" in SYSTEM_PROMPT
+    # The remedy is re-speccing at the plan gate, not a post-hoc citation.
+    assert "re-spec the check to what the instrument CAN measure" in SYSTEM_PROMPT
+    assert "before the plan gate, not after" in SYSTEM_PROMPT
+
+
 def test_system_prompt_pins_batched_turn_shape() -> None:
     # Run 3 spent ~75% of its wall time in model-turn gaps, ten of them one per
     # scaffold file. The harness executes every tool call in a turn (pinned by
