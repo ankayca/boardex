@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -19,6 +21,7 @@ from boardex_runner.agent_bench import (
 )
 from boardex_runner.interception import is_risk_gated
 from boardex_runner.prompts import SYSTEM_PROMPT
+from boardex_runner.provider import _parse_turn
 
 from conftest import (
     BUILD_DESC,
@@ -79,6 +82,26 @@ def test_system_prompt_pins_fault_domain_discrimination() -> None:
         "what to check with a multimeter, not show them a fifth driver rewrite"
         in SYSTEM_PROMPT
     )
+
+
+def test_system_prompt_pins_regex_argument_discipline() -> None:
+    # Run 3 seq110: wait_for_rtt timed out 15s on pattern "PRESS=\\d+" — a
+    # double-escaped backslash matching a literal "\d" — while PRESS=91286 was
+    # streaming. The harness passes regex arguments through untouched (pinned by
+    # test_a_regex_tool_argument_reaches_the_tool_unchanged), so the escaping is
+    # the model's to get right, and the house-style example is what taught it.
+    assert "**Regex arguments are plain regex strings**" in SYSTEM_PROMPT
+    assert r"write `\d`, `\s`, `\.` directly, never double-escaped" in SYSTEM_PROMPT
+    assert r"`\\d` matches a literal backslash" in SYSTEM_PROMPT
+    assert "`wait_for_rtt`'s `pattern` argument" in SYSTEM_PROMPT
+    assert r'wait_for_rtt(pattern="PRESS=\\d+")` times out' in SYSTEM_PROMPT
+    # wait_for_rtt matches literally unless regex=True: the escaping fix alone
+    # would still have timed out.
+    assert "matches `pattern` as LITERAL text unless you pass `regex=True`" in SYSTEM_PROMPT
+    # Regression pin on the source of the fumble: no example anywhere in the
+    # prompt shows a regex with a doubled backslash as the value to pass.
+    assert r"PRESS=\d+" in SYSTEM_PROMPT
+    assert r'{"pattern": "PRESS=\\d+"}' not in SYSTEM_PROMPT
 
 
 def test_risk_gate_floor() -> None:
@@ -193,6 +216,72 @@ def test_deterministic_loop_completes_through_the_wire_layer(task_repo: Path) ->
     # The report artifact referenced by run.completed resolves.
     report_id = events[-1]["payload"]["reportArtifactId"]
     assert engine.artifacts.get(report_id) is not None
+
+
+def _raw_turn(calls: list[tuple[str, str]], content: str | None = None) -> Any:
+    """A ModelTurn parsed the way a live one is — from the provider's raw JSON
+    argument STRINGS — so a test can carry the exact bytes a tool_use block
+    would. ``make_turn`` skips that decode by handing the loop a dict."""
+    tool_calls = [
+        SimpleNamespace(
+            id=f"call_{name}_{i}",
+            function=SimpleNamespace(name=name, arguments=raw),
+        )
+        for i, (name, raw) in enumerate(calls)
+    ]
+    raw_message = {
+        "role": "assistant",
+        "content": content,
+        "tool_calls": [
+            {"id": tc.id, "type": "function",
+             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+            for tc in tool_calls
+        ],
+    }
+    message = SimpleNamespace(
+        content=content, tool_calls=tool_calls, model_dump=lambda: raw_message
+    )
+    return _parse_turn(message)
+
+
+def test_a_regex_tool_argument_reaches_the_tool_unchanged(task_repo: Path) -> None:
+    """QW2(a): the escaping investigation, pinned. A regex argument crosses
+    provider -> _dispatch -> tool host byte-for-byte; no layer re-encodes the
+    backslash. So run 3's literal-"\\d" pattern at seq110 was the model's
+    doubling to fix in the prompt, not a harness bug to fix in code."""
+    wait_desc = "Block until ``pattern`` appears in the RTT stream, or ``timeout_s`` passes."
+    assert not is_risk_gated("wait_for_rtt", wait_desc)  # ungated: it parks no approval
+    host = FakeToolHost(
+        {"wait_for_rtt": wait_desc},
+        results={
+            "wait_for_rtt": {
+                "verdict": "pass",
+                "data": {"matched": True, "text": "PRESS=91286 TEMP=23.1\n"},
+            }
+        },
+    )
+    # Exactly what a well-formed tool_use block carries: JSON source in which
+    # the two characters \d ride as the escape \\d.
+    raw_args = r'{"session_id": "s1", "pattern": "PRESS=\\d+", "regex": true, "_plan_index": 1}'
+    assert json.loads(raw_args)["pattern"] == r"PRESS=\d+"
+
+    script = [
+        make_turn(calls=[("declare_plan", {**VALID_PLAN_ARGS, "checks": []})]),
+        _raw_turn([("wait_for_rtt", raw_args)], content="Waiting for a pressure line."),
+        make_turn(calls=[("write_report", {"markdown": "# RTT matched"})]),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+
+    # The single decode happens in the provider; _plan_index is the only edit.
+    assert host.invocations == [
+        ("wait_for_rtt", {"session_id": "s1", "pattern": r"PRESS=\d+", "regex": True})
+    ]
+    pattern = host.invocations[0][1]["pattern"]
+    assert r"\\d" not in pattern
+    assert re.search(pattern, "PRESS=91286") is not None  # the run-3 line it missed
+    assert events[-1]["type"] == "run.completed"
 
 
 def test_coordinated_i2c_capture_emits_decode_and_measured_timing_artifacts(

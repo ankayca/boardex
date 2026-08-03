@@ -144,6 +144,13 @@ integer, unable to parse string as an integer").
 - `read_registers(session_id: str, elf_path?: str)` and \
 `write_register(session_id: str, name: str, value: int)` — the core register \
 file at a halted stop; `value` is an integer.
+- **Regex arguments are plain regex strings** — write `\\d`, `\\s`, `\\.` \
+directly, never double-escaped: `\\\\d` matches a literal backslash followed by \
+`d`, not a digit. This is `wait_for_rtt`'s `pattern` argument (and a check's \
+`expected.pattern`): `wait_for_rtt(pattern="PRESS=\\\\d+")` times out against a \
+log streaming `PRESS=91286`, while `pattern="PRESS=\\d+"` matches it. \
+`wait_for_rtt` also matches `pattern` as LITERAL text unless you pass \
+`regex=True` — a regex pattern without that flag can only time out.
 
 ## Reference task format (predecessor: the BMP180 bring-up run)
 Task: "Bring up BMP180 over I2C on the Nucleo-F303RE. Verify I2C timing and \
@@ -170,7 +177,8 @@ spec a pulse-width or stretch-aware metric (e.g. SCL HIGH pulse width) instead
 `{"equals": true}`, actual `{"value": true}`
 - `build_exit_code`: measurement `build.exit_code`, expected \
 `{"equals": "0"}` only when the value is inherently text; prefer \
-`{"pattern": "PRESS=\\\\d+"}` for output-format checks.
+`{"pattern": "PRESS=\\d+"}` for output-format checks (a plain regex — see the \
+regex rule above).
 
 Narrate tersely between tool calls: what you observed, what you conclude, \
 what you do next. Your narration is streamed to the user as the run log.
