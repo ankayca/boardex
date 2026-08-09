@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -19,6 +21,7 @@ from boardex_runner.agent_bench import (
 )
 from boardex_runner.interception import is_risk_gated
 from boardex_runner.prompts import SYSTEM_PROMPT
+from boardex_runner.provider import _parse_turn
 
 from conftest import (
     BUILD_DESC,
@@ -79,6 +82,86 @@ def test_system_prompt_pins_fault_domain_discrimination() -> None:
         "what to check with a multimeter, not show them a fifth driver rewrite"
         in SYSTEM_PROMPT
     )
+
+
+def test_system_prompt_pins_regex_argument_discipline() -> None:
+    # Run 3 seq110: wait_for_rtt timed out 15s on pattern "PRESS=\\d+" — a
+    # double-escaped backslash matching a literal "\d" — while PRESS=91286 was
+    # streaming. The harness passes regex arguments through untouched (pinned by
+    # test_a_regex_tool_argument_reaches_the_tool_unchanged), so the escaping is
+    # the model's to get right, and the house-style example is what taught it.
+    assert "**Regex arguments are plain regex strings**" in SYSTEM_PROMPT
+    assert r"write `\d`, `\s`, `\.` directly, never double-escaped" in SYSTEM_PROMPT
+    assert r"`\\d` matches a literal backslash" in SYSTEM_PROMPT
+    assert "`wait_for_rtt`'s `pattern` argument" in SYSTEM_PROMPT
+    # BOTH call forms carry regex=True, so the only variable between the failing
+    # and the working call is the escaping — and the working one actually works:
+    # wait_for_rtt matches literally against its regex=False default, so the
+    # escaping fix alone would still have timed out (review F1).
+    assert r'wait_for_rtt(pattern="PRESS=\\d+", regex=True)` times out' in SYSTEM_PROMPT
+    assert r'wait_for_rtt(pattern="PRESS=\d+", regex=True)` matches it' in SYSTEM_PROMPT
+    assert "matches `pattern` as LITERAL text" in SYSTEM_PROMPT
+    assert "can only time out, whatever its escaping" in SYSTEM_PROMPT
+    # Regression pin on the source of the fumble: no example anywhere in the
+    # prompt shows a regex with a doubled backslash as the value to pass.
+    assert r"PRESS=\d+" in SYSTEM_PROMPT
+    assert r'{"pattern": "PRESS=\\d+"}' not in SYSTEM_PROMPT
+
+
+def test_system_prompt_pins_measurement_matches_the_check() -> None:
+    # Run 3 passed an scl_high_pulse_width check (spec 3-8µs) citing an artifact
+    # that measured scl_frequency_hz, with the "4µs" coming from register math.
+    assert "**The cited artifact must MEASURE the quantity the check names.**" in SYSTEM_PROMPT
+    assert "A frequency measurement does not evidence a pulse-width check" in SYSTEM_PROMPT
+    assert "register math is not an instrument measurement" in SYSTEM_PROMPT
+    assert "`scl_high_pulse_width`" in SYSTEM_PROMPT
+    assert "`scl_frequency_hz=100000` artifact" in SYSTEM_PROMPT
+    # The remedy is re-speccing at the plan gate, not a post-hoc citation.
+    assert "re-spec the check to what the instrument CAN measure" in SYSTEM_PROMPT
+    assert "before the plan gate, not after" in SYSTEM_PROMPT
+    # ...and the rule names where that leads on THIS bench, so it composes with
+    # the house-style bullet instead of contradicting it (review F3).
+    assert (
+        "the stretch-aware frequency check in the house style below, not a "
+        "pulse-width check nothing here can measure" in SYSTEM_PROMPT
+    )
+
+
+def test_system_prompt_pins_stretch_aware_timing_check() -> None:
+    # F3 owner ruling. Two bullets used to disagree: the house style told the
+    # agent to spec a pulse-width check on a stretching bus, while the evidence
+    # law requires an artifact that measures the named quantity — and the
+    # harness mints only scl_frequency_hz (agent_bench._artifacts_from_result).
+    # Following both produced run 3's unevidenceable pulse-width check.
+    assert "**Timing evidence, stretch-aware:**" in SYSTEM_PROMPT
+    # Preferred when measurable...
+    assert "where the analyzer measures pulse width, prefer a pulse-width check" in SYSTEM_PROMPT
+    assert "SCL HIGH width is immune to stretching" in SYSTEM_PROMPT
+    # ...stretch-aware frequency otherwise, never a tight nominal window.
+    assert "Where only frequency is measurable, spec a stretch-aware FREQUENCY" in SYSTEM_PROMPT
+    assert r'a floor bound (`{"min": 20000}`)' in SYSTEM_PROMPT
+    assert "never a tight nominal window" in SYSTEM_PROMPT
+    # run 1's window is the named anti-example, and the caveat rides in the
+    # check's description so the citation states what it proves.
+    assert "run 1's `{\"min\": 90000, \"max\": 110000}` failed a working bus" in SYSTEM_PROMPT
+    assert "state the caveat in the check's `description`" in SYSTEM_PROMPT
+    # Today's bench decides today's check; the preference flips when the
+    # backend can measure pulse width.
+    assert "this bench measures `scl_frequency_hz` and nothing else" in SYSTEM_PROMPT
+    assert "do NOT register a pulse-width check before the analyzer can measure one" in SYSTEM_PROMPT
+    assert "When pulse-width measurement lands, it becomes the preferred citation" in SYSTEM_PROMPT
+
+
+def test_system_prompt_pins_batched_turn_shape() -> None:
+    # Run 3 spent ~75% of its wall time in model-turn gaps, ten of them one per
+    # scaffold file. The harness executes every tool call in a turn (pinned by
+    # test_batched_tool_calls_all_execute_in_order_and_gate_individually), so
+    # batching is free to ask for.
+    assert "## Turn shape — batch what is independent" in SYSTEM_PROMPT
+    assert "Independent tool calls belong in ONE turn as multiple tool calls" in SYSTEM_PROMPT
+    assert "executes every call in the turn, in order" in SYSTEM_PROMPT
+    assert "A turn per file wastes minutes and money" in SYSTEM_PROMPT
+    assert "Sequential turns are for steps whose next action depends on the previous" in SYSTEM_PROMPT
 
 
 def test_risk_gate_floor() -> None:
@@ -193,6 +276,228 @@ def test_deterministic_loop_completes_through_the_wire_layer(task_repo: Path) ->
     # The report artifact referenced by run.completed resolves.
     report_id = events[-1]["payload"]["reportArtifactId"]
     assert engine.artifacts.get(report_id) is not None
+
+
+def _raw_turn(calls: list[tuple[str, str]], content: str | None = None) -> Any:
+    """A ModelTurn parsed the way a live one is — from the provider's raw JSON
+    argument STRINGS — so a test can carry the exact bytes a tool_use block
+    would. ``make_turn`` skips that decode by handing the loop a dict."""
+    tool_calls = [
+        SimpleNamespace(
+            id=f"call_{name}_{i}",
+            function=SimpleNamespace(name=name, arguments=raw),
+        )
+        for i, (name, raw) in enumerate(calls)
+    ]
+    raw_message = {
+        "role": "assistant",
+        "content": content,
+        "tool_calls": [
+            {"id": tc.id, "type": "function",
+             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+            for tc in tool_calls
+        ],
+    }
+    message = SimpleNamespace(
+        content=content, tool_calls=tool_calls, model_dump=lambda: raw_message
+    )
+    return _parse_turn(message)
+
+
+def test_a_regex_tool_argument_reaches_the_tool_unchanged(task_repo: Path) -> None:
+    """QW2(a): the escaping investigation, pinned. A regex argument crosses
+    provider -> _dispatch -> tool host byte-for-byte; no layer re-encodes the
+    backslash. So run 3's literal-"\\d" pattern at seq110 was the model's
+    doubling to fix in the prompt, not a harness bug to fix in code."""
+    wait_desc = "Block until ``pattern`` appears in the RTT stream, or ``timeout_s`` passes."
+    assert not is_risk_gated("wait_for_rtt", wait_desc)  # ungated: it parks no approval
+    host = FakeToolHost(
+        {"wait_for_rtt": wait_desc},
+        results={
+            "wait_for_rtt": {
+                "verdict": "pass",
+                "data": {"matched": True, "text": "PRESS=91286 TEMP=23.1\n"},
+            }
+        },
+    )
+    # Exactly what a well-formed tool_use block carries: JSON source in which
+    # the two characters \d ride as the escape \\d.
+    raw_args = r'{"session_id": "s1", "pattern": "PRESS=\\d+", "regex": true, "_plan_index": 1}'
+    assert json.loads(raw_args)["pattern"] == r"PRESS=\d+"
+
+    script = [
+        make_turn(calls=[("declare_plan", {**VALID_PLAN_ARGS, "checks": []})]),
+        _raw_turn([("wait_for_rtt", raw_args)], content="Waiting for a pressure line."),
+        make_turn(calls=[("write_report", {"markdown": "# RTT matched"})]),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+
+    # The single decode happens in the provider; _plan_index is the only edit.
+    assert host.invocations == [
+        ("wait_for_rtt", {"session_id": "s1", "pattern": r"PRESS=\d+", "regex": True})
+    ]
+    pattern = host.invocations[0][1]["pattern"]
+    assert r"\\d" not in pattern
+    assert re.search(pattern, "PRESS=91286") is not None  # the run-3 line it missed
+    assert events[-1]["type"] == "run.completed"
+
+
+def test_batched_tool_calls_all_execute_in_order_and_gate_individually(
+    task_repo: Path,
+) -> None:
+    """QW3(a)/(c): multiple tool_use blocks in ONE assistant message all execute,
+    sequentially, and every result comes back in one user turn in call order —
+    the behavior the prompt's batching encoding relies on. A gated tool inside a
+    batch still parks its own approval before its own invocation."""
+    host = FakeToolHost(
+        {"build_firmware": BUILD_DESC, "flash_firmware": FLASH_DESC},
+        results={
+            "build_firmware": {
+                "verdict": "pass",
+                "data": {"stdout": "make: ok", "artifact_path": "/x.elf"},
+            }
+        },
+    )
+    scaffold = [
+        (
+            "write_file",
+            {"path": f"src/{name}", "content": f"/* {name} */\n", "reason": "scaffold", "_plan_index": 0},
+        )
+        for name in ("i2c.c", "i2c.h", "main.c")
+    ]
+    script = [
+        make_turn(calls=[("declare_plan", VALID_PLAN_ARGS)]),
+        make_turn(content="Scaffolding three files at once.", calls=scaffold),
+        make_turn(
+            content="Build, flash, then re-read the header.",
+            calls=[
+                ("build_firmware", {"project_dir": "/proj", "_plan_index": 1}),
+                ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+                ("read_file", {"path": "src/i2c.h"}),
+            ],
+        ),
+        make_turn(
+            calls=[
+                (
+                    "record_check",
+                    {
+                        "requirementId": "build_ok",
+                        "actual": {"value": "0"},
+                        "verdict": "pass",
+                        "artifactId": "art_agent1_004_build_log",
+                    },
+                )
+            ]
+        ),
+        make_turn(calls=[("write_report", {"markdown": "# Report\nBatched. Evidence: art_agent1_004_build_log."})]),
+    ]
+    provider = FakeProvider(script)
+    engine = make_agent_engine(task_repo, provider, host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+    assert events[-1]["type"] == "run.completed"
+
+    # Five turns for nine tool calls — the whole point of the encoding.
+    assert provider.calls == 5
+
+    # Every call ran, in the order the model emitted it, across tool families:
+    # three harness workspace writes, then MCP build/flash + a workspace read.
+    assert [e["payload"]["step"]["kind"] for e in events if e["type"] == "step.started"] == [
+        "edit_code", "edit_code", "edit_code",
+        "build", "flash", "understand_context",
+        "report",
+    ]
+    assert host.invocations == [
+        ("build_firmware", {"project_dir": "/proj"}),
+        ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+    ]
+    assert [
+        e["payload"]["artifact"]["kind"] for e in events if e["type"] == "artifact.created"
+    ] == ["code_diff", "code_diff", "code_diff", "build_log", "flash_log", "report_md"]
+
+    # One result per call, in call order, each keyed to its own tool_call_id —
+    # the model gets the whole batch answered in one user turn.
+    tool_messages = [m for m in engine._messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_messages] == [
+        "call_declare_plan_0",
+        "call_write_file_0", "call_write_file_1", "call_write_file_2",
+        "call_build_firmware_0", "call_flash_firmware_1", "call_read_file_2",
+        "call_record_check_0",
+        "call_write_report_0",
+    ]
+    # The batch's read_file answered with that file's content, not the build's.
+    assert "/* i2c.h */" in tool_messages[6]["content"]
+
+    # The gate is per-call inside the batch: flash_firmware parked (and resolved)
+    # after its batch-mate build had already run, and before flash itself started.
+    types_ = [e["type"] for e in events]
+    assert types_.count("approval.requested") == 1
+    i_build_done = next(
+        i for i, e in enumerate(events)
+        if e["type"] == "step.completed" and e["payload"]["summary"].startswith("build_firmware")
+    )
+    i_req = types_.index("approval.requested")
+    i_res = types_.index("approval.resolved")
+    i_flash = next(
+        i for i, e in enumerate(events)
+        if e["type"] == "step.started" and e["payload"]["step"]["kind"] == "flash"
+    )
+    assert i_build_done < i_req < i_res < i_flash
+
+
+def test_a_batch_whose_mid_call_ends_the_run_executes_nothing_after_it(
+    task_repo: Path,
+) -> None:
+    """QW3 companion (review F4): batching must not let a call run after the run
+    is over. write_report seals the log mid-batch; every trailing batch-mate is
+    answered with the sealed error and NONE of them reaches the tool host — the
+    gated flash included, so no approval can be requested for a finished run."""
+    host = FakeToolHost(
+        {"build_firmware": BUILD_DESC, "flash_firmware": FLASH_DESC},
+        results={
+            "build_firmware": {"verdict": "pass", "data": {"stdout": "make: ok"}}
+        },
+    )
+    script = [
+        make_turn(calls=[("declare_plan", {**VALID_PLAN_ARGS, "checks": []})]),
+        make_turn(
+            content="Reporting, then two more calls that must never run.",
+            calls=[
+                ("write_report", {"markdown": "# Report\nDone."}),
+                ("build_firmware", {"project_dir": "/proj"}),
+                ("flash_firmware", {"device_id": "pyocd:0", "firmware_path": "/x.elf"}),
+            ],
+        ),
+    ]
+    engine = make_agent_engine(task_repo, FakeProvider(script), host)
+    events = run(drive_to_terminal(engine))
+    assert_wire_conformant(events)
+    assert events[-1]["type"] == "run.completed"
+
+    # The tool host was never called — not once, by either trailing batch-mate.
+    assert host.invocations == []
+    assert len(host.invocations) == 0
+    # ...and no step or approval was manufactured for them after the terminal.
+    assert [e["payload"]["step"]["kind"] for e in events if e["type"] == "step.started"] == [
+        "report"
+    ]
+    assert not any(e["type"] == "approval.requested" for e in events)
+
+    # Both trailing calls still got an answer, each keyed to its own id: the
+    # message list stays a well-formed tool-call/tool-result pairing.
+    tool_messages = [m for m in engine._messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_messages] == [
+        "call_declare_plan_0",
+        "call_write_report_0",
+        "call_build_firmware_1",
+        "call_flash_firmware_2",
+    ]
+    assert [json.loads(m["content"]) for m in tool_messages[2:]] == [
+        {"error": "run already ended"},
+        {"error": "run already ended"},
+    ]
 
 
 def test_coordinated_i2c_capture_emits_decode_and_measured_timing_artifacts(
