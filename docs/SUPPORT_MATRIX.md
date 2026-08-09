@@ -60,7 +60,8 @@ deferred, BIBLE §2.3 #9) and currently happens on a Linux bench.
 - Probes enumerate once a WinUSB-compatible driver is bound to the interface:
   ST-Link via ST's driver package, generic CMSIS-DAP via Zadig/WinUSB if the
   default HID path fails.
-- sigrok devices likewise need Zadig/WinUSB binding.
+- Logic analyzers: install `sigrok-cli`, add it to `PATH`, bind WinUSB via
+  Zadig — `docs/windows-sigrok-bringup.md`.
 - Firmware builds: the example Makefiles use POSIX recipes; use WSL, Git
   Bash's make, or drive the compiler directly.
 

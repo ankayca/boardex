@@ -82,6 +82,10 @@ Python dependency). `list_analyzers().data.backends` is empty until sigrok is on
 > `sigrok-fwextract-kingst-la2016` (from `sigrok-util`) and drop them in
 > `~/.local/share/sigrok-firmware/`. Without the blobs `--scan` shows the device
 > but capture fails. See [`docs/kingst-la-bringup.md`](../../docs/kingst-la-bringup.md).
+>
+> On **Windows**, install `sigrok-cli`, put it on `PATH`, and bind WinUSB with
+> Zadig (Saleae clones use `fx2lafw`). See
+> [`docs/windows-sigrok-bringup.md`](../../docs/windows-sigrok-bringup.md).
 
 ## Run
 
