@@ -19,11 +19,17 @@ run needs only a compiler.
   brew install pipx && pipx ensurepath          # macOS
   ```
 
+  ```powershell
+  py -m pip install --user pipx                 # Windows — Python 3.10+ from python.org
+  py -m pipx ensurepath                         # then open a new terminal
+  ```
+
   Use your package manager's pipx, not pip's. On Ubuntu 23.04+ and Debian 12+,
   `pip install --user pipx` stops with `error: externally-managed-environment` — the
   system Python refuses installs outside a virtualenv, and that refusal is the first
-  thing a new machine hits. `pipx ensurepath` puts `~/.local/bin` on your `PATH`; open a
-  new shell afterwards.
+  thing a new machine hits. Windows is the exception: python.org's Python has no such
+  refusal, so pip's pipx is the right form there. `pipx ensurepath` puts `~/.local/bin`
+  on your `PATH`; open a new shell afterwards.
 
 Nothing else is required to install Boardex or to run the demo. The tools for talking to
 real hardware — an Arm compiler, `sigrok-cli`, USB permissions — come later, in
@@ -295,6 +301,16 @@ On macOS nothing is needed — pyOCD and libsigrok talk to libusb directly (`bre
 libusb` if enumeration fails). On Windows the probe needs a WinUSB-compatible driver bound
 to its interface: the ST driver package for ST-Link, Zadig for CMSIS-DAP and sigrok
 devices.
+
+**Running Boardex inside WSL2** — the recommended way on Windows — adds one step before
+any of this: WSL2 does not see Windows USB devices at all, so the probe or analyzer you
+just plugged in simply does not exist on the Linux side. Attach it through
+[usbipd-win](https://learn.microsoft.com/en-us/windows/wsl/connect-usb) — `usbipd list`
+to find the device, `usbipd attach` to hand it to WSL; the procedure is in Microsoft's
+docs. Once attached it enumerates as an ordinary Linux USB device, and the udev rules
+above apply exactly as on a Linux box. For native-Windows driver binding, see the per-OS
+notes in [`SUPPORT_MATRIX.md`](SUPPORT_MATRIX.md) and, for logic analyzers,
+[`windows-sigrok-bringup.md`](windows-sigrok-bringup.md).
 
 ### 3. The board profile
 
