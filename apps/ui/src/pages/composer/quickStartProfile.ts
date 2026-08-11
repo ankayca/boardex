@@ -17,7 +17,7 @@ export const DEFAULT_BUILD_COMMAND = 'make';
 export const DEFAULT_SERIAL = { port: '/dev/ttyACM0', baud: 115200 } as const;
 
 /**
- * D12, Kerem's 2026-07-28 ruling: Quick Start seeds ONLY universal bench
+ * D12, the 2026-07-28 product-owner ruling: Quick Start seeds ONLY universal bench
  * preconditions — three rows that are questions the operator answers, not facts we
  * fabricated about their wiring. Board-specific rows (pin names, sensor lines) stay
  * human- or agent-authored: inventing those is the line D12 must not cross. The panel

@@ -10,7 +10,7 @@ Version 2.0 · July 2026 — v1.2 contract amendments per §10.5: added `run.ite
 **v2.3 (Sprint 7 P0 — visual system only; zero wire/reducer changes):** §6 rewritten to the premium visual system from the external design review (docs/design/Boardex_MVP_UI_Design_Review.docx, 2026-07): a three-layer surface hierarchy (canvas `#F7F7F8` / navigation `#FBFBFC` / primary white) replacing the two-tone `#FAFAF9`/white scheme; the full color set re-pointed (borders `#E2E3E7`/`#D2D4DA`, text `#17171A`/`#5C6068`, accent `#5B4CF0`, pass `#168A4A`, fail `#C73535`, warn `#A86D00`) — old values are RETIRED, not aliased; a rewritten type ladder (page 22px, top-bar/section 15px, card/step titles 14px semibold, metadata 12px, code 12.5px mono) with the 12px state-text floor and the 11px label step reserved for the two machine capsules; geometry on the 8px grid (card radius 8px, control radius 6px, buttons 36/40px, sidebar 208px, right rail 320px, evidence drawer 840px); motion extended (not replaced) with the 280ms FAIL→PASS morph token; §6.2's Badge split into four classes (run-state / risk / verdict / inline step status). D14 reservations, flow, and the contract are unchanged.
 
 **v2.4 (Sprint 7 P0 stage 4 — the declared check registry; ONE additive wire field per §10.5, proposed to the backend owner by PR; the wire `contractVersion` stays `boardex-contract/0.1`):** `run.plan_generated` gains `checks?: CheckExpectation[]` where `CheckExpectation = { requirementId, description }` — the plan DECLARES what the run intends to verify (the runner's `declare_plan(steps, risk_summary, checks)` already captures this list; it now reaches the wire). Reducer, same release: RunView gains `registeredChecks?` (the declared registry, verbatim) and `terminalSummary?` (the terminal event's `summary`; a terminal `run.status_changed.reason` is the fallback, the dedicated event takes precedence — the "why it ended" beside v1.5's `endedAt` "when"). These feed the §7.3/§7.6 dual-outcome split: *Run execution* (status + terminal reason) vs *Validation coverage* (recorded `check.evaluated` results measured against the declared registry). A producer that declares no registry (any pre-v2.4 recording, e.g. records/bmp180-run) reduces unchanged, and consumers MUST then report coverage without a denominator ("N checks recorded · no check registry declared") — the denominator is never parsed from plan prose or report markdown, and never invented. Fixtures: the authored `bme280_run_001.jsonl` declares its three checks; the new SYNTHETIC partial-coverage fixture `bme280_run_002_partial_synthetic.jsonl` (§5.5 — clearly marked, not a recording) declares six and records two, exercising the Not-recorded presentation end to end.
-Owners: Kerem (UI/UX, product, contract, mock runner) · Cofounder (MCP servers, orchestrator service, firmware)
+Owners: UI/product owner — UI, contract, mock runner · Backend owner — MCP servers, orchestrator, firmware
 Status: ACTIVE — this is the source of truth for the UI build. When this document and any older spec disagree, this document wins.
 
 ---
@@ -23,7 +23,7 @@ Rules of engagement:
 
 1. Every Claude Code session starts by reading `CLAUDE.md` (created in Task 0.1), which points here.
 2. Tasks are executed one at a time, in order, each ending in an atomic commit.
-3. Every task is followed by a **fresh-context adversarial review** (§9.2) before Kerem accepts it.
+3. Every task is followed by a **fresh-context adversarial review** (§9.2) before the product owner accepts it.
 4. Nothing in the Deferred Register (§2.3) gets built, referenced, or "prepared for" without an explicit decision. Speculative generality is a bug.
 5. When Claude Code is uncertain, it must stop and ask rather than invent. Inventing schema fields, event types, or design tokens not defined here is a blocking review failure.
 
@@ -37,7 +37,7 @@ Rules of engagement:
 
 **The one-line UI principle: a new user understands Boardex in under one minute.** The first screen says, visually and functionally: "Tell Boardex what to validate. Boardex will plan, run, measure, and report."
 
-**Division of labor:** Kerem builds everything in this document (UI + contract package + mock runner). The cofounder owns `servers/` — today three MCP servers (`boardex-core` shared interfaces/evidence, `boardex-target` pyOCD flash/debug/RTT/peripheral inspection, `boardex-logic` sigrok capture + protocol decode for the Kingst LA), and later a thin **orchestrator service** (`servers/boardex-runner`) that runs the agent loop, calls the MCP tools, and emits the §5 event stream. The UI never speaks MCP; the two sides meet at the contract in §5 and nowhere else.
+**Division of labor:** the UI/product owner builds everything in this document (UI + contract package + mock runner). The backend owner owns `servers/` — today three MCP servers (`boardex-core` shared interfaces/evidence, `boardex-target` pyOCD flash/debug/RTT/peripheral inspection, `boardex-logic` sigrok capture + protocol decode for the Kingst LA), and later a thin **orchestrator service** (`servers/boardex-runner`) that runs the agent loop, calls the MCP tools, and emits the §5 event stream. The UI never speaks MCP; the two sides meet at the contract in §5 and nowhere else.
 
 **Competitive posture (context, not a build input):** Embedder (YC S25) and BootLoop (YC) are funded competitors in this exact category; both are CLI/terminal-shaped. Boardex differentiates on (a) the evidence-first run workspace and shareable validation report, (b) a future standardized test bench, (c) trust UX. This is why UI quality is strategy, not polish.
 
@@ -96,24 +96,24 @@ These were cut deliberately. They return in future tracks. Do not build, stub, o
 
 # 3. Repository Architecture
 
-Monorepo. The joint repo already contains the cofounder's Python MCP servers under `servers/` — our scaffold is added **alongside**, never inside or on top of it. npm workspaces cover `packages/*`, `apps/*`, `tools/*` only; `servers/` is Python-land with per-package `pyproject.toml` and is invisible to npm.
+Monorepo. The joint repo already contains the backend owner's Python MCP servers under `servers/` — our scaffold is added **alongside**, never inside or on top of it. npm workspaces cover `packages/*`, `apps/*`, `tools/*` only; `servers/` is Python-land with per-package `pyproject.toml` and is invisible to npm.
 
 ```
 boardex/                           # the joint repo (github.com/ankayca/boardex)
 ├── CLAUDE.md                      # Claude Code operating rules (created in T0.1)
-├── README.md                      # cofounder's — do not rewrite without him
+├── README.md                      # backend owner's — do not rewrite without them
 ├── docs/
 │   ├── BIBLE.md                   # this document
 │   ├── decisions.md               # append-only decision log
-│   ├── ARCHITECTURE.md            # cofounder's — read, don't own
+│   ├── ARCHITECTURE.md            # backend owner's — read, don't own
 │   └── *.md                       # his bring-up / debug notes
-├── servers/                       # COFOUNDER'S DOMAIN — Kerem's tasks never modify it
+├── servers/                       # BACKEND OWNER'S DOMAIN — UI-owner tasks never modify it
 │   ├── boardex-core/              # shared interfaces, evidence, registry (Python)
 │   ├── boardex-target/            # pyOCD flash/debug, RTT, peripherals (Python, MCP)
 │   ├── boardex-logic/             # sigrok capture + decode, Kingst LA (Python, MCP)
 │   └── boardex-runner/            # FUTURE: orchestrator service emitting the §5
 │                                  #   event stream (agent loop over the MCP tools)
-├── examples/firmware/             # cofounder's reference firmware (Nucleo-F303RE)
+├── examples/firmware/             # backend owner's reference firmware (Nucleo-F303RE)
 ├── packages/
 │   └── contract/                  # THE contract. Zod schemas, inferred TS types,
 │       ├── src/
@@ -234,7 +234,7 @@ BenchStatus = { runnerOnline: boolean, contractVersion: string,
 
 # 5. The Contract: Event Stream + Command API
 
-This section is the single most important interface in the company. Both the mock runner and the cofounder's real runner MUST conform to it exactly. Contract version: `boardex-contract/0.1`.
+This section is the single most important interface in the company. Both the mock runner and the backend owner's real runner MUST conform to it exactly. Contract version: `boardex-contract/0.1`.
 
 ## 5.1 Event envelope
 
@@ -344,7 +344,7 @@ The fixture tells this exact story (this narrative is the demo script and the ac
 7. `approval.requested` for fix + re-flash → user approves. Iteration 2: edit, build, flash, capture. All checks PASS (device_ack true, serial shows `TEMP=24.3 HUM=41.2`).
 8. `run.completed` with report artifact (Markdown, evidence-linked).
 
-Artifacts referenced by the fixture live as static files in `fixtures/artifacts/` (small, realistic: a plausible diff, ~40 lines of serial log, a decoded I2C transaction table as JSON, a build log). The cofounder later replaces this authored fixture with a genuinely recorded one — same format, zero UI changes.
+Artifacts referenced by the fixture live as static files in `fixtures/artifacts/` (small, realistic: a plausible diff, ~40 lines of serial log, a decoded I2C transaction table as JSON, a build log). The backend owner later replaces this authored fixture with a genuinely recorded one — same format, zero UI changes.
 
 **Fail variant (v2.0): `bme280_run_001_fail.jsonl`** — the correct-fix-meets-faulty-hardware ending. Verbatim identical to the base story through iteration 2's flash (seq 68; asserted by the fixture test), then diverges: the capture decodes NACKs on every address phase at the *corrected* wire byte 0xEC, serial shows the same `i2c1_wait` timeout lines as iteration 1 (the driver has no NACKF handling, so the UART cannot tell the two failures apart — only the decode can), `device_ack` and `serial_output` fail again, and with nothing left to propose the run ends in `run.failed` with **no further approval requested**. Its own `iter2f` evidence artifacts live alongside the base set. This is the UI's real `failed` terminal (§2.2) — evidence retained, no report.
 
@@ -492,7 +492,7 @@ Purpose: watch and control the active run; embodies §2.2's six states. Layout p
 - **Left rail — Board Context:** compact card: board name, MCU, repo (basename), instrument list resolved by reference against the live bench (found = green dot + the DEVICE NAME, the thing an operator recognises on the bench — the stable registry id it resolved to lives in the "View details" drawer, where it is the thing you copy into a bug report; degraded = the device's own StatusDot, amber offline / red error; missing = no dot, the profile's reference, amber "<reference> was not found on the bench"; serial resolves by kind; and with NO bench snapshot the list is unknown — no dots, plain instrument names, one neutral "Bench status unavailable." line, matching §7.2: never an assumed anything, since a pessimistic amber reports a healthy instrument as unplugged every time the socket blinks), safety line ("Flash requires approval · Max 3 iterations · Manual power: 3V3 confirmed"), "View details" → drawer with full profile incl. connection checklist.
 - **Center — Plan & Progress:** task prompt (collapsed to 2 lines, expandable); the plan as a vertical timeline — each step shows status (pending/active/succeeded/failed), title, and when expanded: summary, artifact chips, and a log pane (LogViewer, per-stream tabs — the five §5.2 streams: agent/build/flash/serial/rtt, the selected tab carrying a 2px accent underline at the seam; log text is never colour-coded, D14). The pane offers an optional per-line timestamp column (each line's `step.log` envelope `ts`, §5.4/v2.2) and client-side find-in-log with match highlighting (T6.2). Active step auto-expanded. Iteration ≥2 renders a divider: "Iteration 2 — applying fix" (driven by the `run.iteration_started` event).
 - **Status card dual outcome (v2.4):** once a run is terminal, the status card separates two dimensions directly below the run-state badge (which stays — it IS the run state): *Run execution* — terminal status + `terminalSummary` (the why), and *Validation coverage* — recorded checks vs `registeredChecks` ("2 of 6 checks recorded"), or the no-denominator fallback ("2 checks recorded · no check registry declared") when the stream declared none. The evidence band renders one NEUTRAL gray chip (dash icon, never red) per registered-but-never-recorded expectation; the same split heads the Validation Report (presentation only — the report markdown is the agent's). A budget-killed run whose firmware worked must never read as a hardware failure, and a missing check must never hide inside "Failed".
-- **Right rail — Status & Approval (composition v2.3):** the rail reads as its own zone — canvas tone behind white cards, separated from the center by a 1px divider mid-gutter. The **status card sticks at the top**; directly below it sits the **reserved action slot**, ONE stable region whose content swaps in place (zero layout jump when states change): while autonomous, the quiet state — "No approval required · Boardex is executing *[active step title]*", live from RunView; when a gate activates, the approval surface occupies the same slot; on a terminal state, the completion module (status heading + Open Validation Report when the `report_md` artifact exists; a failed/stopped run without one states "Evidence collected so far is retained" — never an empty slot, never a dead end). When `awaiting_approval`, the slot holds the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When the pending approval proposes hardware actions and the bench is degraded, the §7.2 warning repeats on the rail (v2.0, Kerem's ruling) — advisory, never gating, and profile-independent: mid-run approvals report the bench's own unhealthy devices only, they never re-resolve profile references. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
+- **Right rail — Status & Approval (composition v2.3):** the rail reads as its own zone — canvas tone behind white cards, separated from the center by a 1px divider mid-gutter. The **status card sticks at the top**; directly below it sits the **reserved action slot**, ONE stable region whose content swaps in place (zero layout jump when states change): while autonomous, the quiet state — "No approval required · Boardex is executing *[active step title]*", live from RunView; when a gate activates, the approval surface occupies the same slot; on a terminal state, the completion module (status heading + Open Validation Report when the `report_md` artifact exists; a failed/stopped run without one states "Evidence collected so far is retained" — never an empty slot, never a dead end). When `awaiting_approval`, the slot holds the **Approval Card** — proposal title, reason, risk badge, files changed (count, expandable list), hardware actions, buttons Approve & Continue (primary) / Review Diff (opens diff drawer) / Reject. When the pending approval proposes hardware actions and the bench is degraded, the §7.2 warning repeats on the rail (v2.0, product-owner ruling) — advisory, never gating, and profile-independent: mid-run approvals report the bench's own unhealthy devices only, they never re-resolve profile references. When `diagnosing`: the **Diagnosis Card** — failed checks summarized, ranked hypotheses with confidence labels and evidence links, proposed fix + risk, Approve Fix Plan.
 - **Bottom — Evidence Summary band:** one chip per MeasurementCheck (verdict badge + short name, e.g. "I2C clock · PASS"), plus Open Logs / Open Diff / Open Report buttons. Clicking a chip opens Evidence Detail.
 
 States: all six from §2.2 plus `stopped`/`failed` terminal (muted summary + evidence retained). Reconnect: on WS drop show a thin amber "reconnecting" bar; on reconnect, HTTP replay from `lastSeq` then resume WS — no data loss, no duplicate rendering (reducer idempotence by seq). Done when: the full fixture plays start-to-finish with both approvals, the failure/diagnosis pass, iteration 2, and completion — and a mid-run page refresh restores identical state.
@@ -667,11 +667,11 @@ Acceptance: from the fixture's failed device_ack check, a user reaches the exact
 
 ### T5.1 — Validation Report view + Markdown copy/download per §7.6.
 ### T5.2 — Run history: terminal runs render fully from HTTP event replay (no WS), proving the event-sourcing bet.
-### T5.3 — Real-runner integration + backend conformance audit (see §10). This is the joint task with the cofounder; UI changes REQUIRED to be zero — any needed UI change is by definition a contract bug and gets fixed in the contract + mock first.
+### T5.3 — Real-runner integration + backend conformance audit (see §10). This is the joint task with the backend owner; UI changes REQUIRED to be zero — any needed UI change is by definition a contract bug and gets fixed in the contract + mock first.
 
 ## Sprint 6 — UI Excellence (goal: the UI reads as a designed product; Documents/Sources lands as contract v2.1)
 
-Protocol for this sprint: T6.1/T6.2/T6.4/T6.5 run the **light loop** — build → Kerem's screenshot review → iterate — with one sprint-level adversarial review (§9.2) at the end covering all four. T6.3 and T6.6 touch the contract surface and keep the full per-task protocol (§9.1/§9.2).
+Protocol for this sprint: T6.1/T6.2/T6.4/T6.5 run the **light loop** — build → the product owner's screenshot review → iterate — with one sprint-level adversarial review (§9.2) at the end covering all four. T6.3 and T6.6 touch the contract surface and keep the full per-task protocol (§9.1/§9.2).
 
 ### T6.1 — Design language v2
 Evolved type scale and rhythm; an elevation + focus-state system; motion tokens (durations/easings for run-state transitions); timeline status iconography; the /design gallery updated as the new visual-regression baseline. D14 color reservations are non-negotiable.
@@ -696,7 +696,7 @@ Runner URL setting replacing the baked env var; a model picker in the composer; 
 # 9. Working Protocol (the entire "process" we keep — nothing else)
 
 ## 9.1 Task loop
-For every task: paste the prompt → Claude Code implements on a branch → `npm run verify` green → adversarial review (§9.2) → Kerem reviews UI in browser → merge. One task per session where possible; always `/clear` or a fresh session between build and review.
+For every task: paste the prompt → Claude Code implements on a branch → `npm run verify` green → adversarial review (§9.2) → the product owner reviews UI in browser → merge. One task per session where possible; always `/clear` or a fresh session between build and review.
 
 ## 9.2 Fresh-context adversarial review (paste after every task, in a NEW session)
 
@@ -711,14 +711,14 @@ Checks: contract exact: y/n · scope clean: y/n · tests honest: y/n · tokens o
 Next recommended task.
 ```
 
-FIX_FIRST → feed findings back to a build session; repeat until MERGEABLE. Kerem is the final gate on anything visual — reviewers do not judge taste.
+FIX_FIRST → feed findings back to a build session; repeat until MERGEABLE. The product owner is the final gate on anything visual — reviewers do not judge taste.
 
 ## 9.3 Decision log
 Any deviation from this bible (schema change, cut, addition) = one line in docs/decisions.md + edit the bible itself. The bible never silently drifts from the code.
 
 ---
 
-# 10. Backend Integration Contract (for the cofounder — hand him §5 + this section)
+# 10. Backend Integration Contract (for the backend owner — hand them §5 + this section)
 
 ## 10.0 Where the contract lives in his architecture
 His MCP servers (boardex-target, boardex-logic) are the tool execution layer and stay exactly as they are — the contract does NOT apply to them. The contract applies to the **orchestrator service** (`servers/boardex-runner`, built): its `AgentBench` (`BENCH=agent`, per docs/RUNNER_AGENT_V0_SPEC.md) runs the agent loop that plans a run, calls the MCP tools behind harness-enforced approval gates, and translates what happens into the §5 event stream + command API — alongside the scripted `FakeBench`/`RealBench` arcs. MCP is an internal dialect behind the orchestrator; the UI never sees it. Practical consequence: he can keep developing/debugging his servers interactively via Claude Code today, and the orchestrator spawns that same tool surface per run once a plan is approved.

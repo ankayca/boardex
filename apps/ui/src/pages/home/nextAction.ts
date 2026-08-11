@@ -6,7 +6,7 @@
 // "Review approval", "View evidence", "Open report". ("Approve flash" until T5.0:
 // awaiting_approval covers ANY pending approval — flash, fix, or something a real
 // runner invents — and the row cannot know which, so the label now names the action
-// the user actually takes rather than guessing the proposal. Kerem's ruling.) The
+// the user actually takes rather than guessing the proposal. Product-owner ruling.) The
 // in-flight states (planning/running/diagnosing/draft) have no spec label — nothing
 // is *needed* from the user — so they get a neutral "View run" that opens the same
 // workspace. No new routes are invented: every action targets the run workspace at

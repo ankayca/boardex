@@ -84,7 +84,7 @@ it unset — wall-clock deltas are the recording. `validate_recording.py`
 re-implements the contract package's T0.3 fixture gate in Python; a recording
 must print `OK` before it is worth handing over.
 
-**Handoff is Kerem's move, not ours**: replacing
+**Handoff is the UI owner's move, not ours**: replacing
 `packages/contract/fixtures/bme280_run_001.jsonl` touches UI-owner territory,
 and the fail-variant fixture test pins the base story's first 68 events —
 swapping only the base file breaks it. Hand the validated recording + artifact
