@@ -72,14 +72,32 @@ class RunnerApp:
         # id, because a bench profile has to describe the hardware actually
         # wired to this host, not whatever a browser last saved under that id.
         self.profile_store = profile_store
-        persisted = profile_store.load() if profile_store is not None else {}
+        # Kept apart from the merged view because it is what gets WRITTEN: the
+        # store holds user-saved profiles only. A launch profile or the
+        # synthetic fallback written in here would fossilize a copy of a source
+        # that re-supplies itself every boot — and would then outlive it,
+        # shadowing a bench.json the operator later edits.
+        self._saved_profiles: dict[str, dict[str, Any]] = (
+            profile_store.load() if profile_store is not None else {}
+        )
         supplied = {str(profile["id"]): profile for profile in (board_profiles or [])}
-        merged: dict[str, dict[str, Any]] = {**persisted, **supplied}
+        # Launch profiles first, and they win on a shared id. First also in
+        # ORDER, so the list the dashboard renders leads with the bench this
+        # runner was actually launched against.
+        merged: dict[str, dict[str, Any]] = dict(supplied)
+        for profile_id, profile in self._saved_profiles.items():
+            merged.setdefault(profile_id, profile)
         if not merged:
             # Unchanged fallback: a runner always has at least one profile.
             fallback = fake_board_profile()
             merged = {str(fallback["id"]): fallback}
         self.board_profiles: dict[str, dict[str, Any]] = merged
+        # The profile an unknown id resolves to. Stated explicitly rather than
+        # left to whatever dict happens to iterate first: on a real bench the
+        # fallback drives physical hardware, so it has to be the profile this
+        # runner was LAUNCHED with — flashing a saved profile's firmware onto
+        # the wired board is the one mistake here that costs a device.
+        self._fallback_profile_id = next(iter(supplied), next(iter(merged)))
         self._bench_status = bench_status
         self._bench_status_cache: dict[str, Any] | None = None
         self._bench_status_at = 0.0
@@ -123,9 +141,13 @@ class RunnerApp:
         or not the disk write does (persistence.write_json never raises), so an
         unwritable home costs restart survival and nothing else.
         """
-        self.board_profiles[str(profile["id"])] = profile
+        profile_id = str(profile["id"])
+        self.board_profiles[profile_id] = profile
+        self._saved_profiles[profile_id] = profile
         if self.profile_store is not None:
-            self.profile_store.save(self.board_profiles)
+            # Only the user-saved set: the fallback profile and the launch
+            # config are re-supplied on every boot and must not be copied here.
+            self.profile_store.save(self._saved_profiles)
 
     # -- run lifecycle ---------------------------------------------------------------
 
@@ -150,9 +172,10 @@ class RunnerApp:
         run_id = new_run_id()
         profile = self.board_profiles.get(board_profile_id)
         if profile is None:
-            # Tolerant like the mock: an unknown profile falls back to the
-            # canned one rather than failing run creation.
-            profile = next(iter(self.board_profiles.values()))
+            # Tolerant like the mock: an unknown profile falls back rather than
+            # failing run creation — to the LAUNCH profile (see __init__), which
+            # on a real bench is the one describing the wired hardware.
+            profile = self.board_profiles[self._fallback_profile_id]
         engine = self.engine_cls(
             run_id=run_id,
             task_prompt=task_prompt,

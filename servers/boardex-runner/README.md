@@ -80,7 +80,7 @@ it — one directory per runner on a multi-bench host):
 
 | File | Holds | Mode |
 |---|---|---|
-| `profiles.json` | Board profiles saved from the dashboard | `0644` |
+| `profiles.json` | Board profiles saved from the dashboard — only those; the launch config and the built-in fallback profile are re-supplied on every boot and never written here | `0644` |
 | `credentials.json` | Provider keys set from the dashboard (see [Provider keys](#provider-keys)) | `0600` |
 
 Both are plain JSON you can read, back up, and delete — deleting the directory
@@ -89,13 +89,16 @@ is the reset, and a runner that never saves anything never creates it.
 `BOARDEX_BOARD_PROFILES` accepts, so a saved set can be handed to another runner
 by copying the file.
 
-Writes are atomic (temp file in the same directory, then `os.replace`), so a
-crash mid-write leaves the old file whole rather than half a JSON document, and
-they are write-through — state is durable as soon as the runner answers, not at
-a clean shutdown that a Ctrl-C never reaches. **State files never crash the
-runner:** an unreadable, unwritable, or corrupt file costs you what was in it,
-never the ability to start. Corrupt JSON is moved aside to
-`<name>.corrupt-<timestamp>` with one log line, so nothing is silently deleted.
+Writes are atomic (a fresh temp file in the same directory, created `O_EXCL`
+so an existing path — a planted symlink included — is refused rather than
+followed, then `os.replace`), so a crash mid-write leaves the old file whole
+rather than half a JSON document, and they are write-through: state is durable
+as soon as the runner answers, not at a clean shutdown that a Ctrl-C never
+reaches. **State files never crash the runner:** an unreadable, unwritable, or
+corrupt file costs you what was in it, never the ability to start. Corrupt JSON
+is moved aside to `<name>.corrupt-<timestamp>` with one log line, so nothing is
+silently deleted; a file that exists but cannot be read disables writing for the
+session, so nothing overwrites state the runner could not see.
 
 Board profiles baked into launch with `BOARDEX_BOARD_PROFILES` (and the
 `BENCH=real` profile from `bench.json`) win over a saved profile with the same
@@ -175,13 +178,29 @@ removes that key.
 
 Storage changes where the key sleeps and nothing else. Nothing else about this
 store moved: `/health`'s masked hint is still the only readable trace, there is
-still no read-back route, and nothing on the save path logs key material. If the
-file is unwritable the runner says so once and carries on with the key in memory,
-and if `~/.boardex/credentials.json` is a **symlink** the runner refuses to read
-or replace it — the session works, it just does not persist, because a file whose
-mode and directory we did not set cannot be claimed to be owner-only. On Windows
-the `0600` is best-effort: the file is created with owner-only intent, but NTFS
-ACLs are not POSIX mode bits and the runner does not pretend otherwise.
+still no read-back route, and nothing on the save path logs key material — not
+even the warning it prints when a write fails.
+
+**Setting is best-effort; removing is not.** If a key cannot be written the
+runner logs it and answers `204` anyway — the key *is* set, the next run will
+spend it, and the cost of the failure is pasting it again after a restart.
+Remove is the opposite case: a removal that only happened in memory is a key
+that comes back on the next boot and goes on spending, so a removal that cannot
+be written answers `500` and the store keeps saying "configured" rather than
+telling you something the file contradicts.
+
+**An unreadable file is not an empty one.** If `credentials.json` exists but
+cannot be read — a permission problem, or a **symlink** where a regular file
+belongs (refused: a file whose mode and directory we did not set cannot be
+claimed to be owner-only) — the runner says so once, runs the session from
+memory, and *does not write*. The file is left exactly as it was, so a bad
+`chmod` costs you one session's persistence rather than every key you had
+stored. The same rule covers `profiles.json`.
+
+On Windows the `0600` is best-effort: the file is created with owner-only
+intent, but NTFS ACLs are not POSIX mode bits, and the same goes for the
+symlink refusals, which are POSIX-strength. The runner does not pretend
+otherwise.
 
 Not encrypted at rest, deliberately. On a machine where another user can read
 your home directory, they can read your keys — encryption there would need a

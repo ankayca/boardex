@@ -95,10 +95,12 @@ _persisted: dict[str, str] = {}
 # models by configure(). Empty until then, so an unconfigured process
 # advertises no providers rather than guessing at one.
 _providers: tuple[str, ...] = ()
-# Where the store rests, resolved once per configure(). None until then, which
-# is also what an unusable path (see _usable_store) leaves it as: the store
-# then behaves exactly as the pre-persistence one did.
+# Where the store rests, resolved once per configure(). None until then.
 _store_path: Path | None = None
+# False until a boot has successfully READ the store (or established that it
+# does not exist yet). A file we could not read is not an empty one, so this
+# session must not write over it — see configure().
+_persist: bool = False
 
 
 @dataclass(frozen=True)
@@ -184,46 +186,29 @@ def _models_from_env() -> list[str]:
     return [model.strip() for model in raw.split(",") if model.strip()]
 
 
-def _usable_store() -> Path | None:
-    """The credentials file, or None when this process must not touch it.
+def _load_persisted(path: Path) -> dict[str, str]:
+    """The stored key dict, or empty when the file simply does not exist yet.
 
-    THE SYMLINK RULE: if the path is a symlink we refuse it — we neither read
-    it nor replace it, and the session runs memory-only with one honest log
-    line. Nothing here would corrupt a target (``os.replace`` swaps the LINK,
-    and ``rename`` moves the LINK aside), so this is not about damage. It is
-    that a credentials file is only owner-only-secret if we know what it IS: a
-    link is a path another process chose, pointing at a file whose mode and
-    directory we never set, and the honest answer to "is this 0600 in your home
-    directory?" for a link is "no idea". Refusing costs a session's persistence;
-    following costs the one property the file's mode is there to give.
+    Raises OSError for a file that exists but could not be read — including a
+    path that is not a regular file. THE SYMLINK RULE lives in that
+    ``no_follow``: the read refuses a symlink inside the open itself (O_NOFOLLOW
+    + fstat on the descriptor, so nothing can be swapped in between deciding and
+    reading), and configure() turns that refusal into a memory-only session.
 
-    Deliberately narrow: only the credentials file, and only the exact path —
-    not an audit of every parent directory, which would be security theater on
-    a home directory the user owns anyway.
-    """
-    if _store_path is None:
-        return None
-    if _store_path.is_symlink():
-        logger.warning(
-            "%s is a symlink; refusing to read or replace it. Provider keys "
-            "will work this session but will not persist.",
-            _store_path,
-        )
-        return None
-    return _store_path
+    Nothing here would corrupt a link's target — ``os.replace`` swaps the LINK,
+    ``rename`` moves the LINK aside — so this is not about damage. It is that a
+    credentials file is only owner-only-secret if we know what it IS, and a link
+    points at a file whose mode and directory we never set. Refusing costs one
+    session's persistence; following costs the property the mode is there for.
 
-
-def _load_persisted() -> dict[str, str]:
-    """The stored key dict, or empty for an absent/corrupt/refused file.
+    Deliberately narrow: this file, and this path — not an audit of every
+    parent directory, which would be theater on a home directory the user owns.
 
     Non-string or blank entries are dropped individually rather than condemning
     the whole file: one hand-edited line should cost one provider's key, not
     every provider's.
     """
-    path = _usable_store()
-    if path is None:
-        return {}
-    raw = persistence.read_json(path, default={})
+    raw = persistence.read_json(path, default={}, no_follow=True)
     return {
         provider: key.strip()
         for provider, key in raw.items()
@@ -231,17 +216,20 @@ def _load_persisted() -> dict[str, str]:
     }
 
 
-def _save_persisted() -> None:
+def _save_persisted() -> bool:
     """Write the deliberately-set keys through, 0600 and atomically.
 
-    Never raises and never logs a key: persistence.write_json logs paths only,
-    and a failed write leaves the process holding the key in memory exactly as
-    a pre-persistence runner did.
+    False when the write did not land — including a session where persistence
+    was disabled at boot, because "not written" is the same fact either way and
+    the caller's decision (survivable, or must be surfaced) is the same.
+
+    Never raises and never logs a key: persistence.write_json logs paths only.
     """
-    path = _usable_store()
-    if path is None:
-        return
-    persistence.write_json(path, dict(_persisted), mode=persistence.OWNER_ONLY_FILE)
+    if not _persist or _store_path is None:
+        return False
+    return persistence.write_json(
+        _store_path, dict(_persisted), mode=persistence.OWNER_ONLY_FILE
+    )
 
 
 def configure(models: Sequence[str] | None = None) -> None:
@@ -258,25 +246,45 @@ def configure(models: Sequence[str] | None = None) -> None:
     whose standard variable is present in the environment boots CONFIGURED, and
     the UI shows it as configured instead of offering to set a key already set.
     """
-    global _providers, _store_path
+    global _providers, _store_path, _persist
     _providers = tuple(providers_from_models(models if models is not None else _models_from_env()))
     _store_path = persistence.state_dir() / persistence.CREDENTIALS_FILE
     _persisted.clear()
-    _persisted.update(_load_persisted())
     _keys.clear()
-    # File first. Only providers this runner advertises become effective keys;
-    # the rest stay in _persisted, unadvertised and unresolvable, but preserved
-    # for the next write.
+    try:
+        _persisted.update(_load_persisted(_store_path))
+        _persist = True
+    except OSError as exc:
+        # An unreadable file is NOT an empty one. Persisting anything now would
+        # write a store we know is incomplete over one that is probably fine —
+        # a permission problem would silently become key loss. So the session
+        # runs memory-only and the file is left exactly as it is, ready to work
+        # again the moment whatever broke is fixed. Nothing can be resurrected
+        # behind the operator's back either: the next boot reads the same file
+        # the same way, and refuses it the same way.
+        logger.warning(
+            "could not read %s (%s); provider keys will work this session but "
+            "will not persist, and the file will not be written",
+            _store_path,
+            exc,
+        )
+        _persist = False
+
+    # PRECEDENCE, in one pass so it cannot be reordered by a later edit: the
+    # file wins, and the environment is consulted only for providers the file
+    # says nothing about. Splitting this into two loops would leave the ruling
+    # standing on the order of two statements a hundred lines apart.
     for provider in _providers:
         stored = _persisted.get(provider)
         if stored is not None:
             _keys[provider] = stored
-    for provider in _providers:
-        if provider in _keys:
-            continue  # the file wins; the env does not get a second vote
-        from_env = _env_key(provider)
-        if from_env is not None:
-            _keys[provider] = from_env
+        else:
+            from_env = _env_key(provider)
+            if from_env is not None:
+                _keys[provider] = from_env
+    # Providers the file holds but this runner does not advertise stay in
+    # _persisted — unadvertised and unresolvable here, preserved for the next
+    # write so a narrower AGENT_MODELS cannot erase another launch's key.
 
 
 def known_providers() -> tuple[str, ...]:
@@ -312,9 +320,16 @@ def set_key(provider: Any, api_key: Any) -> CredentialError | None:
         return CredentialError(400, "invalid api key")
     _keys[provider] = api_key.strip()
     # Write-through: a key is stored the moment it is accepted, so a runner that
-    # dies unexpectedly comes back with the key its 204 promised. A failed write
-    # does not fail the request — the key IS set for this process, which is what
-    # the 204 says; only its survival of a restart is lost, and that is logged.
+    # dies unexpectedly comes back with the key its 204 promised.
+    #
+    # A failed write does NOT fail this request, and that asymmetry with
+    # delete_key is deliberate. What 204 claims here is that the key is set,
+    # which is true — it is in memory and the very next run will spend it; only
+    # its survival of a restart is lost, and the cost of that is pasting it
+    # again. Refusing instead would take the dashboard away from anyone with a
+    # read-only home directory, for a failure they can already see in the log.
+    # Removal is the opposite case: there the unwritten half is a key that goes
+    # on spending money, so it must be surfaced.
     _persisted[provider] = _keys[provider]
     _save_persisted()
     return None
@@ -322,7 +337,10 @@ def set_key(provider: Any, api_key: Any) -> CredentialError | None:
 
 def delete_key(provider: str) -> CredentialError | None:
     """Remove the dashboard's key, then RE-SEED from the environment if one is
-    exported there. Idempotent, so Remove can be pressed twice.
+    exported there. Idempotent, so Remove can be pressed twice. 500 when the
+    removal could not be written to disk — see the body: a removal that only
+    happened in memory is a key that comes back on the next boot and goes on
+    spending, so it is reported rather than swallowed.
 
     Re-seeding is what keeps this store's two views from ever disagreeing. What
     Remove discards is the key the dashboard set; it cannot discard the one the
@@ -341,14 +359,29 @@ def delete_key(provider: str) -> CredentialError | None:
     """
     if provider not in _providers:
         return CredentialError(404, "unknown provider")
-    _keys.pop(provider, None)
-    # Removal is persisted BEFORE the re-seed, and the re-seed is memory-only.
-    # Both halves matter: Remove must survive a restart (or the next boot loads
-    # the key back out of the file and Remove was theater), and the env key it
-    # falls back to must NOT be written (or unsetting the variable stops
-    # helping, which is the escape hatch the README promises).
-    _persisted.pop(provider, None)
-    _save_persisted()
+    # Removal is persisted BEFORE anything is answered, and the re-seed that
+    # follows is memory-only. Both halves matter: Remove must survive a restart
+    # (or the next boot loads the key back out of the file and Remove was
+    # theater), and the env key it falls back to must NOT be written (or
+    # unsetting the variable stops helping, which is the escape hatch the
+    # README promises).
+    was_effective = _keys.pop(provider, None)
+    was_persisted = _persisted.pop(provider, None)
+    # ``_persist`` gates the check, not just the write: in a memory-only session
+    # the file is not a source of truth for the NEXT boot either (the same read
+    # refuses it the same way), so there is nothing a removal could fail to
+    # erase and nothing to warn about.
+    if was_persisted is not None and _persist and not _save_persisted():
+        # The removal did not reach disk. Answering 204 here would be the
+        # runner's worst available lie: the operator is told the key is gone,
+        # stops thinking about it, and the next boot loads it straight back out
+        # of the file and spends it. So we say so, and we put the store back
+        # the way it was — a store that says "still configured" and a file that
+        # holds the key are at least the same fact, and the operator can act on
+        # it (fix the disk, or unset and restart).
+        _keys[provider] = was_effective if was_effective is not None else was_persisted
+        _persisted[provider] = was_persisted
+        return CredentialError(500, "could not remove credential")
     from_env = _env_key(provider)
     if from_env is not None:
         _keys[provider] = from_env

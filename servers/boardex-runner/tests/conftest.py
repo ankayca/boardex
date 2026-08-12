@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
@@ -22,7 +22,7 @@ SPEED = 2000.0  # virtual-clock divisor; a full run finishes in well under a sec
 
 
 @pytest.fixture(autouse=True)
-def isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def isolated_state_dir(tmp_path: Path) -> Iterator[Path]:
     """No test may read or write the developer's real ``~/.boardex``.
 
     Runner state (board profiles, provider keys) now rests on disk, so a suite
@@ -30,10 +30,20 @@ def isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     in — a developer with a saved key would pass tests that fail in CI — and
     could overwrite that person's actual state. Every test gets its own empty
     directory, and one that wants the not-yet-created case simply never writes.
+
+    Its OWN MonkeyPatch, not the shared ``monkeypatch`` fixture: that one
+    instance is shared by every fixture and the test body, so a test calling
+    ``monkeypatch.undo()`` to restore something it patched would also undo this
+    variable and silently repoint itself at the real home directory. Isolation
+    a test can revoke by accident is not isolation.
     """
+    patch = pytest.MonkeyPatch()
     state = tmp_path / "state"
-    monkeypatch.setenv("BOARDEX_STATE_DIR", str(state))
-    return state
+    patch.setenv("BOARDEX_STATE_DIR", str(state))
+    try:
+        yield state
+    finally:
+        patch.undo()
 
 
 def make_engine(
