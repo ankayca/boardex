@@ -6,7 +6,7 @@
 // e.g. "Build & flash", spans several run steps) and iteration ≥2 re-executes a
 // plan index, so "steps completed" can only be counted at plan-index granularity.
 //
-// Latest-execution-wins (Kerem's ruling): a plan index counts as complete only when
+// Latest-execution-wins (product-owner ruling): a plan index counts as complete only when
 // its LATEST executed step succeeded. view.steps is in start order, so a later step
 // for the same plan index overwrites an earlier one — an iteration-2 re-open of a
 // failed index drops it back out of the count until it re-succeeds.

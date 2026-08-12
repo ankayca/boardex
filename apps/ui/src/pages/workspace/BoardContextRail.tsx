@@ -4,7 +4,7 @@
 // the D12 connection checklist.
 //
 // The instrument rows resolve by REFERENCE, through lib/benchReadiness — the same
-// three states the composer and the Board Profile Builder report (T4.2, Kerem's
+// three states the composer and the Board Profile Builder report (T4.2, product-owner
 // ruling). The rail is the surface an operator watches during a run, so an analyzer
 // that is merely unplugged must not read the same as a profile naming an analyzer
 // the bench has never heard of.

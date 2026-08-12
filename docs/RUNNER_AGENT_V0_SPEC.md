@@ -1,6 +1,6 @@
 # Runner-Hosted Agent v0 — Design Spec
 
-Status: PROPOSAL for joint review (Kerem drafts, Ahmet owns the build — `servers/boardex-runner`).
+Status: PROPOSAL for joint review (the product owner drafts, the backend owner owns the build — `servers/boardex-runner`).
 Predecessor proof: the Cursor-hosted BMP180 run (agent + MCP tools, no terminal, real bench).
 Goal: move that harness into `boardex-runner` so `POST /runs` produces a real agent run through the existing UI, emitting the §5 event stream. **Zero UI changes expected** — that is the acceptance test of six sprints of contract discipline.
 

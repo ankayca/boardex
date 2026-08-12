@@ -23,14 +23,14 @@ spec — the emitted JSON Schema is the only cross-language bridge.
 - **Never edit** `packages/contract/*`, `docs/BIBLE.md`, `apps/ui/*`, or
   `tools/mock-runner/*`. Read-only, always.
 - **Never invent** event types, routes, or fields. If a needed event is
-  missing, STOP and draft a proposed BIBLE §5 edit for the UI owner (Kerem) —
+  missing, STOP and draft a proposed BIBLE §5 edit for the UI owner —
   contract changes flow UI-first (§10.5: bible → contract pkg → mock runner →
   UI → our runner). Do not "just emit" it.
 - Any accepted deviation = one appended line in `docs/decisions.md`.
 - The MCP servers (`boardex-core`/`-target`/`-logic`) are NOT bound by this
   contract (BIBLE §10.0); it binds only the future `servers/boardex-runner`.
 
-## v2.0 enforcement details the UI actually applies (from Kerem's one-pager)
+## v2.0 enforcement details the UI actually applies (from the UI owner's one-pager)
 
 These are client-side behaviors; violating them deadlocks or fail-closes the UI
 even when every individual event is schema-valid.
