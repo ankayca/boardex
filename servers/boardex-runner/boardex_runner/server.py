@@ -15,7 +15,7 @@ from typing import Any
 
 from aiohttp import WSMsgType, web
 
-from . import credentials
+from . import credentials, persistence
 from .artifacts import ArtifactStore
 from .clock import Clock, VirtualClock
 from .contract import (
@@ -53,6 +53,7 @@ class RunnerApp:
         bench_status: dict[str, Any] | None = None,
         engine_cls: type[RunEngine] = RunEngine,
         models: list[str] | None = None,
+        profile_store: persistence.ProfileStore | None = None,
     ) -> None:
         self.bench_factory = bench_factory
         self.clock_factory = clock_factory
@@ -62,10 +63,23 @@ class RunnerApp:
         # v2.1 capabilities.models; None => no model choice advertised (§5.3).
         self.models = models
         self.runs: dict[str, RunEngine] = {}
-        self.board_profiles: dict[str, dict[str, Any]] = {
-            str(profile["id"]): profile
-            for profile in (board_profiles or [fake_board_profile()])
-        }
+        # Board profiles come from up to two places, and only ever one of them
+        # writes. ``profile_store`` (None => the pre-persistence behavior, which
+        # is what every direct-construction test wants: no process may read the
+        # developer's ~/.boardex by accident) supplies what earlier sessions
+        # saved; ``board_profiles`` is launch configuration — BENCH=real's
+        # bench.json profile, or BOARDEX_BOARD_PROFILES — and WINS on a shared
+        # id, because a bench profile has to describe the hardware actually
+        # wired to this host, not whatever a browser last saved under that id.
+        self.profile_store = profile_store
+        persisted = profile_store.load() if profile_store is not None else {}
+        supplied = {str(profile["id"]): profile for profile in (board_profiles or [])}
+        merged: dict[str, dict[str, Any]] = {**persisted, **supplied}
+        if not merged:
+            # Unchanged fallback: a runner always has at least one profile.
+            fallback = fake_board_profile()
+            merged = {str(fallback["id"]): fallback}
+        self.board_profiles: dict[str, dict[str, Any]] = merged
         self._bench_status = bench_status
         self._bench_status_cache: dict[str, Any] | None = None
         self._bench_status_at = 0.0
@@ -97,6 +111,21 @@ class RunnerApp:
         message = json.dumps(event)
         for queue in list(clients):
             queue.put_nowait(message)
+
+    # -- board profiles --------------------------------------------------------------
+
+    def save_profile(self, profile: dict[str, Any]) -> None:
+        """Store a profile and write the whole set through to disk.
+
+        Write-through, not a flush on shutdown: the runner is killed with Ctrl-C
+        and hardware sessions do die mid-run, so state that is only durable
+        after a clean exit is not durable. The in-memory update happens whether
+        or not the disk write does (persistence.write_json never raises), so an
+        unwritable home costs restart survival and nothing else.
+        """
+        self.board_profiles[str(profile["id"])] = profile
+        if self.profile_store is not None:
+            self.profile_store.save(self.board_profiles)
 
     # -- run lifecycle ---------------------------------------------------------------
 
@@ -313,7 +342,7 @@ def build_app(state: RunnerApp, ui_root: Path | None = None) -> web.Application:
             return _error(request, 400, "invalid JSON body")
         if not isinstance(body, dict) or not body.get("id"):
             return _error(request, 400, "invalid board profile")
-        state.board_profiles[str(body["id"])] = body
+        state.save_profile(body)
         return _json(request, 200, body)
 
     async def list_runs(request: web.Request) -> web.Response:
@@ -518,7 +547,9 @@ def state_from_env() -> RunnerApp:
     RECORD=<dir> — tee the first run to <dir>/recorded_run.jsonl (+ artifacts/)
     BOARDEX_BENCH_CONFIG=<json file> — RealBench configuration (BENCH=real)
     BOARDEX_BOARD_PROFILES=<json file> — board profile(s) baked in at launch
-        (survives restarts; BENCH=fake|agent)
+        (BENCH=fake|agent; wins over the saved ones on a shared id)
+    BOARDEX_STATE_DIR=<dir> — where saved profiles + provider keys rest
+        (default ~/.boardex)
     AGENT_MODELS=<csv> — LiteLLM model strings advertised via capabilities (BENCH=agent)
     AGENT_MAX_TURNS=<n> — agent turn budget per run (BENCH=agent, default 60)
     """
@@ -529,6 +560,12 @@ def state_from_env() -> RunnerApp:
     # not just agent: the dashboard's key path has to work before anyone
     # switches over, and a fake-bench runner is what a new user meets first.
     credentials.configure()
+    # The one place that opts state into disk: a RunnerApp built directly (every
+    # test harness) stays purely in-memory. ~/.boardex/profiles.json, loaded
+    # here and written through on every save.
+    profile_store = persistence.ProfileStore(
+        persistence.state_dir() / persistence.PROFILES_FILE
+    )
 
     bench_kind = os.environ.get("BENCH", "fake")
     speed = float(os.environ.get("SPEED", "1"))
@@ -560,6 +597,7 @@ def state_from_env() -> RunnerApp:
             models=agent_models_from_env(),
             bench_status=agent_bench_status(),
             board_profiles=_board_profiles_from_env(),
+            profile_store=profile_store,
         )
 
     if bench_kind == "real":
@@ -577,6 +615,7 @@ def state_from_env() -> RunnerApp:
             clock_factory=Clock,
             recorder=recorder,
             board_profiles=[profile],
+            profile_store=profile_store,
         )
 
     return RunnerApp(
@@ -584,6 +623,7 @@ def state_from_env() -> RunnerApp:
         clock_factory=lambda: VirtualClock(speed=speed, dilation=pacing),
         recorder=recorder,
         board_profiles=_board_profiles_from_env(),
+        profile_store=profile_store,
     )
 
 

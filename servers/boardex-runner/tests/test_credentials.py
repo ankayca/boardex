@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import stat
 import sys
 from typing import Any, Iterator
 
 import aiohttp
 import pytest
 
-from boardex_runner import credentials
+from boardex_runner import credentials, persistence
+from boardex_runner.persistence import ProfileStore
 from boardex_runner.provider import LiteLLMProvider
 
 from conftest import run
@@ -321,21 +324,37 @@ def test_credentials_routes_reject_non_local_host_and_origin() -> None:
     run(scenario())
 
 
-def test_stored_key_never_reaches_any_served_byte() -> None:
+def test_stored_key_never_reaches_any_served_byte(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Set a key, drive a full run, then grep the RAW BYTES of everything served.
 
     Wire bytes, not parsed views: schema parsing STRIPS unknown keys, so a key
     echoed into a non-contract field would be laundered by the parse — passing a
     grep over the parsed events while still going out on the socket and the
     replay. Anything a client can read is checked here unparsed.
+
+    Persistence widened what "anything a client can read" means, so the grep
+    widened with it: the key now rests in a file, and the two new places it
+    could wrongly turn up are the OTHER state file (profiles.json, which is
+    world-readable by design) and the log lines the save path emits. Both are
+    checked below, on the same canary.
     """
 
     async def scenario() -> None:
-        async with Harness() as h:
+        # A store, so the save path this test greps actually runs.
+        store = ProfileStore(persistence.state_dir() / persistence.PROFILES_FILE)
+        async with Harness(profile_store=store) as h:
             assert h.session
             key = "sk-or-v1-leak-canary-abcdef123456"
             async with _put(h, {"provider": "openrouter", "apiKey": key}) as res:
                 assert res.status == 204
+
+            # A profile save after the key is set: the write-through that could
+            # carry a key into the wrong file happens here, not at boot.
+            profiles = await h.get_json("/board-profiles")
+            saved = dict(profiles[0], name="Bench with a key configured")
+            assert (await h.post("/board-profiles", saved)).status == 200
 
             run_id = await h.create_run()
             ws = await h.session.ws_connect(f"{h.base}/ws?runId={run_id}")
@@ -400,4 +419,30 @@ def test_stored_key_never_reaches_any_served_byte() -> None:
                 async with probe as res:
                     assert key not in await res.text()
 
-    run(scenario())
+            # THE ON-DISK SURFACE. A key belongs in credentials.json and nowhere
+            # else: profiles.json is world-readable by design (it holds repo
+            # paths and bench wiring), so a key reaching it would undo the 0600
+            # the other file is written with.
+            state_dir = persistence.state_dir()
+            profiles_json = state_dir / persistence.PROFILES_FILE
+            assert profiles_json.exists()  # the save above really did write
+            assert key not in profiles_json.read_text(encoding="utf-8")
+            # Everything else the runner dropped in the state directory, too —
+            # temp files, corrupt-file copies, anything a future writer adds.
+            for path in state_dir.rglob("*"):
+                if path.is_file() and path.name != persistence.CREDENTIALS_FILE:
+                    assert key not in path.read_text(encoding="utf-8", errors="ignore"), path
+            # The one file that legitimately holds it is owner-only.
+            creds_json = state_dir / persistence.CREDENTIALS_FILE
+            assert key in creds_json.read_text(encoding="utf-8")
+            if sys.platform != "win32":
+                assert stat.S_IMODE(creds_json.stat().st_mode) == 0o600
+
+            # And no log record from any of it carries key material. The save
+            # path logs paths only — a warning that helpfully included the value
+            # it could not write would put the key in every operator's terminal.
+            for record in caplog.records:
+                assert key not in record.getMessage()
+
+    with caplog.at_level(logging.DEBUG):
+        run(scenario())

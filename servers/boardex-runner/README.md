@@ -50,7 +50,8 @@ VITE_RUNNER_URL=http://localhost:4380 npm run dev -w apps/ui
 | `FIXTURE=fail` | Fake bench replays the failing arc |
 | `RECORD=<dir>` | Tee the first run to `<dir>/recorded_run.jsonl` + `artifacts/` (§10.3 fixture format) |
 | `BOARDEX_BENCH_CONFIG` | JSON file with `RealBenchConfig` fields (`BENCH=real`) |
-| `BOARDEX_BOARD_PROFILES` | JSON file (a BoardProfile or an array) baked in at launch so profiles survive restarts (`BENCH=fake`/`agent`) |
+| `BOARDEX_BOARD_PROFILES` | JSON file (a BoardProfile or an array) baked into launch; wins over a saved profile of the same id (`BENCH=fake`/`agent`) |
+| `BOARDEX_STATE_DIR` | Where saved board profiles and provider keys rest (default `~/.boardex`) |
 | `AGENT_MODELS` | Comma-separated LiteLLM model strings advertised via `/health` `capabilities.models` (`BENCH=agent`; default `openrouter/anthropic/claude-sonnet-4.6`) |
 | `AGENT_MAX_TURNS` | Agent turn budget per run (`BENCH=agent`, default 60) |
 | `BOARDEX_CONTRACT_SCHEMA_DIR` | Override the JSON Schema location (defaults to repo lookup) |
@@ -71,6 +72,36 @@ wiring, e.g.:
   "i2c_address_7bit": 118
 }
 ```
+
+## State on disk
+
+Two things outlive the process, both in `~/.boardex` (`BOARDEX_STATE_DIR` moves
+it — one directory per runner on a multi-bench host):
+
+| File | Holds | Mode |
+|---|---|---|
+| `profiles.json` | Board profiles saved from the dashboard | `0644` |
+| `credentials.json` | Provider keys set from the dashboard (see [Provider keys](#provider-keys)) | `0600` |
+
+Both are plain JSON you can read, back up, and delete — deleting the directory
+is the reset, and a runner that never saves anything never creates it.
+`profiles.json` is an array of wire `BoardProfile` objects, the same shape
+`BOARDEX_BOARD_PROFILES` accepts, so a saved set can be handed to another runner
+by copying the file.
+
+Writes are atomic (temp file in the same directory, then `os.replace`), so a
+crash mid-write leaves the old file whole rather than half a JSON document, and
+they are write-through — state is durable as soon as the runner answers, not at
+a clean shutdown that a Ctrl-C never reaches. **State files never crash the
+runner:** an unreadable, unwritable, or corrupt file costs you what was in it,
+never the ability to start. Corrupt JSON is moved aside to
+`<name>.corrupt-<timestamp>` with one log line, so nothing is silently deleted.
+
+Board profiles baked into launch with `BOARDEX_BOARD_PROFILES` (and the
+`BENCH=real` profile from `bench.json`) win over a saved profile with the same
+id: a bench profile has to describe the hardware actually wired to this host, not
+whatever a browser last saved under that id. Saved profiles the launch config
+says nothing about are still served.
 
 ## BENCH=agent
 
@@ -98,8 +129,9 @@ behind the same engine and wire layer. Highlights:
   `declare_iteration`) and a 3-turn idle stall are harness counters; a
   malformed meta-tool payload gets one retry, then the run fails closed.
 - **Keys.** Set from the dashboard or from the environment — see
-  [Provider keys](#provider-keys). Resolved at call time; nothing key-derived is
-  logged, stored on disk, or emitted.
+  [Provider keys](#provider-keys). Resolved at call time; the key rests only in
+  `~/.boardex/credentials.json` (mode `0600`), and nothing key-derived is
+  logged, emitted, or written anywhere else.
 - **Model selection.** `/health` advertises `capabilities.models` from
   `AGENT_MODELS`; `CreateRun.model` must be in that list (else 409) and is
   echoed onto `Run.model`; absent, the first listed model is used.
@@ -126,10 +158,36 @@ unsetting the variable and restarting the runner. That is your launch
 configuration, and the dashboard deliberately has no authority over it: a web
 page should not be able to rewrite how the process was started.
 
-**Storage is in-memory and dies with the process.** A restart clears anything set
-from the dashboard — paste it again, or export the variable to have it survive.
-That is deliberate for v0: a key that outlives the process has to rest somewhere
-on disk, and that is a decision to make on purpose, not a side effect.
+**A key you set survives a restart.** It is written to
+`~/.boardex/credentials.json`, mode `0600` — owner-only, the same place and the
+same permissions `~/.netrc` and `~/.aws/credentials` have used for decades. Paste
+it once. Delete the file (or the whole `~/.boardex` directory) to reset, or press
+Remove in the dashboard, which does the same thing for one provider.
+
+**A stored key wins over an exported one at boot**, and the environment seeds
+only the providers the file says nothing about. Pasting into the dashboard is the
+more recent and more specific act; an exported variable is often inherited from a
+shell profile nobody has read in months, and the other order would make the
+dashboard silently ineffective for exactly the people who already have the
+variable set. What gets written is only what someone deliberately set: an env
+seed is never copied to disk, so unsetting the variable and restarting still
+removes that key.
+
+Storage changes where the key sleeps and nothing else. Nothing else about this
+store moved: `/health`'s masked hint is still the only readable trace, there is
+still no read-back route, and nothing on the save path logs key material. If the
+file is unwritable the runner says so once and carries on with the key in memory,
+and if `~/.boardex/credentials.json` is a **symlink** the runner refuses to read
+or replace it — the session works, it just does not persist, because a file whose
+mode and directory we did not set cannot be claimed to be owner-only. On Windows
+the `0600` is best-effort: the file is created with owner-only intent, but NTFS
+ACLs are not POSIX mode bits and the runner does not pretend otherwise.
+
+Not encrypted at rest, deliberately. On a machine where another user can read
+your home directory, they can read your keys — encryption there would need a
+passphrase on every runner start or a keychain integration per platform, and
+both are decisions for the day a shared bench needs auth (see below), not
+something to half-build now.
 
 The store is **write-only**: no route serves key material back. `GET /health`
 advertises presence and a masked hint (last four characters, and nothing at all

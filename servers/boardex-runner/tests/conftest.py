@@ -7,7 +7,10 @@ and wire layer — the same code paths the live bench uses.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 from boardex_runner.artifacts import ArtifactStore
 from boardex_runner.clock import VirtualClock
@@ -16,6 +19,21 @@ from boardex_runner.fake_bench import FakeBench, fake_board_profile
 
 TERMINAL = {"completed", "failed", "stopped"}
 SPEED = 2000.0  # virtual-clock divisor; a full run finishes in well under a second
+
+
+@pytest.fixture(autouse=True)
+def isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """No test may read or write the developer's real ``~/.boardex``.
+
+    Runner state (board profiles, provider keys) now rests on disk, so a suite
+    without this fixture would seed itself from whoever's home directory it ran
+    in — a developer with a saved key would pass tests that fail in CI — and
+    could overwrite that person's actual state. Every test gets its own empty
+    directory, and one that wants the not-yet-created case simply never writes.
+    """
+    state = tmp_path / "state"
+    monkeypatch.setenv("BOARDEX_STATE_DIR", str(state))
+    return state
 
 
 def make_engine(
