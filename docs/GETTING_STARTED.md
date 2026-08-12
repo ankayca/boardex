@@ -141,9 +141,11 @@ printed URL yourself. Boardex says so rather than pretending it opened something
 ### 2. Add a model provider key
 
 Go to **Settings → Model provider** in the dashboard, paste your key, and Save. You do
-not need a shell for this, and you should not use one: the runner holds the key in memory
-for the session, write-only — no route serves a key back, nothing is written to disk, and
-nothing is stored in the browser. Stop `boardex up` and it is gone.
+not need a shell for this, and you should not use one. The store is write-only — no route
+serves a key back, and nothing is kept in the browser. The runner writes it to
+`~/.boardex/credentials.json`, owner-only (mode `0600`), so you paste it once and it is
+still there after a restart. Press **Remove** to clear it, or delete `~/.boardex` to reset
+everything the runner has saved.
 
 You need an account with a model provider first. OpenRouter is the default (the key looks
 like `sk-or-v1-…`); other providers work when the runner is configured for them, and the
@@ -160,6 +162,10 @@ boardex up
 One trap worth naming: exporting the literal placeholder — `sk-or-v1-...`, dots and all —
 exports a *string*, and the run then fails at 0:00 with no error in your terminal.
 `echo ${OPENROUTER_API_KEY:0:12}` if you are unsure.
+
+If you do both, the key you saved in the dashboard wins — the exported variable only seeds
+providers the saved file says nothing about. Unset the variable and restart to stop using
+it; nothing exported is ever copied into the saved file.
 
 ### 3. Point it at a firmware project
 
@@ -183,6 +189,10 @@ Everything else in the board profile — the build command, the MCU, the instrum
 is compiled for you when you create the run, from the bench scan and the path. The
 **Advanced** link opens the full profile editor if you want to set them by hand, and a
 Quick Start profile stays editable there afterwards.
+
+Boards you save are kept in `~/.boardex/profiles.json` and are still there after a
+restart. It is plain JSON: back it up, hand it to a colleague's runner, or delete it to
+start over.
 
 ### 4. Describe the task
 
