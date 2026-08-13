@@ -31,6 +31,10 @@ from conftest import run
 MODEL = "openrouter/anthropic/claude-sonnet-4.6"
 KEY = "sk-or-v1-persisted-9f3a2b71"
 
+# skipif conditions evaluate at collection time on every platform, and
+# os.geteuid does not exist on Windows — so the call itself must be guarded.
+_RUNNING_AS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
+
 
 @pytest.fixture(autouse=True)
 def clean_store(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -255,6 +259,7 @@ def test_a_crash_between_temp_write_and_replace_leaves_the_original_intact(
     assert list(persistence.state_dir().glob("*.tmp-*")) == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlink creation needs privileges on Windows")
 def test_a_planted_temp_file_or_symlink_is_refused_never_followed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -307,7 +312,7 @@ def test_temp_names_are_unique_per_write() -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads through any mode")
+@pytest.mark.skipif(_RUNNING_AS_ROOT, reason="root reads through any mode")
 def test_an_unreadable_credentials_file_is_never_written_over(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -344,7 +349,7 @@ def test_an_unreadable_credentials_file_is_never_written_over(
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads through any mode")
+@pytest.mark.skipif(_RUNNING_AS_ROOT, reason="root reads through any mode")
 def test_an_unreadable_profiles_file_is_never_written_over() -> None:
     """Same rule on the other file: a transient read failure at boot costs
     persistence for the session, not the profiles already on disk."""
@@ -411,6 +416,7 @@ def test_a_removal_that_cannot_be_written_reports_failure_instead_of_lying(
     assert credentials.advertise() == [{"provider": "openrouter", "configured": False}]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlink creation needs privileges on Windows")
 def test_a_memory_only_session_still_removes_honestly(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -428,14 +434,16 @@ def test_a_memory_only_session_still_removes_honestly(
     assert credentials.advertise() == [{"provider": "openrouter", "configured": False}]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX open flags")
 def test_a_credentials_path_that_is_not_a_regular_file_is_refused(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The fstat half of the read guard: O_NOFOLLOW catches links, and the
     stat on the descriptor we hold catches everything else that is not a
     regular file (a directory, a fifo someone left there). Refused, logged,
-    memory-only — never crashed, never treated as empty-and-writable."""
+    memory-only — never crashed, never treated as empty-and-writable.
+
+    Runs on Windows too: os.open cannot open a directory there, so the same
+    OSError-propagates-refusal path is taken before fstat gets a look."""
     creds_file().mkdir(parents=True)
 
     with caplog.at_level("WARNING"):
@@ -471,6 +479,7 @@ def test_a_corrupt_state_file_is_moved_aside_and_the_runner_boots_clean(
     assert sum("moved to" in record.message for record in caplog.records) == 2
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlink creation needs privileges on Windows")
 def test_a_symlinked_credentials_file_is_refused_not_followed(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
