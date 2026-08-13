@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import stat
 import sys
 from typing import Any, Iterator
 
 import aiohttp
 import pytest
 
-from boardex_runner import credentials
+from boardex_runner import credentials, persistence
+from boardex_runner.persistence import ProfileStore
 from boardex_runner.provider import LiteLLMProvider
 
 from conftest import run
@@ -246,6 +249,46 @@ def test_credentials_routes_store_reflect_and_remove() -> None:
     run(scenario())
 
 
+def test_delete_answers_500_when_the_removal_cannot_be_persisted() -> None:
+    """The route half of the delete ruling. 204 means "the key is gone"; if the
+    removal did not reach disk, the next boot brings it back and goes on
+    spending, so the runner says so instead."""
+
+    async def scenario() -> None:
+        async with Harness() as h:
+            assert h.session
+            key = "sk-or-v1-removal-must-persist"
+            async with _put(h, {"provider": "openrouter", "apiKey": key}) as res:
+                assert res.status == 204
+
+            real_replace = persistence.os.replace
+            failing = {"now": True}
+
+            def maybe_boom(src: Any, dst: Any) -> Any:
+                if failing["now"]:
+                    raise OSError(30, "Read-only file system")
+                return real_replace(src, dst)
+
+            persistence.os.replace = maybe_boom  # restored below, not via undo
+            try:
+                async with h.session.delete(h.base + "/credentials/openrouter") as res:
+                    assert res.status == 500
+                    assert await res.json() == {"error": "could not remove credential"}
+            finally:
+                failing["now"] = False
+                persistence.os.replace = real_replace
+
+            # And the store still says what the file says: still configured.
+            health = await h.get_json("/health")
+            assert health["credentials"][0]["configured"] is True
+
+            # With the disk working, the same Remove lands.
+            async with h.session.delete(h.base + "/credentials/openrouter") as res:
+                assert res.status == 204
+
+    run(scenario())
+
+
 def test_credentials_have_no_read_back_route() -> None:
     """The property the whole design rests on: nothing serves a key back. A GET
     is simply not a method these resources have, and none may be added."""
@@ -321,21 +364,37 @@ def test_credentials_routes_reject_non_local_host_and_origin() -> None:
     run(scenario())
 
 
-def test_stored_key_never_reaches_any_served_byte() -> None:
+def test_stored_key_never_reaches_any_served_byte(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Set a key, drive a full run, then grep the RAW BYTES of everything served.
 
     Wire bytes, not parsed views: schema parsing STRIPS unknown keys, so a key
     echoed into a non-contract field would be laundered by the parse — passing a
     grep over the parsed events while still going out on the socket and the
     replay. Anything a client can read is checked here unparsed.
+
+    Persistence widened what "anything a client can read" means, so the grep
+    widened with it: the key now rests in a file, and the two new places it
+    could wrongly turn up are the OTHER state file (profiles.json, which is
+    world-readable by design) and the log lines the save path emits. Both are
+    checked below, on the same canary.
     """
 
     async def scenario() -> None:
-        async with Harness() as h:
+        # A store, so the save path this test greps actually runs.
+        store = ProfileStore(persistence.state_dir() / persistence.PROFILES_FILE)
+        async with Harness(profile_store=store) as h:
             assert h.session
             key = "sk-or-v1-leak-canary-abcdef123456"
             async with _put(h, {"provider": "openrouter", "apiKey": key}) as res:
                 assert res.status == 204
+
+            # A profile save after the key is set: the write-through that could
+            # carry a key into the wrong file happens here, not at boot.
+            profiles = await h.get_json("/board-profiles")
+            saved = dict(profiles[0], name="Bench with a key configured")
+            assert (await h.post("/board-profiles", saved)).status == 200
 
             run_id = await h.create_run()
             ws = await h.session.ws_connect(f"{h.base}/ws?runId={run_id}")
@@ -400,4 +459,58 @@ def test_stored_key_never_reaches_any_served_byte() -> None:
                 async with probe as res:
                     assert key not in await res.text()
 
-    run(scenario())
+            # THE ON-DISK SURFACE. A key belongs in credentials.json and nowhere
+            # else: profiles.json is world-readable by design (it holds repo
+            # paths and bench wiring), so a key reaching it would undo the 0600
+            # the other file is written with.
+            state_dir = persistence.state_dir()
+            profiles_json = state_dir / persistence.PROFILES_FILE
+            assert profiles_json.exists()  # the save above really did write
+            assert key not in profiles_json.read_text(encoding="utf-8")
+            # Everything else the runner dropped in the state directory, too —
+            # temp files, corrupt-file copies, anything a future writer adds.
+            for path in state_dir.rglob("*"):
+                if path.is_file() and path.name != persistence.CREDENTIALS_FILE:
+                    assert key not in path.read_text(encoding="utf-8", errors="ignore"), path
+            # The one file that legitimately holds it is owner-only.
+            creds_json = state_dir / persistence.CREDENTIALS_FILE
+            assert key in creds_json.read_text(encoding="utf-8")
+            if sys.platform != "win32":
+                assert stat.S_IMODE(creds_json.stat().st_mode) == 0o600
+
+            # THE SAVE PATH'S FAILURE LOG. A warning is where a key most easily
+            # escapes: the value is right there in the caller's hand, and
+            # "could not write <this> to <path>" is the natural sentence to
+            # reach for. Force the failure and check what it said.
+            real_replace = persistence.os.replace
+            failing = {"now": True}
+
+            def maybe_boom(src: Any, dst: Any) -> Any:
+                # A switch, not monkeypatch.undo(): undo() would also revert the
+                # conftest fixture's BOARDEX_STATE_DIR and repoint the rest of
+                # this test at the developer's real home directory.
+                if failing["now"]:
+                    raise OSError(28, "No space left on device")
+                return real_replace(src, dst)
+
+            monkeypatch.setattr(persistence.os, "replace", maybe_boom)
+            failed_key = "sk-or-v1-leak-canary-on-a-full-disk-77b1"
+            async with _put(h, {"provider": "openrouter", "apiKey": failed_key}) as res:
+                # Best-effort persistence: the key IS set for this process, which
+                # is all the 204 claims (delete is the half that must surface).
+                assert res.status == 204
+            failing["now"] = False
+            assert any("could not write" in r.getMessage() for r in caplog.records)
+            # The write failed, so the file still holds the previous key —
+            # unchanged, not truncated to something partial.
+            assert key in creds_json.read_text(encoding="utf-8")
+
+            # And no log record from any of it carries key material. The save
+            # path logs paths only — a warning that helpfully included the value
+            # it could not write would put the key in every operator's terminal.
+            for record in caplog.records:
+                assert key not in record.getMessage()
+                assert failed_key not in record.getMessage()
+
+    with caplog.at_level(logging.DEBUG):
+        run(scenario())
