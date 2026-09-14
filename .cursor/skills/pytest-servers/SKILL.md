@@ -13,7 +13,8 @@ Server changes are verified with pytest only.
 The repo venv lives at `.venv/` in the workspace root. Bootstrap (idempotent):
 
 ```bash
-cd /home/ankayca/boardex
+export REPO=/path/to/boardex              # the repo root, wherever it is checked out
+cd "$REPO"
 python -m venv .venv                      # only if .venv is missing
 source .venv/bin/activate
 pip install -e "servers/boardex-core[dev]"

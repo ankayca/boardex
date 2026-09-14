@@ -21,7 +21,7 @@ source of truth and encodes the non-negotiable rules for working in this repo.
    for it.
 4. **Respect ownership.** `servers/` and `examples/` are the backend owner's domain.
    Read them freely; **never write** to them. The same goes for `README.md`, the
-   cofounder's `docs/*.md`, and existing `.gitignore` content (extend it additively only).
+   backend owner's `docs/*.md`, and existing `.gitignore` content (extend it additively only).
 5. **Prove it works.** Every task ships tests where logic exists, keeps `npm run verify`
    green (typecheck + lint + test across workspaces), and lands as atomic,
    conventionally-named commits. **If the task or review brief names a behavior to

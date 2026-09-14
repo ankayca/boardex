@@ -17,6 +17,7 @@ from boardex_runner.artifacts import ArtifactStore
 from boardex_runner.clock import VirtualClock
 from boardex_runner.contract import validate_event
 from boardex_runner.fake_bench import FakeBench
+from boardex_runner.persistence import ProfileStore
 from boardex_runner.server import RunnerApp, build_app, state_from_env
 
 from conftest import run
@@ -28,11 +29,19 @@ SPEED = 2000.0
 class Harness:
     """One listening runner + one HTTP client session."""
 
-    def __init__(self, *, fail_variant: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_variant: bool = False,
+        profile_store: ProfileStore | None = None,
+    ) -> None:
+        # No profile store by default: the harness stays purely in-memory, so no
+        # test writes to a state directory it did not ask for.
         self.state = RunnerApp(
             bench_factory=lambda: FakeBench(fail_variant=fail_variant),
             clock_factory=lambda: VirtualClock(speed=SPEED),
             artifacts=ArtifactStore(),
+            profile_store=profile_store,
         )
         self.runner: web.AppRunner | None = None
         self.session: aiohttp.ClientSession | None = None

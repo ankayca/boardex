@@ -1,5 +1,5 @@
 // Board Context rail instrument list (BIBLE §7.3): the three bench-readiness states,
-// resolved by reference through lib/benchReadiness (T4.2, Kerem's ruling). During a
+// resolved by reference through lib/benchReadiness (T4.2, product-owner ruling). During a
 // run this rail is what the operator watches, so "the analyzer is unplugged" and "this
 // profile names an analyzer that does not exist" must not render the same.
 import { describe, expect, it } from 'vitest';

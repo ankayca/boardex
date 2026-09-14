@@ -1,10 +1,10 @@
 # Open contract proposals — backend positions (for the integration call)
 
-Ahmet's positions on the three optional-field proposals from Kerem's
-integration one-pager (§5 "Open proposals"). All three follow the §10.5 chain
-if accepted: bible §5 edit → contract package → mock runner + fixture → UI →
-then our runner emits them. Nothing below is implemented runner-side yet, by
-design.
+The backend owner's positions on the three optional-field proposals from the
+product owner's integration one-pager (§5 "Open proposals"). All three follow
+the §10.5 chain if accepted: bible §5 edit → contract package → mock runner +
+fixture → UI → then our runner emits them. Nothing below is implemented
+runner-side yet, by design.
 
 ## 1. `Approval.proposal.diffArtifactId?` (bind gate → diff)
 
@@ -12,7 +12,7 @@ design.
 before the fix gate opens (edit step → `artifact.created` → diagnosis →
 `approval.requested`), so populating the field is one line for us. Today the
 UI's "Review Diff" binds to *the run's latest* `code_diff`, which holds only
-because edit steps immediately precede gates (Kerem's own T3.3 review note);
+because edit steps immediately precede gates (the product owner's own T3.3 review note);
 an explicit id makes the binding true by construction instead of by pipeline
 shape — and stays honest when a future runner interleaves edits. Optional
 field, absent = current behavior, zero migration cost.

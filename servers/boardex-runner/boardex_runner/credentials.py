@@ -28,24 +28,50 @@ SECRETS DISCIPLINE — this is the design, not a precaution bolted on:
  2. The key never reaches an event, an artifact, a log line or an error body.
     This module is not wired to the event log at all, and every rejection below
     answers with a FIXED string that never echoes the request.
- 3. Storage is module memory: it dies with the process. Honest for v0 — a key
-    that survives a restart needs a decision about where it rests on disk, and
-    inventing one here would put secrets somewhere nobody chose.
+ 3. Storage is ``~/.boardex/credentials.json``, mode 0600, written atomically
+    (see persistence.py). v0 kept keys in module memory and said so; this is
+    the decision that limit was waiting on, and it is the boring one — an
+    owner-only file in the user's home directory, the standard ``~/.netrc`` and
+    ``~/.aws/credentials`` already set. Persistence changes WHERE THE DICT
+    SLEEPS AND NOTHING ELSE: the same advertise()-only readable surface, the
+    same hint floor, still no read-back route, and nothing on the save path
+    logs a key. Encryption at rest and a shared-bench answer stay deferred —
+    on a machine where another user can read your home directory, they can read
+    your keys.
 
 Env vars keep working as the fallback: a runner booted with the provider-standard
 variable set is already configured (seeded at startup, so the UI sees it and does
 not offer to set a key that is in fact already set), and ``resolve_key`` falls
 back to the environment for anything the store does not hold. Existing setups
 therefore behave exactly as they did before this module existed.
+
+PRECEDENCE, pinned: for a given provider the FILE BEATS THE ENVIRONMENT at boot,
+and the environment seeds only the providers the file says nothing about. Both
+are deliberate acts, but pasting a key into the dashboard is the more recent and
+more specific one — it names this runner, while an exported variable is often
+inherited from a shell profile the operator has not thought about in months. The
+alternative ordering would also make the dashboard silently ineffective for
+anyone with the variable exported: paste, restart, and the old key is back with
+nothing on screen explaining why.
+
+What is persisted is what someone deliberately SET (``set_key``); an env seed is
+never written to the file. That is what keeps the standing escape hatch true —
+unset the variable, restart, and the key is gone — instead of the runner
+quietly copying an exported key onto disk where it outlives the export.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from . import persistence
 from .provider import DEFAULT_MODEL
+
+logger = logging.getLogger(__name__)
 
 # The hint reveals at most the last four characters, and only when the key is
 # long enough that four characters are a negligible fraction of it. A short key
@@ -55,12 +81,26 @@ from .provider import DEFAULT_MODEL
 HINT_MIN_KEY_LENGTH = 8
 HINT_TAIL_LENGTH = 4
 
-# provider -> key. Module memory only; never serialized, never logged.
+# provider -> key. The EFFECTIVE store: what advertise() describes and what
+# resolve_key() serves, env seeds included. Never logged.
 _keys: dict[str, str] = {}
+# provider -> key AS IT RESTS ON DISK: only keys someone deliberately set (or a
+# previous process did). Env seeds never enter it, so unsetting the variable and
+# restarting still removes the key — see the module docstring's precedence note.
+# Entries for providers this runner does not know about are kept, so a runner
+# booted with a narrower AGENT_MODELS cannot erase another runner's key on its
+# next write.
+_persisted: dict[str, str] = {}
 # The providers this runner will hold a key for; derived from the advertised
 # models by configure(). Empty until then, so an unconfigured process
 # advertises no providers rather than guessing at one.
 _providers: tuple[str, ...] = ()
+# Where the store rests, resolved once per configure(). None until then.
+_store_path: Path | None = None
+# False until a boot has successfully READ the store (or established that it
+# does not exist yet). A file we could not read is not an empty one, so this
+# session must not write over it — see configure().
+_persist: bool = False
 
 
 @dataclass(frozen=True)
@@ -146,24 +186,105 @@ def _models_from_env() -> list[str]:
     return [model.strip() for model in raw.split(",") if model.strip()]
 
 
+def _load_persisted(path: Path) -> dict[str, str]:
+    """The stored key dict, or empty when the file simply does not exist yet.
+
+    Raises OSError for a file that exists but could not be read — including a
+    path that is not a regular file. THE SYMLINK RULE lives in that
+    ``no_follow``: the read refuses a symlink inside the open itself (O_NOFOLLOW
+    + fstat on the descriptor, so nothing can be swapped in between deciding and
+    reading), and configure() turns that refusal into a memory-only session.
+
+    Nothing here would corrupt a link's target — ``os.replace`` swaps the LINK,
+    ``rename`` moves the LINK aside — so this is not about damage. It is that a
+    credentials file is only owner-only-secret if we know what it IS, and a link
+    points at a file whose mode and directory we never set. Refusing costs one
+    session's persistence; following costs the property the mode is there for.
+
+    Deliberately narrow: this file, and this path — not an audit of every
+    parent directory, which would be theater on a home directory the user owns.
+
+    Non-string or blank entries are dropped individually rather than condemning
+    the whole file: one hand-edited line should cost one provider's key, not
+    every provider's.
+    """
+    raw = persistence.read_json(path, default={}, no_follow=True)
+    return {
+        provider: key.strip()
+        for provider, key in raw.items()
+        if isinstance(provider, str) and isinstance(key, str) and key.strip()
+    }
+
+
+def _save_persisted() -> bool:
+    """Write the deliberately-set keys through, 0600 and atomically.
+
+    False when the write did not land — including a session where persistence
+    was disabled at boot, because "not written" is the same fact either way and
+    the caller's decision (survivable, or must be surfaced) is the same.
+
+    Never raises and never logs a key: persistence.write_json logs paths only.
+    """
+    if not _persist or _store_path is None:
+        return False
+    return persistence.write_json(
+        _store_path, dict(_persisted), mode=persistence.OWNER_ONLY_FILE
+    )
+
+
 def configure(models: Sequence[str] | None = None) -> None:
-    """Set the known providers from the advertised models and seed from env.
+    """Set the known providers from the advertised models, load the stored keys,
+    and seed from env whatever the file does not cover.
 
     Called once at startup. ``models=None`` reads AGENT_MODELS, so the store
     knows the same providers the runner would advertise regardless of BENCH —
     the dashboard's key path has to work before anyone switches to BENCH=agent.
 
-    Seeding is what keeps env-only setups unchanged: a provider whose standard
-    variable is present in the environment boots CONFIGURED, and the UI shows it
-    as configured instead of offering to set a key that is already set.
+    Two sources, and the order between them is the ruling in the module
+    docstring: the FILE first, then the environment for providers the file says
+    nothing about. Seeding is what keeps env-only setups unchanged — a provider
+    whose standard variable is present in the environment boots CONFIGURED, and
+    the UI shows it as configured instead of offering to set a key already set.
     """
-    global _providers
+    global _providers, _store_path, _persist
     _providers = tuple(providers_from_models(models if models is not None else _models_from_env()))
+    _store_path = persistence.state_dir() / persistence.CREDENTIALS_FILE
+    _persisted.clear()
     _keys.clear()
+    try:
+        _persisted.update(_load_persisted(_store_path))
+        _persist = True
+    except OSError as exc:
+        # An unreadable file is NOT an empty one. Persisting anything now would
+        # write a store we know is incomplete over one that is probably fine —
+        # a permission problem would silently become key loss. So the session
+        # runs memory-only and the file is left exactly as it is, ready to work
+        # again the moment whatever broke is fixed. Nothing can be resurrected
+        # behind the operator's back either: the next boot reads the same file
+        # the same way, and refuses it the same way.
+        logger.warning(
+            "could not read %s (%s); provider keys will work this session but "
+            "will not persist, and the file will not be written",
+            _store_path,
+            exc,
+        )
+        _persist = False
+
+    # PRECEDENCE, in one pass so it cannot be reordered by a later edit: the
+    # file wins, and the environment is consulted only for providers the file
+    # says nothing about. Splitting this into two loops would leave the ruling
+    # standing on the order of two statements a hundred lines apart.
     for provider in _providers:
-        from_env = _env_key(provider)
-        if from_env is not None:
-            _keys[provider] = from_env
+        stored = _persisted.get(provider)
+        if stored is not None:
+            _keys[provider] = stored
+        else:
+            from_env = _env_key(provider)
+            if from_env is not None:
+                _keys[provider] = from_env
+    # Providers the file holds but this runner does not advertise stay in
+    # _persisted — unadvertised and unresolvable here, preserved for the next
+    # write so a narrower AGENT_MODELS cannot erase another launch's key.
 
 
 def known_providers() -> tuple[str, ...]:
@@ -198,12 +319,28 @@ def set_key(provider: Any, api_key: Any) -> CredentialError | None:
     if not isinstance(api_key, str) or not api_key.strip():
         return CredentialError(400, "invalid api key")
     _keys[provider] = api_key.strip()
+    # Write-through: a key is stored the moment it is accepted, so a runner that
+    # dies unexpectedly comes back with the key its 204 promised.
+    #
+    # A failed write does NOT fail this request, and that asymmetry with
+    # delete_key is deliberate. What 204 claims here is that the key is set,
+    # which is true — it is in memory and the very next run will spend it; only
+    # its survival of a restart is lost, and the cost of that is pasting it
+    # again. Refusing instead would take the dashboard away from anyone with a
+    # read-only home directory, for a failure they can already see in the log.
+    # Removal is the opposite case: there the unwritten half is a key that goes
+    # on spending money, so it must be surfaced.
+    _persisted[provider] = _keys[provider]
+    _save_persisted()
     return None
 
 
 def delete_key(provider: str) -> CredentialError | None:
     """Remove the dashboard's key, then RE-SEED from the environment if one is
-    exported there. Idempotent, so Remove can be pressed twice.
+    exported there. Idempotent, so Remove can be pressed twice. 500 when the
+    removal could not be written to disk — see the body: a removal that only
+    happened in memory is a key that comes back on the next boot and goes on
+    spending, so it is reported rather than swallowed.
 
     Re-seeding is what keeps this store's two views from ever disagreeing. What
     Remove discards is the key the dashboard set; it cannot discard the one the
@@ -222,7 +359,29 @@ def delete_key(provider: str) -> CredentialError | None:
     """
     if provider not in _providers:
         return CredentialError(404, "unknown provider")
-    _keys.pop(provider, None)
+    # Removal is persisted BEFORE anything is answered, and the re-seed that
+    # follows is memory-only. Both halves matter: Remove must survive a restart
+    # (or the next boot loads the key back out of the file and Remove was
+    # theater), and the env key it falls back to must NOT be written (or
+    # unsetting the variable stops helping, which is the escape hatch the
+    # README promises).
+    was_effective = _keys.pop(provider, None)
+    was_persisted = _persisted.pop(provider, None)
+    # ``_persist`` gates the check, not just the write: in a memory-only session
+    # the file is not a source of truth for the NEXT boot either (the same read
+    # refuses it the same way), so there is nothing a removal could fail to
+    # erase and nothing to warn about.
+    if was_persisted is not None and _persist and not _save_persisted():
+        # The removal did not reach disk. Answering 204 here would be the
+        # runner's worst available lie: the operator is told the key is gone,
+        # stops thinking about it, and the next boot loads it straight back out
+        # of the file and spends it. So we say so, and we put the store back
+        # the way it was — a store that says "still configured" and a file that
+        # holds the key are at least the same fact, and the operator can act on
+        # it (fix the disk, or unset and restart).
+        _keys[provider] = was_effective if was_effective is not None else was_persisted
+        _persisted[provider] = was_persisted
+        return CredentialError(500, "could not remove credential")
     from_env = _env_key(provider)
     if from_env is not None:
         _keys[provider] = from_env

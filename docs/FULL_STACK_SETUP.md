@@ -1,6 +1,6 @@
 # Boardex Full-Stack Setup — Runner (BENCH=agent) + UI on One Machine
 
-Audience: Ahmet. Scope: everything from clean checkout to a live agent run in the browser, on your machine, hardware optional. Companion doc for the hardware stages themselves: `docs/BENCH_BRINGUP.md` (fixes, device resolution, staged A→B→C test). This doc is the plumbing underneath it.
+Audience: the runner maintainer. Scope: everything from clean checkout to a live agent run in the browser, on your machine, hardware optional. Companion doc for the hardware itself: `docs/SUPPORT_MATRIX.md` (OS tiers, probe and analyzer access, per-OS driver permissions). This doc is the plumbing underneath it.
 
 ---
 
@@ -81,7 +81,7 @@ Open the printed URL. Bottom-left pill must read **Runner online · real**. (The
 1. **Boards → New Profile**: `repoPath` = absolute path to the workspace copy (e.g. `<repo>/firmware/agent-workspace/rtt-f303re`), build command `make`, real instrument ids if hardware is attached (else leave empty — the amber "not found on the bench" notice is advisory and never blocks). Save.
 2. **New Run** → select that profile → type the task → **Create Run Plan**.
    - Hardware-free smoke task (proven): *"Change the console output format in the reference firmware to print PRESSURE=<p> alongside TEMP/HUM, and build it."*
-   - Hardware stages: per `BENCH_BRINGUP.md` §4 (build-only Stage A, then the BMP180 prompt).
+   - Hardware stages: build-only Stage A first, then the BMP180 prompt; device access per `docs/SUPPORT_MATRIX.md`.
 3. Approve the plan in the UI. Flash/reset tool calls will park on approval cards — that's `interception.py`'s floor, regardless of profile config. Reject ends the run as `stopped` with the tool provably never invoked.
 
 ## 9. RECORD — the discipline that keeps recordings non-empty

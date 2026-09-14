@@ -77,8 +77,9 @@ export function StatusApprovalRail({
     view.diagnosis !== undefined && (run.status === 'diagnosing' || fixApproval !== null);
 
   // The §7.2 bench-degraded warning repeats at every approval that proposes
-  // hardware actions (Kerem's T5.0 adjudication): an operator about to authorize a
-  // flash deserves the same "your analyzer is unplugged" they got at composition.
+  // hardware actions (the product owner's T5.0 adjudication): an operator about to
+  // authorize a flash deserves the same "your analyzer is unplugged" they got at
+  // composition.
   // Profile-independent by the same ruling — mid-run approvals gate on the bench's
   // own report only (instruments: null), never on re-resolving a profile. The snapshot
   // is the prop threaded from the workspace (T6.5).

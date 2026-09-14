@@ -1,5 +1,10 @@
 # Boardex
 
+[![CI](https://github.com/ankayca/boardex/actions/workflows/ci.yml/badge.svg)](https://github.com/ankayca/boardex/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/boardex)](https://pypi.org/project/boardex/)
+
+**Early, open source (Apache-2.0), and built for contribution — the fastest way to help is to run it, then bring your hardware.**
+
 Boardex is an AI agent that brings up firmware on real hardware — it plans the work,
 writes and builds the code, flashes the board, drives a logic analyzer, and reads the
 results back. It proves what it claims: every check links to a recorded artifact (logic
@@ -47,8 +52,9 @@ Both print the URL and stop on Ctrl-C.
 - **[OS support and bench setup](docs/SUPPORT_MATRIX.md)** — what runs where, and how
   probe/analyzer access works per platform. For Kingst logic analyzers, the one-time
   [bring-up](docs/kingst-la-bringup.md).
-- **[Contributing](#development)** — the design is in
+- **[Contributing](CONTRIBUTING.md)** — the design is in
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); adding an instrument is a one-file job.
+  What we need most right now is in [Help build it](#help-build-it).
 
 ## Where this is today
 
@@ -56,6 +62,39 @@ Early software. The loop has been run end to end on STM32 Nucleo-F303RE benches 
 BMP180/BME280-class I2C sensors, an ST-Link probe, and a Kingst logic analyzer. Linux and
 WSL are the primary platforms; macOS and Windows run the software fine, but hardware
 access there is less exercised. Expect rough edges, and please report them.
+
+## Help build it
+
+Boardex is built so that supporting new lab equipment never touches agent code: each
+instrument domain is an MCP server assembled from the same four layers, and a new device
+is one adapter file that implements a `boardex-core` interface plus a one-line
+registration. The walkthrough is the "How to add a new backend" section of
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+What we want most, in order:
+
+1. **Instrument adapters.** Debug probes first — J-Link and OpenOCD-compatible probes
+   are both still "planned" rows in the [equipment table](#supported-equipment) — and
+   logic analyzers beyond fx2lafw and Kingst. The flagship contribution is the **first
+   oscilloscope adapter**: `boardex-scope` has its seat designed into the architecture
+   (same four layers, SCPI/pyvisa backend, `"oscilloscope"` is already a device kind in
+   `boardex-core`) but the code is unwritten — whoever ships it defines the domain.
+   Start from [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+2. **Board bring-ups on new MCU families.** Run the loop on hardware we don't own and
+   tell us what was weird — ideally with a recording attached (`RECORD=<dir> boardex up`,
+   see [Getting Started](docs/GETTING_STARTED.md)) so we can replay your bench without
+   owning your bench.
+3. **Windows-native and macOS bench testing.** The software layer is CI-proven on all
+   three OSes; hardware access off Linux needs more eyes. Start from the
+   [OS support matrix](docs/SUPPORT_MATRIX.md) and the
+   [Windows sigrok bring-up](docs/windows-sigrok-bringup.md).
+4. **Confusion reports.** The moment you stopped being sure what was happening is a
+   first-class report here, not a lesser one — file it with the
+   ["I got confused" issue template](.github/ISSUE_TEMPLATE/confusion_report.yml).
+   Nothing has to be broken for it to be worth filing.
+
+Ground rules and setup live in [CONTRIBUTING.md](CONTRIBUTING.md); starter tasks are
+labeled [good first issue](https://github.com/ankayca/boardex/labels/good%20first%20issue).
 
 ---
 
@@ -112,6 +151,9 @@ boardex/
 | Logic analyzer | Kingst LA1010 | ⚠️ via `boardex-logic` — mainline sigrok lists it untested (streaming-only); [bring-up](docs/kingst-la-bringup.md) |
 | Oscilloscope | Rigol, Siglent | planned via SCPI/pyvisa |
 
+*Every "planned" row is an open invitation — one adapter file. See
+[Help build it](#help-build-it).*
+
 ## Working from a checkout
 
 ```bash
@@ -146,7 +188,9 @@ specifics (target names, udev) and how to register the server with an MCP client
 
 Adding hardware is intentionally a one-file job: implement the relevant
 `boardex-core` interface as an adapter and register it. See the "How to add a new
-backend" section of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+backend" section of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the ranked
+wishlist in [Help build it](#help-build-it), and the ground rules in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

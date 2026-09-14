@@ -1,6 +1,6 @@
 # boardex-runner ⇄ UI Integration — One-Pager
 
-Audience: Ahmet. Scope: bring the UI up against your runner and pass conformance. Authority: `docs/BIBLE.md` §5 (wire contract, v2.0) and §10. Machine-readable spec: `packages/contract/json-schema/` (`events`, `commands`, `artifacts`). The mock (`tools/mock-runner`) is the reference implementation — when prose is ambiguous, its behavior is the tiebreaker.
+Audience: the runner maintainer. Scope: bring the UI up against your runner and pass conformance. Authority: `docs/BIBLE.md` §5 (wire contract, v2.0) and §10. Machine-readable spec: `packages/contract/json-schema/` (`events`, `commands`, `artifacts`). The mock (`tools/mock-runner`) is the reference implementation — when prose is ambiguous, its behavior is the tiebreaker.
 
 ## 1. Boot
 
