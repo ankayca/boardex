@@ -310,7 +310,8 @@ libsigrok's own `60-libsigrok.rules`, which comes with a distro `sigrok-cli` pac
 On macOS nothing is needed — pyOCD and libsigrok talk to libusb directly (`brew install
 libusb` if enumeration fails). On Windows the probe needs a WinUSB-compatible driver bound
 to its interface: the ST driver package for ST-Link, Zadig for CMSIS-DAP and sigrok
-devices.
+devices. Logic analyzers also need `sigrok-cli` on `PATH` —
+[`windows-sigrok-bringup.md`](windows-sigrok-bringup.md).
 
 **Running Boardex inside WSL2** — the recommended way on Windows — adds one step before
 any of this: WSL2 does not see Windows USB devices at all, so the probe or analyzer you
@@ -343,7 +344,8 @@ contract, and you author it once per board.
 Instrument support, per-OS caveats, and what is Tier 1 versus best-effort:
 [`SUPPORT_MATRIX.md`](SUPPORT_MATRIX.md). Kingst logic analyzers need a one-time
 bring-up (a recent libsigrok build plus user-extracted firmware) before sigrok will see
-them: [`kingst-la-bringup.md`](kingst-la-bringup.md). For flashing specifics — target
+them: [`kingst-la-bringup.md`](kingst-la-bringup.md). On Windows, `sigrok-cli` + WinUSB
+is [`windows-sigrok-bringup.md`](windows-sigrok-bringup.md). For flashing specifics — target
 names, recovering a wedged board — see
 [`servers/boardex-target/README.md`](../servers/boardex-target/README.md).
 

@@ -156,7 +156,10 @@ def fix_command(check: CheckResult, system: str | None = None) -> str:
             return "sudo apt install sigrok-cli    # Kingst LA2016 needs a git-master build"
         if host == "Darwin":
             return "brew install sigrok-cli"
-        return "install sigrok-cli from https://sigrok.org/wiki/Downloads"
+        return (
+            "install sigrok-cli, add it to PATH, bind WinUSB with Zadig — "
+            "see docs/windows-sigrok-bringup.md"
+        )
     if check.name == "arm-none-eabi-gcc":
         if host == "Linux":
             return "sudo apt install gcc-arm-none-eabi"

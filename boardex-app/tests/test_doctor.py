@@ -172,6 +172,11 @@ def test_pyocd_fix_names_the_bench_when_pyocd_itself_is_present() -> None:
     assert doctor.fix_command(absent, "Linux").startswith("pip install")
 
 
+def test_windows_sigrok_fix_points_at_bringup_doc() -> None:
+    check = CheckResult("sigrok-cli", "missing", "not on PATH")
+    assert "windows-sigrok-bringup.md" in doctor.fix_command(check, "Windows")
+
+
 def test_an_ok_check_has_no_fix_line() -> None:
     check = CheckResult("sigrok-cli", "ok", "sigrok-cli 0.7.2")
     assert doctor.fix_command(check, "Linux") == ""

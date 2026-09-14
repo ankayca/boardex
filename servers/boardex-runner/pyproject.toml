@@ -39,7 +39,11 @@ dev = ["pytest>=8.0", "boardex-runner[agent]"]
 # BENCH=agent extras: imported lazily (provider/mcp host) at runtime, so
 # fake/real deployments need none of these — but the test suite does.
 agent = [
-    "litellm>=1.40",
+    # 1.98.0+ imports typing.NotRequired (3.11+) at package import, so
+    # `import litellm` crashes on the 3.10 floor CI still runs
+    # (BerriAI/litellm#38076). Cap until a release with the
+    # typing_extensions fallback ships.
+    "litellm>=1.40,<1.98",
     # litellm lazy-imports its proxy path (fastapi + orjson) whenever `tools`
     # is passed to completion(); without these the first tool-calling turn
     # crashes on ModuleNotFoundError.
